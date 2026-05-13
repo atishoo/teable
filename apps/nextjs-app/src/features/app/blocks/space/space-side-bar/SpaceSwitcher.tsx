@@ -3,6 +3,7 @@ import { getUniqName } from '@teable/core';
 import { Check, ChevronDown, Database, Plus, ShieldUser, Trash2 } from '@teable/icons';
 import {
   createSpace,
+  getSpaceById,
   getSubscriptionSummaryList,
   PinType,
   type IGetSpaceVo,
@@ -90,6 +91,11 @@ export const SpaceSwitcher = (props: ISpaceSwitcherProps) => {
   const pinMap = usePinMap();
   const { spaceList } = useSpaceList();
   const { spaceId: currentSpaceId } = useParams<{ spaceId: string }>();
+  const { data: space } = useQuery({
+    queryKey: ReactQueryKeys.space(currentSpaceId),
+    queryFn: ({ queryKey }) => getSpaceById(queryKey[1]).then((res) => res.data),
+    enabled: Boolean(currentSpaceId),
+  });
 
   const { data: subscriptionList } = useQuery({
     queryKey: ['subscription-summary-list'],
@@ -106,15 +112,16 @@ export const SpaceSwitcher = (props: ISpaceSwitcherProps) => {
   }, [subscriptionList]);
 
   const currentSpace = useMemo(() => {
-    return spaceList?.find((space) => space.id === currentSpaceId);
-  }, [spaceList, currentSpaceId]);
+    return spaceList?.find((space) => space.id === currentSpaceId) ?? space;
+  }, [spaceList, space, currentSpaceId]);
 
   const sortedSpaceList = useMemo(() => {
-    if (!spaceList || !currentSpaceId) return spaceList;
-    const currentSpaceItem = spaceList.find((s) => s.id === currentSpaceId);
+    if (!currentSpaceId) return spaceList;
+    if (!spaceList) return currentSpace ? [currentSpace] : spaceList;
+    const currentSpaceItem = spaceList.find((s) => s.id === currentSpaceId) ?? currentSpace;
     if (!currentSpaceItem) return spaceList;
     return [currentSpaceItem, ...spaceList.filter((s) => s.id !== currentSpaceId)];
-  }, [spaceList, currentSpaceId]);
+  }, [spaceList, currentSpace, currentSpaceId]);
 
   const organization = user?.organization;
 

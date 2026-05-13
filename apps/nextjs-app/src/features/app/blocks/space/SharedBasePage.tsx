@@ -38,7 +38,7 @@ export const SharedBasePage = () => {
       </div>
       <div className="min-h-0 flex-1">
         {sharedBases && sharedBases.length > 0 ? (
-          <BaseList baseIds={sharedBases.map((base) => base.id)} />
+          <BaseList bases={sharedBases} baseIds={sharedBases.map((base) => base.id)} />
         ) : (
           <p className="flex h-24 items-center justify-center text-xl text-muted-foreground">
             {t('space:sharedBase.empty')}

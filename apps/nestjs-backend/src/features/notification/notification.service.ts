@@ -12,7 +12,7 @@ import {
 } from '@teable/core';
 import type { Prisma } from '@teable/db-main-prisma';
 import { PrismaService } from '@teable/db-main-prisma';
-import { MailTransporterType, MailType } from '@teable/openapi';
+import { CollaboratorType, MailTransporterType, MailType } from '@teable/openapi';
 import {
   type IGetNotifyListQuery,
   type INotificationUnreadCountVo,
@@ -363,6 +363,39 @@ export class NotificationService {
     }
   }
 
+  async sendCollaboratorAccessNotify(params: {
+    fromUserId: string;
+    toUserId: string;
+    resourceId: string;
+    resourceName: string;
+    resourceType: CollaboratorType;
+  }) {
+    const { fromUserId, toUserId, resourceId, resourceName, resourceType } = params;
+    if (fromUserId === toUserId) {
+      return;
+    }
+
+    const fromUser = await this.userService.getUserById(fromUserId);
+    if (!fromUser) {
+      return;
+    }
+
+    const isBase = resourceType === CollaboratorType.Base;
+    await this.sendCommonNotify({
+      path: isBase ? `/base/${resourceId}` : `/space/${resourceId}`,
+      fromUserId,
+      toUserId,
+      message: {
+        i18nKey:
+          `common.notification.collaborator.${isBase ? 'baseAdded' : 'spaceAdded'}` as I18nPath,
+        context: {
+          fromUserName: fromUser.name,
+          resourceName,
+        },
+      },
+    });
+  }
+
   async sendImportResultNotify(params: {
     tableId: string;
     baseId: string;
@@ -515,15 +548,30 @@ export class NotificationService {
     fromUserSets: Record<string, { id: string; name: string; avatar: string | null }>
   ) {
     const origin = this.mailConfig.origin;
+    const systemIcon = { iconUrl: `${origin}/images/favicon/favicon.svg` };
+    const fromUser = fromUserSets[fromUserId];
 
     switch (notifyType) {
-      case NotificationTypeEnum.System:
+      case NotificationTypeEnum.System: {
+        if (fromUser) {
+          const { id, name, avatar } = fromUser;
+          return {
+            userId: id,
+            userName: name,
+            userAvatarUrl: avatar && getPublicFullStorageUrl(avatar),
+          };
+        }
+        return systemIcon;
+      }
       case NotificationTypeEnum.ExportBase:
-        return { iconUrl: `${origin}/images/favicon/favicon.svg` };
+        return systemIcon;
       case NotificationTypeEnum.Comment:
       case NotificationTypeEnum.CollaboratorCellTag:
       case NotificationTypeEnum.CollaboratorMultiRowTag: {
-        const { id, name, avatar } = fromUserSets[fromUserId];
+        if (!fromUser) {
+          return systemIcon;
+        }
+        const { id, name, avatar } = fromUser;
 
         return {
           userId: id,

@@ -666,6 +666,10 @@
     "exportBase": {
       "successText": "Dışa aktarma verileri hazır",
       "failedText": "Dışa aktarma başarısız oldu, lütfen tekrar deneyin"
+    },
+    "collaborator": {
+      "baseAdded": "{{fromUserName}} sizi \"{{resourceName}}\" tabanına ortak çalışan olarak ekledi",
+      "spaceAdded": "{{fromUserName}} sizi \"{{resourceName}}\" alanına ortak çalışan olarak ekledi"
     }
   },
   "role": {

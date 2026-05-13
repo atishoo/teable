@@ -1017,6 +1017,10 @@
     "exportBase": {
       "successText": "导出数据已就绪",
       "failedText": "导出失败，请重试"
+    },
+    "collaborator": {
+      "baseAdded": "{{fromUserName}} 已将你添加为「{{resourceName}}」的数据库协作者",
+      "spaceAdded": "{{fromUserName}} 已将你添加为「{{resourceName}}」的空间协作者"
     }
   },
   "role": {

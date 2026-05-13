@@ -709,6 +709,10 @@
     "exportBase": {
       "successText": "エクスポートデータの準備ができました",
       "failedText": "エクスポートに失敗しました。再試行してください"
+    },
+    "collaborator": {
+      "baseAdded": "{{fromUserName}} があなたをベース「{{resourceName}}」の共同編集者に追加しました",
+      "spaceAdded": "{{fromUserName}} があなたをスペース「{{resourceName}}」の共同編集者に追加しました"
     }
   },
   "role": {

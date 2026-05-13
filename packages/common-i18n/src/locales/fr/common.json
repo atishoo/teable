@@ -707,6 +707,10 @@
     "exportBase": {
       "successText": "Les données d'exportation sont prêtes",
       "failedText": "L'exportation a échoué, veuillez réessayer"
+    },
+    "collaborator": {
+      "baseAdded": "{{fromUserName}} vous a ajouté comme collaborateur à la base \"{{resourceName}}\"",
+      "spaceAdded": "{{fromUserName}} vous a ajouté comme collaborateur à l'espace \"{{resourceName}}\""
     }
   },
   "role": {

@@ -1020,6 +1020,10 @@
     "exportBase": {
       "successText": "Export data is ready",
       "failedText": "Export failed, please retry"
+    },
+    "collaborator": {
+      "baseAdded": "{{fromUserName}} added you as a collaborator to base \"{{resourceName}}\"",
+      "spaceAdded": "{{fromUserName}} added you as a collaborator to space \"{{resourceName}}\""
     }
   },
   "role": {

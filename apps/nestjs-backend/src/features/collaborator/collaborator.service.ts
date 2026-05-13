@@ -35,6 +35,7 @@ import {
 import type { IClsStore } from '../../types/cls';
 import { getMaxLevelRole } from '../../utils/get-max-level-role';
 import { getPublicFullStorageUrl } from '../attachments/plugins/utils';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class CollaboratorService {
@@ -42,9 +43,49 @@ export class CollaboratorService {
     private readonly prismaService: PrismaService,
     private readonly cls: ClsService<IClsStore>,
     private readonly eventEmitterService: EventEmitterService,
+    private readonly notificationService: NotificationService,
     @InjectModel('CUSTOM_KNEX') private readonly knex: Knex,
     @InjectDbProvider() private readonly dbProvider: IDbProvider
   ) {}
+
+  private async sendCollaboratorAccessNotifications({
+    collaborators,
+    resourceId,
+    resourceName,
+    resourceType,
+    createdBy,
+  }: {
+    collaborators: {
+      principalId: string;
+      principalType: PrincipalType;
+    }[];
+    resourceId: string;
+    resourceName: string;
+    resourceType: CollaboratorType;
+    createdBy?: string;
+  }) {
+    const fromUserId = createdBy || this.cls.get('user.id');
+    if (!fromUserId) {
+      return;
+    }
+
+    const userCollaborators = collaborators.filter(
+      (collaborator) =>
+        collaborator.principalType === PrincipalType.User && collaborator.principalId !== fromUserId
+    );
+
+    await Promise.allSettled(
+      userCollaborators.map((collaborator) =>
+        this.notificationService.sendCollaboratorAccessNotify({
+          fromUserId,
+          toUserId: collaborator.principalId,
+          resourceId,
+          resourceName,
+          resourceType,
+        })
+      )
+    );
+  }
 
   async createSpaceCollaborator({
     collaborators,
@@ -920,12 +961,24 @@ export class CollaboratorService {
         .filter((c) => c.principalType === PrincipalType.User)
         .map((c) => c.principalId)
     );
-    return this.createSpaceCollaborator({
+    const space = await this.prismaService.txClient().space.findUniqueOrThrow({
+      where: { id: spaceId, deletedTime: null },
+      select: { name: true },
+    });
+    const res = await this.createSpaceCollaborator({
       collaborators: collaborator.collaborators,
       spaceId,
       role: collaborator.role,
       createdBy: this.cls.get('user.id'),
     });
+    await this.sendCollaboratorAccessNotifications({
+      collaborators: collaborator.collaborators,
+      resourceId: spaceId,
+      resourceName: space.name,
+      resourceType: CollaboratorType.Space,
+      createdBy: this.cls.get('user.id'),
+    });
+    return res;
   }
 
   async addBaseCollaborators(baseId: string, collaborator: AddBaseCollaboratorRo) {
@@ -942,12 +995,24 @@ export class CollaboratorService {
         .filter((c) => c.principalType === PrincipalType.User)
         .map((c) => c.principalId)
     );
-    return this.createBaseCollaborator({
+    const base = await this.prismaService.txClient().base.findUniqueOrThrow({
+      where: { id: baseId, deletedTime: null },
+      select: { name: true },
+    });
+    const res = await this.createBaseCollaborator({
       collaborators: collaborator.collaborators,
       baseId,
       role: collaborator.role,
       createdBy: this.cls.get('user.id'),
     });
+    await this.sendCollaboratorAccessNotifications({
+      collaborators: collaborator.collaborators,
+      resourceId: baseId,
+      resourceName: base.name,
+      resourceType: CollaboratorType.Base,
+      createdBy: this.cls.get('user.id'),
+    });
+    return res;
   }
 
   async validateUserAddRole({

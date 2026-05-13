@@ -655,6 +655,10 @@
     "exportBase": {
       "successText": "Дані експорту готові",
       "failedText": "Експорт не вдався, спробуйте ще раз"
+    },
+    "collaborator": {
+      "baseAdded": "{{fromUserName}} додав вас як співпрацівника до бази \"{{resourceName}}\"",
+      "spaceAdded": "{{fromUserName}} додав вас як співпрацівника до простору \"{{resourceName}}\""
     }
   },
   "role": {

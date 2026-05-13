@@ -87,6 +87,7 @@ export const NotificationsManage: React.FC = () => {
   const [newUnreadCount, setNewUnreadCount] = useState<number | undefined>(undefined);
 
   const [notifyStatus, setNotifyStatus] = useState(NotificationStatesEnum.Unread);
+  const unreadBadgeText = unreadCount > 99 ? '99+' : unreadCount;
 
   const { data: queryUnreadCount = 0 } = useQuery({
     queryKey: ReactQueryKeys.notifyUnreadCount(),
@@ -164,6 +165,17 @@ export const NotificationsManage: React.FC = () => {
     }
   }, [notification?.notification, t]);
 
+  useEffect(() => {
+    const messageI18n = notification?.notification?.messageI18n;
+    if (!messageI18n?.includes('notification.collaborator.')) {
+      return;
+    }
+
+    queryClient.invalidateQueries({ queryKey: ReactQueryKeys.getSharedBase() });
+    queryClient.invalidateQueries({ queryKey: ReactQueryKeys.baseAll() });
+    queryClient.invalidateQueries({ queryKey: ReactQueryKeys.spaceList() });
+  }, [notification?.notification?.id, notification?.notification?.messageI18n, queryClient]);
+
   const {
     data: notifyPage,
     fetchNextPage,
@@ -233,8 +245,8 @@ export const NotificationsManage: React.FC = () => {
         >
           <Bell className="size-5 shrink-0" />
           {unreadCount > 0 ? (
-            <span className="absolute right-2.5 top-1 inline-flex -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full bg-red-400 p-1 text-[8px] leading-none text-white">
-              {unreadCount}
+            <span className="absolute right-2 top-1 inline-flex size-[18px] -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full bg-red-400 text-[9px] leading-none text-white">
+              {unreadBadgeText}
             </span>
           ) : (
             ''

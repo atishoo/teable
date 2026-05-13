@@ -675,6 +675,10 @@
     "exportBase": {
       "successText": "Данные экспорта готовы",
       "failedText": "Экспорт не удался, попробуйте снова"
+    },
+    "collaborator": {
+      "baseAdded": "{{fromUserName}} добавил вас в качестве участника базы \"{{resourceName}}\"",
+      "spaceAdded": "{{fromUserName}} добавил вас в качестве участника пространства \"{{resourceName}}\""
     }
   },
   "role": {

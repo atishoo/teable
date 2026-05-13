@@ -25,6 +25,7 @@ import type { IClsStore } from '../../types/cls';
 import { generateInvitationCode } from '../../utils/code-generate';
 import { CollaboratorService } from '../collaborator/collaborator.service';
 import { MailSenderService } from '../mail-sender/mail-sender.service';
+import { NotificationService } from '../notification/notification.service';
 import { SettingOpenApiService } from '../setting/open-api/setting-open-api.service';
 import { UserService } from '../user/user.service';
 
@@ -38,6 +39,7 @@ export class InvitationService {
     private readonly mailSenderService: MailSenderService,
     private readonly collaboratorService: CollaboratorService,
     private readonly userService: UserService,
+    private readonly notificationService: NotificationService,
     private readonly eventEmitter: EventEmitter2
   ) {}
 
@@ -110,7 +112,7 @@ export class InvitationService {
       (email) => !sendUsers.find((u) => u.email.toLowerCase() === email.toLowerCase())
     );
 
-    return this.prismaService.$tx(async () => {
+    const result = await this.prismaService.$tx(async () => {
       // create user if not exist
       const newUsers = await this.createNotExistedUser(noExistEmails);
       sendUsers.push(...newUsers);
@@ -190,6 +192,22 @@ export class InvitationService {
 
       return result;
     });
+
+    await Promise.allSettled(
+      sendUsers
+        .filter((sendUser) => sendUser.id !== user.id)
+        .map((sendUser) =>
+          this.notificationService.sendCollaboratorAccessNotify({
+            fromUserId: user.id,
+            toUserId: sendUser.id,
+            resourceId,
+            resourceName,
+            resourceType,
+          })
+        )
+    );
+
+    return result;
   }
 
   async emailInvitationBySpace(spaceId: string, data: EmailSpaceInvitationRo) {

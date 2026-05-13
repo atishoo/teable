@@ -702,6 +702,10 @@
     "exportBase": {
       "successText": "Exportdaten sind bereit",
       "failedText": "Export fehlgeschlagen, bitte erneut versuchen"
+    },
+    "collaborator": {
+      "baseAdded": "{{fromUserName}} hat Sie als Mitarbeiter zur Base \"{{resourceName}}\" hinzugefügt",
+      "spaceAdded": "{{fromUserName}} hat Sie als Mitarbeiter zum Space \"{{resourceName}}\" hinzugefügt"
     }
   },
   "role": {

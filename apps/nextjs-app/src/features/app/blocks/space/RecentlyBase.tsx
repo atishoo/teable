@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getUserLastVisitListBase, getSpaceList, getSharedBase } from '@teable/openapi';
+import { getUserLastVisitListBase, getSharedBase } from '@teable/openapi';
 import { ReactQueryKeys } from '@teable/sdk/config';
 import {
   Card,
@@ -82,7 +82,7 @@ export const RecentlyBase = () => {
               </div>
             ) : (
               <div className="flex flex-col gap-2">
-                <BaseList baseIds={sharedBases.map((base) => base.id)} />
+                <BaseList bases={sharedBases} baseIds={sharedBases.map((base) => base.id)} />
               </div>
             )}
           </TabsContent>

@@ -47,12 +47,13 @@ enum ViewMode {
 
 interface IBaseListProps {
   baseIds: string[];
+  bases?: IGetBaseVo[];
   spaceId?: string;
   showToolbar?: boolean;
 }
 
 export const BaseList = (props: IBaseListProps) => {
-  const { baseIds, spaceId, showToolbar = false } = props;
+  const { baseIds, bases, spaceId, showToolbar = false } = props;
   const { t } = useTranslation(spaceConfig.i18nNamespaces);
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -95,8 +96,8 @@ export const BaseList = (props: IBaseListProps) => {
   });
 
   const allBaseMap = useMemo(() => {
-    return keyBy(allBaseList, 'id');
-  }, [allBaseList]);
+    return keyBy(bases ?? allBaseList, 'id');
+  }, [allBaseList, bases]);
 
   // Get all bases in their stored order (backend returns sorted by base.order)
   const orderedBases = useMemo(() => {

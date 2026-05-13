@@ -1231,6 +1231,10 @@ export type I18nTranslations = {
                 "successText": string;
                 "failedText": string;
             };
+            "collaborator": {
+                "baseAdded": string;
+                "spaceAdded": string;
+            };
         };
         "role": {
             "title": {
