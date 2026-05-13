@@ -53,7 +53,7 @@ export const LinkNotification = (props: LinkNotificationProps) => {
   };
 
   return notifyType !== NotificationTypeEnum.ExportBase ? (
-    <Link href={url}>
+    <Link href={url} className="text-foreground hover:text-foreground">
       {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
       <div
         className="max-h-20 overflow-auto break-words"

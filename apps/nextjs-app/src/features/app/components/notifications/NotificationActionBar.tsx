@@ -27,11 +27,12 @@ export const NotificationActionBar: React.FC<ActionBarProps> = (props) => {
   return (
     <HoverCard openDelay={100} closeDelay={0}>
       <HoverCardTrigger
+        asChild
         onClick={async () => {
           await commonHandler();
         }}
       >
-        {children}
+        <div>{children}</div>
       </HoverCardTrigger>
       <HoverCardContent
         className="size-auto p-0"
