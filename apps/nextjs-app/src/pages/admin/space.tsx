@@ -149,7 +149,9 @@ const AdminSpacePage: NextPageWithLayout = () => {
           <Table className="min-w-[1600px] table-fixed">
             <TableHeader className="sticky top-0 z-20 bg-background">
               <TableRow>
-                <TableHead className="w-[320px] whitespace-nowrap">空间</TableHead>
+                <TableHead className="sticky left-0 z-30 w-[320px] whitespace-nowrap border-r bg-background">
+                  空间
+                </TableHead>
                 <TableHead className="w-[300px] whitespace-nowrap">创建者</TableHead>
                 <TableHead className="w-[100px] whitespace-nowrap">数据库</TableHead>
                 <TableHead className="w-[110px] whitespace-nowrap">协作者</TableHead>
@@ -182,7 +184,7 @@ const AdminSpacePage: NextPageWithLayout = () => {
                 const isDeleted = Boolean(item.deletedTime);
                 return (
                   <TableRow key={item.id}>
-                    <TableCell className="w-[320px] whitespace-nowrap">
+                    <TableCell className="sticky left-0 z-20 w-[320px] whitespace-nowrap border-r bg-background">
                       <div className="flex min-w-0 items-center gap-3">
                         <SpaceAvatar name={item.name} className="size-7 rounded-sm border" />
                         <div className="min-w-0">

@@ -185,7 +185,9 @@ const AdminUserPage: NextPageWithLayout = () => {
           <Table className="min-w-[1290px] table-fixed">
             <TableHeader className="sticky top-0 z-20 bg-background">
               <TableRow>
-                <TableHead className="w-[360px] whitespace-nowrap">用户</TableHead>
+                <TableHead className="sticky left-0 z-30 w-[360px] whitespace-nowrap border-r bg-background">
+                  用户
+                </TableHead>
                 <TableHead className="w-[110px] whitespace-nowrap">角色</TableHead>
                 <TableHead className="w-[120px] whitespace-nowrap">状态</TableHead>
                 <TableHead className="w-[170px] whitespace-nowrap">最近登录</TableHead>
@@ -218,7 +220,7 @@ const AdminUserPage: NextPageWithLayout = () => {
                 const isDeleted = Boolean(item.deletedTime);
                 return (
                   <TableRow key={item.id}>
-                    <TableCell className="w-[360px] whitespace-nowrap">
+                    <TableCell className="sticky left-0 z-20 w-[360px] whitespace-nowrap border-r bg-background">
                       <div className="flex min-w-0 items-center gap-3">
                         <UserAvatar user={item} />
                         <div className="min-w-0">
