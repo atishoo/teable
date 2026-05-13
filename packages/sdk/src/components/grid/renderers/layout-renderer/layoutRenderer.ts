@@ -1,5 +1,5 @@
-import { contractColorForTheme } from '@teable/core';
 import { isEqual, groupBy, cloneDeep } from 'lodash';
+import { collaboratorColorCount } from '../../../collaborator';
 import type { IGridTheme } from '../../configs';
 import { GRID_DEFAULT, ROW_RELATED_REGIONS } from '../../configs';
 import type { IVisibleRegion } from '../../hooks';
@@ -40,6 +40,81 @@ import { RenderRegion, DividerRegion } from './interface';
 const spriteIconMap = {
   [RowControlType.Drag]: GridInnerIcon.Drag,
   [RowControlType.Expand]: GridInnerIcon.Detail,
+};
+
+const collaboratorFocusLineWidth = 3;
+const collaboratorLabelHeight = 20;
+const collaboratorLabelPaddingX = 6;
+const collaboratorLabelMaxWidth = 120;
+
+interface ICollaboratorLabelProps {
+  x: number;
+  y: number;
+  width: number;
+  borderColor: string;
+  userName: string;
+  isFreezeRegion: boolean;
+  freezeRegionWidth: number;
+  rowInitSize: number;
+  containerWidth: number;
+  theme: IGridTheme;
+}
+
+const drawCollaboratorLabel = (ctx: CanvasRenderingContext2D, props: ICollaboratorLabelProps) => {
+  const {
+    x,
+    y,
+    width,
+    borderColor,
+    userName,
+    isFreezeRegion,
+    freezeRegionWidth,
+    rowInitSize,
+    containerWidth,
+    theme,
+  } = props;
+  const leftBound = isFreezeRegion ? 0 : freezeRegionWidth;
+  const rightBound = isFreezeRegion ? freezeRegionWidth : containerWidth;
+  const fontSize = theme.fontSizeXS;
+  const maxWidth = Math.max(
+    24,
+    Math.min(width - 4, rightBound - leftBound - 2, collaboratorLabelMaxWidth)
+  );
+
+  ctx.save();
+  ctx.font = `500 ${fontSize}px ${theme.fontFamily}`;
+
+  const textMaxWidth = Math.max(12, maxWidth - collaboratorLabelPaddingX * 2);
+  const textWidth = drawSingleLineText(ctx, {
+    text: userName,
+    fontSize,
+    maxWidth: textMaxWidth,
+    needRender: false,
+  }).width;
+  const labelWidth = Math.min(maxWidth, textWidth + collaboratorLabelPaddingX * 2);
+  const labelX = Math.max(leftBound + 1, Math.min(x + 1, rightBound - labelWidth - 1));
+  const labelY =
+    y - collaboratorLabelHeight >= rowInitSize ? y - collaboratorLabelHeight + 1 : y + 1;
+
+  drawRect(ctx, {
+    x: labelX,
+    y: labelY,
+    width: labelWidth,
+    height: collaboratorLabelHeight,
+    fill: hexToRGBA(borderColor),
+    radius: 3,
+  });
+  drawSingleLineText(ctx, {
+    x: labelX + collaboratorLabelPaddingX,
+    y: labelY + (collaboratorLabelHeight - fontSize) / 2,
+    text: userName,
+    fill: theme.staticWhite,
+    fontSize,
+    maxWidth: textMaxWidth,
+    verticalAlign: 'top',
+  });
+
+  ctx.restore();
 };
 
 const {
@@ -744,12 +819,13 @@ export const drawCollaborators = (ctx: CanvasRenderingContext2D, props: ILayoutD
     getLinearRow,
   } = props;
   const { scrollTop, scrollLeft } = scrollState;
-  const { themeKey } = theme;
 
   const { freezeColumnCount, freezeRegionWidth, rowInitSize, containerWidth, containerHeight } =
     coordInstance;
 
   if (!collaborators?.length) return;
+
+  const shouldShowCollaboratorLabels = collaborators.length > collaboratorColorCount;
 
   ctx.save();
 
@@ -793,13 +869,29 @@ export const drawCollaborators = (ctx: CanvasRenderingContext2D, props: ILayoutD
     ctx.clip();
 
     drawRect(ctx, {
-      x: x + 0.5,
-      y: y + 0.5,
-      width,
-      height: height,
-      stroke: hexToRGBA(contractColorForTheme(borderColor, themeKey)),
+      x: x + collaboratorFocusLineWidth / 2,
+      y: y + collaboratorFocusLineWidth / 2,
+      width: width - collaboratorFocusLineWidth,
+      height: height - collaboratorFocusLineWidth,
+      stroke: hexToRGBA(borderColor),
+      lineWidth: collaboratorFocusLineWidth,
       radius: 2,
     });
+
+    if (shouldShowCollaboratorLabels) {
+      drawCollaboratorLabel(ctx, {
+        x,
+        y,
+        width,
+        borderColor,
+        userName: conflictCollaborators[0].user.name,
+        isFreezeRegion,
+        freezeRegionWidth,
+        rowInitSize,
+        containerWidth,
+        theme,
+      });
+    }
 
     ctx.restore();
   }

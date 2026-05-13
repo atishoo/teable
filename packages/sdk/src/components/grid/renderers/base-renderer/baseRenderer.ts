@@ -229,11 +229,13 @@ export const drawLine = (ctx: CanvasRenderingContext2D, props: ILineProps) => {
 };
 
 export const drawRect = (ctx: CanvasRenderingContext2D, props: IRectProps) => {
-  const { x, y, width, height, fill, stroke, radius: _radius, opacity } = props;
+  const { x, y, width, height, fill, stroke, lineWidth, radius: _radius, opacity } = props;
+  const previousLineWidth = ctx.lineWidth;
 
   ctx.beginPath();
   if (fill) ctx.fillStyle = fill;
   if (stroke) ctx.strokeStyle = stroke;
+  if (lineWidth != null) ctx.lineWidth = lineWidth;
   if (opacity) ctx.globalAlpha = opacity;
 
   if (_radius == null) {
@@ -259,6 +261,7 @@ export const drawRect = (ctx: CanvasRenderingContext2D, props: IRectProps) => {
 
   if (fill) ctx.fill();
   if (stroke) ctx.stroke();
+  if (lineWidth != null) ctx.lineWidth = previousLineWidth;
 };
 
 // eslint-disable-next-line sonarjs/cognitive-complexity
@@ -629,6 +632,7 @@ export const drawAvatar = (ctx: CanvasRenderingContext2D, props: IAvatarProps) =
     height,
     fill,
     stroke,
+    strokeWidth,
     defaultText,
     textColor,
     img,
@@ -641,6 +645,7 @@ export const drawAvatar = (ctx: CanvasRenderingContext2D, props: IAvatarProps) =
 
   // wrapper stroke
   if (stroke) ctx.strokeStyle = stroke;
+  if (strokeWidth != null) ctx.lineWidth = strokeWidth;
   ctx.arc(x + width / 2, y + height / 2, width / 2, 0, Math.PI * 2, false);
 
   if (fill) ctx.fillStyle = fill;

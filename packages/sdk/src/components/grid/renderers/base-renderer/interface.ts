@@ -25,6 +25,7 @@ interface ICornerRadius {
 export interface IRectProps extends IRectangle {
   fill?: string;
   stroke?: string;
+  lineWidth?: number;
   radius?: number | ICornerRadius;
   opacity?: number;
 }
@@ -124,6 +125,7 @@ export interface IAvatarProps extends IRectangle {
   img?: HTMLImageElement | ImageBitmap;
   fill?: string;
   stroke?: string;
+  strokeWidth?: number;
   fontSize?: number;
   textColor?: string;
   fontFamily: string;

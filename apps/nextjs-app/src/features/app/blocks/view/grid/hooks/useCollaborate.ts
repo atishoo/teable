@@ -1,6 +1,6 @@
-import { ColorUtils, getCellCollaboratorsChannel } from '@teable/core';
+import { getCellCollaboratorsChannel } from '@teable/core';
 import type { ICellItem, ICell } from '@teable/sdk';
-import { useSession } from '@teable/sdk';
+import { useSession, getCollaboratorColor, getCollaboratorColorMap } from '@teable/sdk';
 import { SelectionRegionType } from '@teable/sdk/components/grid';
 import type { ICollaborator, CombinedSelection } from '@teable/sdk/components/grid';
 import { useConnection, useIsReadOnlyPreview, useTableId, useViewId } from '@teable/sdk/hooks';
@@ -49,7 +49,19 @@ export const useCollaborate = (
 
     const receiveHandler = () => {
       if (presence?.remotePresences) {
-        setCollaborators(Object.values(presence.remotePresences));
+        const remoteCollaborators = Object.values(presence.remotePresences) as ICollaborator;
+        const collaboratorColorMap = getCollaboratorColorMap(
+          remoteCollaborators.map(({ user }) => `${tableId}_${user.id}`)
+        );
+
+        setCollaborators(
+          remoteCollaborators.map((collaborator) => ({
+            ...collaborator,
+            borderColor:
+              collaboratorColorMap.get(`${tableId}_${collaborator.user.id}`) ??
+              collaborator.borderColor,
+          }))
+        );
       }
     };
 
@@ -62,7 +74,7 @@ export const useCollaborate = (
       presence?.unsubscribe();
       presence?.removeListener('receive', receiveHandler);
     };
-  }, [isReadOnlyPreview, presence]);
+  }, [isReadOnlyPreview, presence, tableId]);
 
   useEffect(() => {
     if (isReadOnlyPreview || !localPresence) {
@@ -88,7 +100,7 @@ export const useCollaborate = (
               email: user.email,
             },
             activeCellId: activeCellId,
-            borderColor: ColorUtils.getRandomHexFromStr(`${tableId}_${user.id}`),
+            borderColor: getCollaboratorColor(`${tableId}_${user.id}`),
             timeStamp: Date.now(),
           },
           (error) => {

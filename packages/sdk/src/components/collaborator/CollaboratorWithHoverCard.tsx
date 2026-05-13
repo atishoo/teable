@@ -6,12 +6,69 @@ import { useTranslation } from '../../context/app/i18n';
 import { useSession } from '../../hooks';
 import { UserAvatar } from '../cell-value';
 
+const collaboratorColors = [
+  '#ef4444',
+  '#22c55e',
+  '#3b82f6',
+  '#f59e0b',
+  '#a855f7',
+  '#06b6d4',
+  '#ec4899',
+  '#84cc16',
+  '#14b8a6',
+  '#f97316',
+  '#6366f1',
+  '#d946ef',
+  '#10b981',
+  '#eab308',
+  '#0ea5e9',
+  '#f43f5e',
+];
+
+export const collaboratorColorCount = collaboratorColors.length;
+
 export type ICollaboratorUser = Omit<
   IUser,
   'phone' | 'notifyMeta' | 'hasPassword' | 'isAdmin' | 'avatar'
 > & {
   borderColor?: string;
   avatar?: ReactNode;
+};
+
+const getCollaboratorColorIndex = (seedSource: string) => {
+  let seed = 0;
+
+  for (let i = 0; i < seedSource.length; i++) {
+    seed = (seed << 5) - seed + seedSource.charCodeAt(i);
+    seed |= 0;
+  }
+
+  return Math.abs(seed) % collaboratorColorCount;
+};
+
+export const getCollaboratorColor = (seedSource: string) => {
+  return collaboratorColors[getCollaboratorColorIndex(seedSource)];
+};
+
+export const getCollaboratorColorMap = (seedSources: string[]) => {
+  const usedColorIndices = new Set<number>();
+
+  return new Map(
+    Array.from(new Set(seedSources))
+      .sort()
+      .map((seedSource) => {
+        let colorIndex = getCollaboratorColorIndex(seedSource);
+
+        if (usedColorIndices.size < collaboratorColorCount) {
+          while (usedColorIndices.has(colorIndex)) {
+            colorIndex = (colorIndex + 1) % collaboratorColorCount;
+          }
+        }
+
+        usedColorIndices.add(colorIndex);
+        return [seedSource, collaboratorColors[colorIndex]];
+      })
+  );
 };
 
 export const CollaboratorWithHoverCard = (props: ICollaboratorUser) => {
@@ -26,7 +83,7 @@ export const CollaboratorWithHoverCard = (props: ICollaboratorUser) => {
           <UserAvatar
             name={name}
             avatar={avatar}
-            className="size-6 cursor-pointer border"
+            className="size-6 cursor-pointer border-2"
             style={{
               borderColor: borderColor ?? colors.gray[500],
             }}

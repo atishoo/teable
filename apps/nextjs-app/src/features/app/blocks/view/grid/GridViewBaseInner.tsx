@@ -4,7 +4,6 @@ import {
   FieldKeyType,
   FieldType,
   RowHeightLevel,
-  contractColorForTheme,
   fieldVoSchema,
   stringifyClipboardText,
 } from '@teable/core';
@@ -62,6 +61,7 @@ import {
   TaskStatusCollectionContext,
   PendingUploadContext,
   isNeedPersistEditing,
+  collaboratorColorCount,
 } from '@teable/sdk';
 import { GRID_DEFAULT } from '@teable/sdk/components/grid/configs';
 import { useScrollFrameRate } from '@teable/sdk/components/grid/hooks';
@@ -1254,7 +1254,11 @@ export const GridViewBaseInner: React.FC<IGridViewBaseInnerProps> = (
       });
     }
 
-    if ([RegionType.Cell, RegionType.ActiveCell].includes(type) && collaborators.length) {
+    if (
+      [RegionType.Cell, RegionType.ActiveCell].includes(type) &&
+      collaborators.length &&
+      collaborators.length <= collaboratorColorCount
+    ) {
       const { x, y, width, height } = bounds;
       const cellInfo = getCellContent(cellItem);
       if (!cellInfo?.id) {
@@ -1291,12 +1295,7 @@ export const GridViewBaseInner: React.FC<IGridViewBaseInnerProps> = (
             direction: 'rtl',
             lineHeight: `${hoverHeight}px`,
             // multiple collaborators only display the latest one
-            backgroundColor: hexToRGBA(
-              contractColorForTheme(
-                hoverCollaborators.slice(-1)[0].borderColor,
-                theme.themeKey ?? 'light'
-              )
-            ),
+            backgroundColor: hexToRGBA(hoverCollaborators.slice(-1)[0].borderColor),
           },
         });
     }
