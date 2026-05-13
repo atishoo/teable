@@ -102,7 +102,6 @@ import { ExpandRecordContainer } from '@/features/app/components/expand-record-c
 import type { IExpandRecordContainerRef } from '@/features/app/components/expand-record-container/types';
 import { useChatPanelStore } from '@/features/app/components/sidebar/useChatPanelStore';
 import { useShareAllowCopy, useShareContext } from '@/features/app/context/ShareContext';
-import { useBaseUsage } from '@/features/app/hooks/useBaseUsage';
 import { useDisableAIAction } from '@/features/app/hooks/useDisableAIAction';
 import { tableConfig } from '@/features/i18n/table.config';
 import { FieldOperator } from '../../../components/field-setting';
@@ -184,7 +183,6 @@ export const GridViewBaseInner: React.FC<IGridViewBaseInnerProps> = (
   const ssrRecord = useSSRRecord();
   const theme = useGridTheme();
   const fields = useFields();
-  const usage = useBaseUsage();
   const { aiField: aiFieldEnabled } = useDisableAIAction();
   const allFields = useFields({ withHidden: true });
   const taskStatusCollection = useContext(TaskStatusCollectionContext);
@@ -242,8 +240,7 @@ export const GridViewBaseInner: React.FC<IGridViewBaseInnerProps> = (
   const [newRecords, setNewRecords] = useState<ICreateRecordsRo['records']>();
   const [cellErrors, setCellErrors] = useState<ICellError[]>([]);
 
-  const { fieldAIEnable: billingFieldAIEnable = false } = usage?.limit ?? {};
-  const fieldAIEnable = billingFieldAIEnable && aiFieldEnabled;
+  const fieldAIEnable = aiFieldEnabled;
 
   const aiAutoFillDialogRef = useRef<IAiAutoFillDialogContainerRef>(null);
 
@@ -639,7 +636,9 @@ export const GridViewBaseInner: React.FC<IGridViewBaseInnerProps> = (
                 timestamp: Date.now(),
                 addToChat: true,
               });
-              useChatPanelStore.getState().open();
+              const chatPanelStore = useChatPanelStore.getState();
+              chatPanelStore.setPanelType('general');
+              chatPanelStore.open();
             }
           },
           deleteRecords: async () => {
@@ -684,7 +683,9 @@ export const GridViewBaseInner: React.FC<IGridViewBaseInnerProps> = (
                 timestamp: Date.now(),
                 addToChat: true,
               });
-              useChatPanelStore.getState().open();
+              const chatPanelStore = useChatPanelStore.getState();
+              chatPanelStore.setPanelType('general');
+              chatPanelStore.open();
             }
           },
           insertRecord: (anchorId, position, num: number) => {

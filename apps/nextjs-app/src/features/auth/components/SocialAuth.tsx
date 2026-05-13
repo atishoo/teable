@@ -22,7 +22,7 @@ export const providersAll = [
   },
   {
     id: 'oidc',
-    text: 'OIDC',
+    text: 'SSO',
     authUrl: '/api/auth/oidc',
   },
 ];

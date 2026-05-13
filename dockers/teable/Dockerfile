@@ -8,8 +8,8 @@ ARG BUILD_VERSION="1.0.0-alpha"
 
 FROM node:${NODE_VERSION}-bookworm AS deps
 ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable && pnpm add npm-run-all2 zx -g
+ENV PATH="$PNPM_HOME/bin:$PNPM_HOME:$PATH"
+RUN corepack enable && corepack prepare pnpm@9.13.0 --activate && pnpm add npm-run-all2 zx -g
 
 # Disabling some well-known postinstall scripts
 ENV HUSKY=0
@@ -51,9 +51,12 @@ RUN set -ex; \
         echo "\nNEXT_PUBLIC_BUILD_VERSION=\"${BUILD_VERSION}\"" >> apps/nextjs-app/.env; \
 # Distinguish whether it is an integration test operation
         if [ -n "$INTEGRATION_TEST" ]; then \
-              pnpm -F "./packages/**" run build; \
+              pnpm --workspace-concurrency=1 -F "./packages/**" run build; \
         else \
-              NODE_OPTIONS=--max-old-space-size=8192 pnpm -r run build; \
+              NODE_OPTIONS=--max-old-space-size=8192 pnpm --workspace-concurrency=1 -F "./packages/**" run build; \
+              NODE_OPTIONS=--max-old-space-size=8192 pnpm -F @teable/plugin run build; \
+              NODE_OPTIONS=--max-old-space-size=8192 pnpm -F @teable/backend run build; \
+              NODE_OPTIONS=--max-old-space-size=8192 pnpm -F @teable/app run build-fast; \
         fi
 
 
@@ -76,7 +79,7 @@ RUN set -ex; \
         chmod +x ./scripts/post-build-cleanup.mjs; \
         zx ./scripts/post-build-cleanup.mjs; \
         pnpm -F '!@teable/eslint-config-bases' --config.dedupe-peer-dependents=false install --prod --prefer-offline --frozen-lockfile; \
-        pnpm -F @teable/db-main-prisma prisma-generate --schema ./prisma/postgres/schema.prisma
+        PRISMA_DATABASE_URL="postgresql://teable:teable@127.0.0.1:5432/teable?schema=public" pnpm -F @teable/db-main-prisma exec prisma generate --schema ./prisma/postgres/schema.prisma
 
 RUN set -ex; \
         apt-get update; \
@@ -94,12 +97,15 @@ FROM tianon/gosu:1.19 AS gosu
 
 FROM node:${NODE_VERSION}-bookworm-slim AS runner
 
+ARG BUILD_VERSION
+ARG NEXTJS_APP_PORT=3000
+
 ENV TZ=UTC \
     NODE_ENV=production \
-    PORT=${NEXTJS_APP_PORT:-3000}\
+    PORT=${NEXTJS_APP_PORT} \
     NEXTJS_DIR=apps/nextjs-app \
-    PNPM_HOME="/pnpm" \
-    PATH="$PNPM_HOME:$PATH"
+    PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME/bin:$PNPM_HOME:$PATH"
 
 RUN set -ex; \
         npm install zx -g; \

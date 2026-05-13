@@ -7,6 +7,11 @@ import { z } from '../zod';
 
 export const EXPORT_CSV_FROM_TABLE = '/export/{tableId}';
 
+export enum ExportTableFormat {
+  Csv = 'csv',
+  Xlsx = 'xlsx',
+}
+
 export const exportCsvQuerySchema = contentQueryBaseSchema.pick({
   viewId: true,
   ignoreViewQuery: true,
@@ -42,6 +47,10 @@ export const exportCsvRoSchema = exportCsvQuerySchema
         description:
           'When ignoreViewQuery is true, use this columnMeta to sort fields by order. Format: { fieldId: { order: number } }',
       }),
+    format: z.nativeEnum(ExportTableFormat).optional().meta({
+      description: 'Export file format. Defaults to csv.',
+      example: ExportTableFormat.Csv,
+    }),
   });
 
 export type IExportCsvRo = z.infer<typeof exportCsvRoSchema>;

@@ -676,6 +676,7 @@
       "cancel": "キャンセル",
       "leave": "離れる",
       "downAsCsv": "csvをダウンロード",
+      "downAsXlsx": "XLSXをダウンロード",
       "importData": "データをインポート",
       "duplicate": "複製",
       "duplicating": "複製中...",

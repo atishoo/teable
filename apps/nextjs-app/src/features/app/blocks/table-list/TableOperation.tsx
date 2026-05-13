@@ -51,7 +51,8 @@ export const TableOperation = (props: ITableOperationProps) => {
   const queryClient = useQueryClient();
   const { baseId, tableId: routerTableId } = router.query;
   const { t } = useTranslation(tableConfig.i18nNamespaces);
-  const { trigger } = useDownload({ downloadUrl: `/api/export/${table.id}`, key: 'table' });
+  const downloadUrl = `/api/export/${table.id}`;
+  const { trigger } = useDownload({ downloadUrl, key: 'table' });
 
   const defaultTableName = useMemo(
     () =>
@@ -149,14 +150,24 @@ export const TableOperation = (props: ITableOperationProps) => {
             </DropdownMenuItem>
           )}
           {menuPermission.exportTable && (
-            <DropdownMenuItem
-              onClick={() => {
-                trigger?.();
-              }}
-            >
-              <Export className="mr-2 size-4" />
-              {t('table:import.menu.downAsCsv')}
-            </DropdownMenuItem>
+            <>
+              <DropdownMenuItem
+                onClick={() => {
+                  trigger?.();
+                }}
+              >
+                <Export className="mr-2 size-4" />
+                {t('table:import.menu.downAsCsv')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  trigger?.(`${downloadUrl}?format=xlsx`);
+                }}
+              >
+                <FileExcel className="mr-2 size-4" />
+                {t('table:import.menu.downAsXlsx')}
+              </DropdownMenuItem>
+            </>
           )}
           {menuPermission.importTable && (
             <DropdownMenuSub>

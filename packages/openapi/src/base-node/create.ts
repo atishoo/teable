@@ -44,6 +44,8 @@ export type ICreateDashboardNodeRo = z.infer<typeof createBaseDashboardNodeRoSch
 const createBaseWorkflowNodeRoSchema = z.object({
   ...createBaseNodeSchema.shape,
   resourceType: z.literal(BaseNodeResourceType.Workflow),
+  trigger: z.unknown().optional(),
+  isActive: z.boolean().optional(),
 });
 
 export type ICreateWorkflowNodeRo = z.infer<typeof createBaseWorkflowNodeRoSchema>;

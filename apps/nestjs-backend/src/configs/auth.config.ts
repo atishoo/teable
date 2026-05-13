@@ -13,6 +13,33 @@ const getCookieSecure = (value: string | undefined) => {
   return value === 'true';
 };
 
+type SocialAuthEnv = Record<string, string | undefined>;
+
+const isOidcConfigured = (env: SocialAuthEnv) =>
+  Boolean(
+    env.BACKEND_OIDC_CLIENT_ID &&
+      env.BACKEND_OIDC_CLIENT_SECRET &&
+      env.BACKEND_OIDC_CALLBACK_URL &&
+      (env.BACKEND_OIDC_ISSUER ||
+        (env.BACKEND_OIDC_AUTHORIZATION_URL &&
+          env.BACKEND_OIDC_TOKEN_URL &&
+          env.BACKEND_OIDC_USER_INFO_URL))
+  );
+
+export const getSocialAuthProviders = (env: SocialAuthEnv = process.env) => {
+  const providers = new Set(
+    env.SOCIAL_AUTH_PROVIDERS?.split(',')
+      .map((provider) => provider.trim())
+      .filter(Boolean) ?? []
+  );
+
+  if (isOidcConfigured(env)) {
+    providers.add('oidc');
+  }
+
+  return Array.from(providers);
+};
+
 export const authConfig = registerAs('auth', () => ({
   jwt: {
     secret:
@@ -45,7 +72,7 @@ export const authConfig = registerAs('auth', () => ({
     process.env.BACKEND_EMAIL_CODE_EXPIRES_IN ??
     process.env.BACKEND_SIGNUP_VERIFICATION_EXPIRES_IN ??
     '30m',
-  socialAuthProviders: process.env.SOCIAL_AUTH_PROVIDERS?.split(',') ?? [],
+  socialAuthProviders: getSocialAuthProviders(),
   github: {
     clientID: process.env.BACKEND_GITHUB_CLIENT_ID,
     clientSecret: process.env.BACKEND_GITHUB_CLIENT_SECRET,

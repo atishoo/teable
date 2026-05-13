@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { ViewType } from '@teable/core';
-import { Lock, Share2, Star, Trash } from '@teable/icons';
+import { FileExcel, Lock, Share2, Star, Trash } from '@teable/icons';
 import { BaseNodeResourceType, duplicateView } from '@teable/openapi';
 import {
   useBaseId,
@@ -121,6 +121,10 @@ export const ViewListItem: React.FC<IProps> = ({ view, removable, isActive, onEd
     downloadUrl,
     key: 'view',
   });
+  const downloadXlsxUrl = useMemo(
+    () => `${downloadUrl}${downloadUrl.includes('?') ? '&' : '?'}format=xlsx`,
+    [downloadUrl]
+  );
 
   const { resetSearchHandler } = useGridSearchStore();
   const isInIframe = useIsInIframe();
@@ -274,10 +278,16 @@ export const ViewListItem: React.FC<IProps> = ({ view, removable, isActive, onEd
             </ContextMenuItem>
           )}
           {view.type === 'grid' && permission['table|export'] && (
-            <ContextMenuItem onClick={() => trigger?.()}>
-              <Download className="size-4 shrink-0" />
-              {t('import.menu.downAsCsv')}
-            </ContextMenuItem>
+            <>
+              <ContextMenuItem onClick={() => trigger?.()}>
+                <Download className="size-4 shrink-0" />
+                {t('import.menu.downAsCsv')}
+              </ContextMenuItem>
+              <ContextMenuItem onClick={() => trigger?.(downloadXlsxUrl)}>
+                <FileExcel className="size-4 shrink-0" />
+                {t('import.menu.downAsXlsx')}
+              </ContextMenuItem>
+            </>
           )}
           {permission['view|create'] && (
             <ContextMenuItem

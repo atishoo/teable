@@ -10,6 +10,7 @@ import type {
   GetServerSideProps as NextGetServerSideProps,
 } from 'next';
 import { getAppDatabaseUrl } from './database-url';
+import { getSocialAuthProviders } from './get-social-auth-providers';
 
 type GetServerSideProps<
   P extends { [key: string]: any } = { [key: string]: any },
@@ -49,7 +50,7 @@ export default function withEnv<P extends { [key: string]: any }>(
         gaId: process.env.GA_ID,
         googleAdsConversionId: process.env.GOOGLE_ADS_CONVERSION_ID,
         sentryDsn: process.env.SENTRY_DSN,
-        socialAuthProviders: process.env.SOCIAL_AUTH_PROVIDERS?.split(','),
+        socialAuthProviders: getSocialAuthProviders(),
         storage: omitBy(storage, isUndefined),
         passwordLoginDisabled: process.env.PASSWORD_LOGIN_DISABLED === 'true' ? true : undefined,
         publicDatabaseProxy: process.env.PUBLIC_DATABASE_PROXY,

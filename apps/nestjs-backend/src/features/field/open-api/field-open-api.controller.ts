@@ -50,6 +50,7 @@ import { UseV2Feature } from '../../canary/decorators/use-v2-feature.decorator';
 import { V2FeatureGuard } from '../../canary/guards/v2-feature.guard';
 import { V2IndicatorInterceptor } from '../../canary/interceptors/v2-indicator.interceptor';
 import { FieldService } from '../field.service';
+import { RecordOpenApiService } from '../../record/open-api/record-open-api.service';
 import { FieldOpenApiV2Service } from './field-open-api-v2.service';
 import { FieldOpenApiService } from './field-open-api.service';
 
@@ -62,6 +63,7 @@ export class FieldOpenApiController {
     private readonly fieldService: FieldService,
     private readonly fieldOpenApiService: FieldOpenApiService,
     private readonly fieldOpenApiV2Service: FieldOpenApiV2Service,
+    private readonly recordOpenApiService: RecordOpenApiService,
     private readonly cls: ClsService<IClsStore>
   ) {}
 
@@ -265,16 +267,16 @@ export class FieldOpenApiController {
   @Permissions('record|update')
   @Post('/:fieldId/auto-fill')
   async autoFillField(
-    @Param('tableId') _tableId: string,
-    @Param('fieldId') _fieldId: string,
-    @Body(new ZodValidationPipe(autoFillFieldRoSchema)) _query: IAutoFillFieldRo
+    @Param('tableId') tableId: string,
+    @Param('fieldId') fieldId: string,
+    @Body(new ZodValidationPipe(autoFillFieldRoSchema)) query: IAutoFillFieldRo
   ): Promise<IAutoFillFieldVo> {
-    return { taskId: null };
+    return await this.recordOpenApiService.autoFillField(tableId, fieldId, query);
   }
 
   @Permissions('record|update')
   @Post('/:fieldId/stop-fill')
-  async stopFillField(@Param('tableId') _tableId: string, @Param('fieldId') _fieldId: string) {
-    return null;
+  async stopFillField(@Param('tableId') tableId: string, @Param('fieldId') fieldId: string) {
+    return await this.recordOpenApiService.stopFillField(tableId, fieldId);
   }
 }

@@ -15,6 +15,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { FieldKeyType } from '@teable/core';
 import { PrismaService } from '@teable/db-main-prisma';
 import {
   createRecordsRoSchema,
@@ -147,7 +148,19 @@ export class RecordOpenApiController {
   ): Promise<IRecord> {
     // Use V2 logic when canary config enables it for this space + feature
     if (this.cls.get('useV2')) {
-      return this.recordOpenApiV2Service.updateRecord(tableId, recordId, updateRecordRo);
+      const result = await this.recordOpenApiV2Service.updateRecord(
+        tableId,
+        recordId,
+        updateRecordRo
+      );
+      if (!isAiInternal) {
+        await this.recordOpenApiService.autoFillDependentFieldsForUpdatedRecords(
+          tableId,
+          [{ id: recordId, fields: updateRecordRo.record.fields }],
+          updateRecordRo.fieldKeyType ?? FieldKeyType.Name
+        );
+      }
+      return result;
     }
 
     return await this.recordOpenApiService.updateRecord(
@@ -205,7 +218,15 @@ export class RecordOpenApiController {
     @Headers('x-ai-internal') isAiInternal?: string
   ): Promise<IRecord[]> {
     if (this.cls.get('useV2')) {
-      return await this.recordOpenApiV2Service.updateRecords(tableId, updateRecordsRo);
+      const result = await this.recordOpenApiV2Service.updateRecords(tableId, updateRecordsRo);
+      if (!isAiInternal) {
+        await this.recordOpenApiService.autoFillDependentFieldsForUpdatedRecords(
+          tableId,
+          updateRecordsRo.records ?? [],
+          updateRecordsRo.fieldKeyType ?? FieldKeyType.Name
+        );
+      }
+      return result;
     }
 
     return (
@@ -229,11 +250,22 @@ export class RecordOpenApiController {
   ): Promise<ICreateRecordsVo> {
     // Use V2 logic when canary config enables it for this space + feature
     if (this.cls.get('useV2')) {
-      return await this.recordOpenApiV2Service.createRecords(
+      const res = await this.recordOpenApiV2Service.createRecords(
         tableId,
         createRecordsRo,
         isAiInternal
       );
+      if (!isAiInternal) {
+        await this.recordOpenApiService.autoFillDependentFieldsForUpdatedRecords(
+          tableId,
+          res.records.map((record, index) => ({
+            id: record.id,
+            fields: createRecordsRo.records?.[index]?.fields ?? record.fields,
+          })),
+          createRecordsRo.fieldKeyType ?? FieldKeyType.Name
+        );
+      }
+      return res;
     }
 
     return await this.recordOpenApiService.multipleCreateRecords(
@@ -389,11 +421,11 @@ export class RecordOpenApiController {
   @Permissions('record|update')
   @Post(':recordId/:fieldId/auto-fill')
   async autoFillCell(
-    @Param('tableId') _tableId: string,
-    @Param('recordId') _recordId: string,
-    @Param('fieldId') _fieldId: string
+    @Param('tableId') tableId: string,
+    @Param('recordId') recordId: string,
+    @Param('fieldId') fieldId: string
   ): Promise<IAutoFillCellVo> {
-    return { taskId: '' };
+    return await this.recordOpenApiService.autoFillCell(tableId, recordId, fieldId);
   }
 
   @Permissions('record|read')

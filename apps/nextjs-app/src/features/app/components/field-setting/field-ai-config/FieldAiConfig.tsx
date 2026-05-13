@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { IFieldAIConfig } from '@teable/core';
 import { FieldType } from '@teable/core';
 import { ChevronDown, ChevronRight, HelpCircle, MagicAi } from '@teable/icons';
-import { BillingProductLevel, getAIConfig } from '@teable/openapi';
+import { getAIConfig } from '@teable/openapi';
 import { useBaseId } from '@teable/sdk/hooks';
 import {
   cn,
@@ -22,10 +22,8 @@ import {
   generateGatewayModelKeyList,
 } from '@/features/app/blocks/admin/setting/components/ai-config/utils';
 import { RequireCom } from '@/features/app/blocks/setting/components/RequireCom';
-import { useBaseUsage } from '@/features/app/hooks/useBaseUsage';
 import { useDisableAIAction } from '@/features/app/hooks/useDisableAIAction';
 import { tableConfig } from '@/features/i18n/table.config';
-import { UpgradeWrapper } from '../../billing/UpgradeWrapper';
 import type { IFieldEditorRo } from '../type';
 import { AttachmentFieldAiConfig } from './AttachmentFieldAiConfig';
 import { DateFieldAiConfig } from './DateFieldAiConfig';
@@ -52,7 +50,6 @@ const SUPPORTED_FIELD_TYPES = new Set([
 
 export const FieldAiConfig: React.FC<FieldAiConfigProps> = ({ field, onChange }) => {
   const { type: fieldType, isLookup, aiConfig } = field;
-  const usage = useBaseUsage();
   const { aiField: aiFieldEnabled } = useDisableAIAction();
   const baseId = useBaseId() as string;
   const { t } = useTranslation(tableConfig.i18nNamespaces);
@@ -65,8 +62,7 @@ export const FieldAiConfig: React.FC<FieldAiConfigProps> = ({ field, onChange })
   });
 
   const { type } = aiConfig ?? {};
-  const { fieldAIEnable: billingFieldAIEnable = false } = usage?.limit ?? {};
-  const fieldAIEnable = billingFieldAIEnable && aiFieldEnabled;
+  const fieldAIEnable = aiFieldEnabled;
   const isExpanded = _isExpanded && fieldAIEnable;
   const { llmProviders = [], modelDefinationMap, gatewayModels } = baseAiConfig ?? {};
 
@@ -156,7 +152,7 @@ export const FieldAiConfig: React.FC<FieldAiConfigProps> = ({ field, onChange })
     return null;
   }
 
-  const headerComponent = fieldAIEnable ? (
+  const headerComponent = (
     <div
       className={cn(
         'group flex cursor-pointer select-none items-center justify-between px-3 py-2 rounded-sm gap-x-2',
@@ -192,30 +188,12 @@ export const FieldAiConfig: React.FC<FieldAiConfigProps> = ({ field, onChange })
         )}
       </div>
     </div>
-  ) : (
-    <UpgradeWrapper targetBillingLevel={BillingProductLevel.Pro}>
-      {({ badge }) => (
-        <div className="group flex cursor-pointer select-none items-center justify-between rounded-sm px-3 py-2">
-          <div className="flex items-center gap-x-1">
-            <MagicAi className="size-4 text-gray-500" />
-            {t('table:field.aiConfig.title')}
-            {badge}
-          </div>
-          <ChevronRight className="size-4" />
-        </div>
-      )}
-    </UpgradeWrapper>
   );
 
   return (
     <Fragment>
       <hr className="border-border" />
-      <div
-        className={cn(
-          'w-full rounded-md border text-sm',
-          fieldAIEnable && 'border-border dark:border-white/20'
-        )}
-      >
+      <div className="w-full rounded-md border border-border text-sm dark:border-white/20">
         {headerComponent}
 
         {isExpanded && (

@@ -1,5 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { AggregationModule } from '../../aggregation/aggregation.module';
+import { AiModule } from '../../ai/ai.module';
 import { AttachmentsStorageModule } from '../../attachments/attachments-storage.module';
 import { AttachmentsModule } from '../../attachments/attachments.module';
 import { CalculationModule } from '../../calculation/calculation.module';
@@ -8,6 +9,7 @@ import { CollaboratorModule } from '../../collaborator/collaborator.module';
 import { FieldCalculateModule } from '../../field/field-calculate/field-calculate.module';
 import { FieldModule } from '../../field/field.module';
 import { SelectionModule } from '../../selection/selection.module';
+import { ShareDbModule } from '../../../share-db/share-db.module';
 import { TableModule } from '../../table/table.module';
 import { TableDomainQueryModule } from '../../table-domain';
 import { V2Module } from '../../v2/v2.module';
@@ -23,6 +25,7 @@ import { RecordOpenApiService } from './record-open-api.service';
   imports: [
     RecordModule,
     RecordModifyModule,
+    AiModule,
     FieldCalculateModule,
     FieldModule,
     CalculationModule,
@@ -34,6 +37,7 @@ import { RecordOpenApiService } from './record-open-api.service';
     ViewOpenApiModule,
     TableModule,
     TableDomainQueryModule,
+    ShareDbModule,
     V2Module,
     CanaryModule,
     forwardRef(() => SelectionModule),

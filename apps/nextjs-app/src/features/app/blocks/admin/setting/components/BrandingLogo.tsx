@@ -1,12 +1,14 @@
 /* eslint-disable jsx-a11y/no-static-element-interactions */
 /* eslint-disable jsx-a11y/click-events-have-key-events */
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus } from '@teable/icons';
 import { uploadLogo } from '@teable/openapi';
+import { ReactQueryKeys } from '@teable/sdk/config';
 import { Spin } from '@teable/ui-lib/base';
 import { toast } from '@teable/ui-lib/shadcn/ui/sonner';
 import { useTranslation } from 'next-i18next';
 import { useRef, useState } from 'react';
+import { notifyBrandUpdated } from '@/features/app/hooks/useBrand';
 import { settingPluginConfig } from '@/features/i18n/setting-plugin.config';
 
 export const BrandingLogo = (props: { value?: string }) => {
@@ -14,6 +16,7 @@ export const BrandingLogo = (props: { value?: string }) => {
   const [logoUrl, setLogoUrl] = useState(value);
   const { t } = useTranslation(settingPluginConfig.i18nNamespaces);
   const fileInput = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
 
   const { mutate: uploadLogoMutation, isPending: isLoading } = useMutation({
     mutationFn: async (file: File) => {
@@ -24,8 +27,11 @@ export const BrandingLogo = (props: { value?: string }) => {
     },
     onSuccess: (res) => {
       if (res.data.url) {
-        console.log('res.data.url', res.data.url);
-        setLogoUrl(res.data.url + '?v=' + Date.now());
+        const nextLogoUrl = res.data.url + '?v=' + Date.now();
+        setLogoUrl(nextLogoUrl);
+        notifyBrandUpdated({ brandLogo: nextLogoUrl });
+        queryClient.invalidateQueries({ queryKey: ['setting'] });
+        queryClient.invalidateQueries({ queryKey: ReactQueryKeys.getPublicSetting() });
       }
     },
   });

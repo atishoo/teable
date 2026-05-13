@@ -685,6 +685,7 @@
       "cancel": "Annulla",
       "leave": "Lascia",
       "downAsCsv": "Scarica csv",
+      "downAsXlsx": "Scarica XLSX",
       "importData": "Importa Dati",
       "duplicate": "Duplica",
       "duplicating": "Duplicazione in corso...",

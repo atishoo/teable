@@ -263,11 +263,6 @@ export class SettingOpenApiService {
 
       const responseText = res.text.trim();
 
-      // Log the full response for debugging
-      this.logger.log(
-        `[testAttachment] Full AI response: "${responseText}", data preview: "${data.substring(0, 100)}..."`
-      );
-
       // Strict validation: expect exactly "K" or "k" in quotes
       const quotedLetterMatch = responseText.match(/"([^"]+)"/);
       const letterInQuotes = quotedLetterMatch ? quotedLetterMatch[1].toLowerCase() : null;
@@ -301,13 +296,6 @@ export class SettingOpenApiService {
 
       const isValid =
         (containsExpectedInQuotes || isJustTheLetter) && isShortResponse && !indicatesCannotSee;
-
-      this.logger.log(
-        `[testAttachment] Validation: letterInQuotes="${letterInQuotes}", ` +
-          `containsExpectedInQuotes=${containsExpectedInQuotes}, isJustTheLetter=${isJustTheLetter}, ` +
-          `isShortResponse=${isShortResponse}, indicatesCannotSee=${indicatesCannotSee}, ` +
-          `isValid=${isValid}`
-      );
 
       return isValid;
     } catch (error) {
@@ -374,18 +362,8 @@ export class SettingOpenApiService {
 
     // Run both tests in parallel
     const [urlResult, base64Result] = await Promise.all([
-      signedUrl
-        ? this.testAttachmentWithData(modelInstance, signedUrl, contentType).then((r) => {
-            this.logger.log(`testAttachmentAbility URL test for ${token}: ${r}`);
-            return r;
-          })
-        : Promise.resolve(false),
-      base64Data
-        ? this.testAttachmentWithData(modelInstance, base64Data, contentType).then((r) => {
-            this.logger.log(`testAttachmentAbility base64 test for ${token}: ${r}`);
-            return r;
-          })
-        : Promise.resolve(false),
+      signedUrl ? this.testAttachmentWithData(modelInstance, signedUrl, contentType) : false,
+      base64Data ? this.testAttachmentWithData(modelInstance, base64Data, contentType) : false,
     ]);
 
     return { url: urlResult, base64: base64Result };
@@ -420,9 +398,6 @@ export class SettingOpenApiService {
 
       const hasToolCall = hasDirectToolCall || hasStepToolCall || hasToolResults;
 
-      this.logger.log(
-        `testToolCall result: hasDirectToolCall=${hasDirectToolCall}, hasStepToolCall=${hasStepToolCall}, hasToolResults=${hasToolResults}`
-      );
       return hasToolCall;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : unknownErrorMsg;
@@ -430,7 +405,6 @@ export class SettingOpenApiService {
 
       // Any error during tool call test means the model cannot properly use tools
       // Even schema errors indicate the model/provider combination is not usable for tool calling
-      this.logger.log('testToolCall: Error during test, marking as unsupported');
       return false;
     }
   }
@@ -581,8 +555,16 @@ export class SettingOpenApiService {
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : unknownErrorMsg;
+      const needsV1Hint =
+        type === LLMProviderType.OPENAI_COMPATIBLE &&
+        Boolean(baseUrl) &&
+        !/\/v1\/?$/i.test(baseUrl ?? '') &&
+        /invalid json response/i.test(message);
+      const detail = needsV1Hint
+        ? `${message}. Base URL may be missing the "/v1" suffix. Try ${(baseUrl ?? '').replace(/\/$/, '')}/v1.`
+        : message;
       throw new CustomHttpException(
-        'LLM test failed with error: ' + message,
+        'LLM test failed with error: ' + detail,
         HttpErrorCode.VALIDATION_ERROR,
         {
           localization: {

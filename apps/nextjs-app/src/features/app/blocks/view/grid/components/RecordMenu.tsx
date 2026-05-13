@@ -1,6 +1,6 @@
 import { History, ArrowUp, ArrowDown, Link, MessageSquare, MessageSquareDot } from '@teable/icons';
 import { useGridViewStore } from '@teable/sdk/components';
-import { useBaseId, useTableId, useTablePermission, useView } from '@teable/sdk/hooks';
+import { useTableId, useTablePermission, useView } from '@teable/sdk/hooks';
 import {
   cn,
   Command,
@@ -24,7 +24,7 @@ import { useTranslation, Trans } from 'next-i18next';
 import { Fragment, useCallback, useRef, useState } from 'react';
 import { useClickAway } from 'react-use';
 import { useAI } from '@/features/app/hooks/useAI';
-import { useBaseUsage } from '@/features/app/hooks/useBaseUsage';
+import { useDisableAIAction } from '@/features/app/hooks/useDisableAIAction';
 import { tableConfig } from '@/features/i18n/table.config';
 
 export interface IMenuItemProps<T> {
@@ -292,14 +292,13 @@ export const RecordMenu = () => {
   const { recordMenu, closeRecordMenu } = useGridViewStore();
   const { t } = useTranslation(tableConfig.i18nNamespaces);
   const tableId = useTableId();
-  const baseId = useBaseId();
   const view = useView();
   const viewId = view?.id;
   const permission = useTablePermission();
   const recordMenuRef = useRef<HTMLDivElement>(null);
   const { enable: aiEnable } = useAI();
-  const usage = useBaseUsage({ disabled: !baseId });
-  const chatEnabled = Boolean(aiEnable && usage?.limit?.chatAIEnable);
+  const { aiChat } = useDisableAIAction();
+  const chatEnabled = Boolean(aiEnable && aiChat);
 
   useClickAway(recordMenuRef, () => {
     closeRecordMenu();

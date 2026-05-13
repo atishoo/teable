@@ -39,6 +39,17 @@ import { Permissions } from '../../auth/decorators/permissions.decorator';
 import { TqlPipe } from '../../record/open-api/tql.pipe';
 import { AggregationOpenApiService } from './aggregation-open-api.service';
 
+type IAiFillTaskSnapshot = {
+  tableId: string;
+  fieldId: string;
+  recordIds: string[];
+  completedCount?: number;
+  totalCount?: number;
+};
+
+const ACTIVE_AI_FILL_TASK_STATUSES = ['pending', 'processing', 'running'];
+const AI_FILL_TASK_TYPE = 'text';
+
 @Controller('api/table/:tableId/aggregation')
 @AllowAnonymous()
 export class AggregationOpenApiController {
@@ -179,11 +190,73 @@ export class AggregationOpenApiController {
   @Get('/task-status-collection')
   @Permissions('table|read')
   async getTaskStatusCollection(
-    @Param('tableId') _tableId: string
+    @Param('tableId') tableId: string
   ): Promise<ITaskStatusCollectionVo> {
+    const tasks = await this.prismaService.txClient().task.findMany({
+      where: {
+        type: AI_FILL_TASK_TYPE,
+        status: { in: ACTIVE_AI_FILL_TASK_STATUSES },
+        snapshot: {
+          contains: `"tableId":"${tableId}"`,
+        },
+      },
+      select: {
+        id: true,
+        snapshot: true,
+      },
+    });
+    const cells: ITaskStatusCollectionVo['cells'] = [];
+    const fieldMap: ITaskStatusCollectionVo['fieldMap'] = {};
+
+    tasks.forEach((task) => {
+      const snapshot = this.parseAiFillTaskSnapshot(task.snapshot);
+      if (!snapshot || snapshot.tableId !== tableId) return;
+
+      snapshot.recordIds.forEach((recordId) => {
+        cells.push({ recordId, fieldId: snapshot.fieldId });
+      });
+      const current = fieldMap[snapshot.fieldId];
+      fieldMap[snapshot.fieldId] = {
+        taskId: task.id,
+        completedCount:
+          (current?.completedCount ?? 0) +
+          (typeof snapshot.completedCount === 'number' ? snapshot.completedCount : 0),
+        totalCount:
+          (current?.totalCount ?? 0) +
+          (typeof snapshot.totalCount === 'number'
+            ? snapshot.totalCount
+            : snapshot.recordIds.length),
+      };
+    });
+
     return {
-      fieldMap: {},
-      cells: [],
+      fieldMap,
+      cells,
     };
+  }
+
+  private parseAiFillTaskSnapshot(snapshot?: string | null): IAiFillTaskSnapshot | null {
+    if (!snapshot) return null;
+    try {
+      const value = JSON.parse(snapshot) as Partial<IAiFillTaskSnapshot>;
+      if (
+        typeof value.tableId !== 'string' ||
+        typeof value.fieldId !== 'string' ||
+        !Array.isArray(value.recordIds)
+      ) {
+        return null;
+      }
+      return {
+        tableId: value.tableId,
+        fieldId: value.fieldId,
+        recordIds: value.recordIds.filter(
+          (recordId): recordId is string => typeof recordId === 'string'
+        ),
+        completedCount: value.completedCount,
+        totalCount: value.totalCount,
+      };
+    } catch {
+      return null;
+    }
   }
 }

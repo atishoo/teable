@@ -15,22 +15,57 @@
  */
 
 import { useEffect } from 'react';
-import { useEnv } from './useEnv';
+import { useBrand } from './useBrand';
+
+const FAVICON_RELS = ['icon', 'shortcut icon', 'apple-touch-icon'];
+
+const applyBrandFavicon = (brandLogo: string) => {
+  const href = new URL(brandLogo, window.location.origin).href;
+  document
+    .querySelectorAll("link[rel*='icon'], link[rel='manifest']")
+    .forEach((link) => link.remove());
+
+  FAVICON_RELS.forEach((rel) => {
+    const link = document.createElement('link');
+    link.rel = rel;
+    link.href = href;
+    document.head.appendChild(link);
+  });
+
+  const manifest = document.createElement('link');
+  manifest.rel = 'manifest';
+  manifest.href = `data:application/manifest+json,${encodeURIComponent(
+    JSON.stringify({
+      icons: [{ src: href, sizes: 'any' }],
+    })
+  )}`;
+  document.head.appendChild(manifest);
+};
 
 export const useAutoFavicon = () => {
-  const env = useEnv();
+  const { brandLogo } = useBrand();
+
   useEffect(() => {
-    if (!env.brandLogo) {
+    if (!brandLogo) {
       return;
     }
 
-    const links = document.querySelectorAll("link[rel*='icon']");
-    links.forEach((link) => link.remove());
+    const refreshFavicon = () => applyBrandFavicon(brandLogo);
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        refreshFavicon();
+      }
+    };
 
-    const newLink = document.createElement('link');
-    newLink.type = 'image/x-icon';
-    newLink.rel = 'shortcut icon';
-    newLink.href = env.brandLogo;
-    document.head.appendChild(newLink);
-  }, [env.brandLogo]);
+    refreshFavicon();
+    window.addEventListener('focus', refreshFavicon);
+    window.addEventListener('pageshow', refreshFavicon);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('focus', refreshFavicon);
+      window.removeEventListener('pageshow', refreshFavicon);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [brandLogo]);
 };

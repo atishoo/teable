@@ -11,34 +11,14 @@ import {
   PopoverContent,
   PopoverTrigger,
   Switch,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
 } from '@teable/ui-lib/shadcn';
 import { PencilIcon, PlusIcon } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useWorkFlowPanelStore } from '@/features/app/automation/workflow-panel/useWorkFlowPaneStore';
-import { useBaseUsage } from '@/features/app/hooks/useBaseUsage';
 import { tableConfig } from '@/features/i18n/table.config';
 import { PromptEditor, type EditorViewRef } from '../field-ai-config/components/prompt-editor';
 import { ColorPicker } from './SelectOptions';
-
-const UnavailableInPlanTips = (props: { children: React.ReactNode }) => {
-  const { children } = props;
-  const { t } = useTranslation(tableConfig.i18nNamespaces);
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>{children}</TooltipTrigger>
-        <TooltipContent>
-          <p className="max-w-[320px]">{t('billing.unavailableInPlanTips')}</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-};
 
 const ConfirmEditor = (props: {
   options?: Partial<IButtonFieldOptions>;
@@ -176,36 +156,23 @@ const WorkflowAction = (props: { options?: Partial<IButtonFieldOptions>; onSave?
   const workflow = options?.workflow;
   const { setModal } = useWorkFlowPanelStore();
   const { t } = useTranslation(tableConfig.i18nNamespaces);
-  const usage = useBaseUsage();
-  const { buttonFieldEnable = false } = usage?.limit ?? {};
 
   return (
     <div className="flex flex-col gap-2">
       <Label className="text-sm font-medium">{t('table:field.default.button.automation')}</Label>
-      {buttonFieldEnable ? (
-        <Button
-          className="flex items-center "
-          variant="outline"
-          onClick={() => {
-            setModal({ from: 'buttonFieldOptions' });
-            onSave?.();
-          }}
-        >
-          {workflow?.id ? <PencilIcon className="size-4" /> : <PlusIcon className="size-4" />}
-          <span className="flex-1 text-left">
-            {workflow?.name || t('table:field.default.button.customAutomation')}
-          </span>
-        </Button>
-      ) : (
-        <UnavailableInPlanTips>
-          <Button className="flex items-center " variant="outline">
-            <PlusIcon className="size-4" />
-            <span className="flex-1 text-left">
-              {workflow?.name || t('table:field.default.button.customAutomation')}
-            </span>
-          </Button>
-        </UnavailableInPlanTips>
-      )}
+      <Button
+        className="flex items-center "
+        variant="outline"
+        onClick={() => {
+          setModal({ from: 'buttonFieldOptions' });
+          onSave?.();
+        }}
+      >
+        {workflow?.id ? <PencilIcon className="size-4" /> : <PlusIcon className="size-4" />}
+        <span className="flex-1 text-left">
+          {workflow?.name || t('table:field.default.button.customAutomation')}
+        </span>
+      </Button>
     </div>
   );
 };

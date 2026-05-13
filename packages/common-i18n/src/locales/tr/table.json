@@ -673,6 +673,7 @@
       "cancel": "İptal",
       "leave": "Ayrıl",
       "downAsCsv": "csv İndir",
+      "downAsXlsx": "XLSX indir",
       "importData": "Veri İçe Aktar",
       "duplicate": "Çoğalt",
       "duplicating": "Çoğaltılıyor...",

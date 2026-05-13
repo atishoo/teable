@@ -25,13 +25,11 @@ export const AutoFillCellRoute: RouteConfig = registerRoute({
     }),
   },
   responses: {
-    200: {
-      description: 'Returns the updated record status',
+    201: {
+      description: 'Returns the task ID for the auto-fill process',
       content: {
         'application/json': {
-          schema: z.object({
-            status: z.string(),
-          }),
+          schema: autoFillCellVoSchema,
         },
       },
     },

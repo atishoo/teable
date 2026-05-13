@@ -835,6 +835,19 @@ export class FieldOpenApiV2Service {
     return normalized;
   }
 
+  private normalizeLegacyCreateOptions(value: unknown): unknown {
+    const normalized = this.normalizeLegacyTimeZone(value);
+    if (!normalized || typeof normalized !== 'object' || Array.isArray(normalized)) {
+      return normalized;
+    }
+
+    const options = { ...(normalized as Record<string, unknown>) };
+    if (options.defaultValue === null) {
+      delete options.defaultValue;
+    }
+    return options;
+  }
+
   private denormalizeLegacyTimeZone(value: unknown): unknown {
     if (Array.isArray(value)) {
       return value.map((item) => this.denormalizeLegacyTimeZone(item));
@@ -1097,7 +1110,7 @@ export class FieldOpenApiV2Service {
     return this.normalizeLegacyTimeZone({
       ...base,
       type: ro.type,
-      ...(ro.options != null ? { options: ro.options } : {}),
+      ...(ro.options != null ? { options: this.normalizeLegacyCreateOptions(ro.options) } : {}),
     }) as Record<string, unknown>;
   }
 

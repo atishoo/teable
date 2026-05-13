@@ -8,6 +8,7 @@ import type {
 } from 'next';
 import { getUserMe } from '@/backend/api/rest/get-user';
 import { providersAll } from '@/features/auth/components/SocialAuth';
+import { getSocialAuthProviders } from './get-social-auth-providers';
 import { isValidRedirectPath } from './isValidRedirectPath';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -99,7 +100,7 @@ export default function ensureLogin<P extends { [key: string]: any }>(
 function redirectSocialAuth(req: GetServerSidePropsContext['req']) {
   const rawRedirect = new URLSearchParams(req?.url?.split('?')[1] ?? '').get('redirect');
   const redirect = rawRedirect && isValidRedirectPath(rawRedirect) ? rawRedirect : null;
-  const envProviders = process.env.SOCIAL_AUTH_PROVIDERS?.split(',') ?? [];
+  const envProviders = getSocialAuthProviders();
   const envPasswordLoginDisabled = process.env.PASSWORD_LOGIN_DISABLED === 'true';
   if (envPasswordLoginDisabled && envProviders.length === 1) {
     const provider = providersAll.find((provider) => provider.id === envProviders[0]);

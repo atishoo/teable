@@ -12,6 +12,7 @@ import { AggregationOpenApiModule } from './features/aggregation/open-api/aggreg
 import { AiModule } from './features/ai/ai.module';
 import { AttachmentsModule } from './features/attachments/attachments.module';
 import { AuthModule } from './features/auth/auth.module';
+import { AutomationModule } from './features/automation/automation.module';
 import { BaseModule } from './features/base/base.module';
 import { BaseNodeModule } from './features/base-node/base-node.module';
 import { BuiltinAssetsInitModule } from './features/builtin-assets-init';
@@ -99,6 +100,7 @@ export const appModules = {
     CommentOpenApiModule,
     OrganizationModule,
     AiModule,
+    AutomationModule,
     PluginModule,
     PluginPanelModule,
     PluginContextMenuModule,

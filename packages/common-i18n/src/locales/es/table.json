@@ -680,6 +680,7 @@
       "cancel": "Cancelar",
       "leave": "Dejar",
       "downAsCsv": "Descargar csv",
+      "downAsXlsx": "Descargar XLSX",
       "importData": "Importar datos",
       "duplicate": "Duplicar",
       "duplicating": "Duplicando...",

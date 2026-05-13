@@ -24,9 +24,15 @@ const parseDsn = (dsn, label) => {
   }
 };
 
-const migrateWorkspace = async ({ label, packageName, schema }) => {
+const migrateWorkspace = async ({ label, packageDir, schema, databaseUrlEnv, databaseUrl }) => {
   console.log(`Running ${label} database migration...`);
-  const result = await $({ cwd: '/app' })`pnpm -F ${packageName} prisma-migrate deploy --schema ${schema}`;
+  const result = await $({
+    cwd: packageDir,
+    env: {
+      ...process.env,
+      [databaseUrlEnv]: databaseUrl,
+    },
+  })`pnpm exec prisma migrate deploy --schema ${schema}`;
   console.log(`${label} database migration completed:`, result);
   return result;
 };
@@ -34,13 +40,17 @@ const migrateWorkspace = async ({ label, packageName, schema }) => {
 const pgMigrate = async () => {
   await migrateWorkspace({
     label: 'meta',
-    packageName: '@teable/db-main-prisma',
+    packageDir: '/app/packages/db-main-prisma',
     schema: './prisma/postgres/schema.prisma',
+    databaseUrlEnv: 'PRISMA_DATABASE_URL',
+    databaseUrl: metaDatabaseUrl,
   });
   await migrateWorkspace({
     label: 'data',
-    packageName: '@teable/db-data-prisma',
+    packageDir: '/app/packages/db-data-prisma',
     schema: './prisma/schema.prisma',
+    databaseUrlEnv: 'PRISMA_DATA_DATABASE_URL',
+    databaseUrl: dataDatabaseUrl,
   });
 };
 

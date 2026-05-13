@@ -1,5 +1,4 @@
 import { Lock, MoreHorizontal, Settings, Trash2 } from '@teable/icons';
-import { BillingProductLevel } from '@teable/openapi';
 import { useBasePermission, useIsReadOnlyPreview } from '@teable/sdk/hooks';
 import {
   DropdownMenu,
@@ -13,7 +12,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useTranslation } from 'next-i18next';
 import { useMemo } from 'react';
-import { UpgradeWrapper } from '@/features/app/components/billing/UpgradeWrapper';
 import { ShareBaseDialog } from '@/features/app/components/collaborator/share/ShareBaseDialog';
 import { tableConfig } from '@/features/i18n/table.config';
 
@@ -88,7 +86,6 @@ export const BasePageRouter = () => {
     href: string;
     label: string;
     Icon: React.FC<{ className?: string }>;
-    billingLevel?: BillingProductLevel;
   }[] = useMemo(
     () =>
       [
@@ -97,7 +94,6 @@ export const BasePageRouter = () => {
           label: t('common:noun.authorityMatrix'),
           Icon: Lock,
           hidden: !basePermission?.['base|authority_matrix_config'],
-          billingLevel: BillingProductLevel.Business,
         },
       ].filter((item) => !item.hidden),
     [baseId, basePermission, t]
@@ -111,34 +107,25 @@ export const BasePageRouter = () => {
     <>
       <div className="flex flex-col gap-2 px-3">
         <ul>
-          {pageRoutes.map(({ href, label, Icon, billingLevel }) => {
+          {pageRoutes.map(({ href, label, Icon }) => {
             return (
-              <UpgradeWrapper
-                key={href}
-                baseId={baseId as string}
-                targetBillingLevel={billingLevel}
-              >
-                {({ badge }) => (
-                  <li key={href}>
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      asChild
-                      className={cn(
-                        'w-full justify-start text-sm my-[2px]',
-                        router.asPath.startsWith(href) && 'bg-secondary'
-                      )}
-                    >
-                      <Link href={href} className="font-normal">
-                        <Icon className="size-4 shrink-0" />
-                        <p className="truncate">{label}</p>
-                        <div className="grow basis-0"></div>
-                        {badge}
-                      </Link>
-                    </Button>
-                  </li>
-                )}
-              </UpgradeWrapper>
+              <li key={href}>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  asChild
+                  className={cn(
+                    'w-full justify-start text-sm my-[2px]',
+                    router.asPath.startsWith(href) && 'bg-secondary'
+                  )}
+                >
+                  <Link href={href} className="font-normal">
+                    <Icon className="size-4 shrink-0" />
+                    <p className="truncate">{label}</p>
+                    <div className="grow basis-0"></div>
+                  </Link>
+                </Button>
+              </li>
             );
           })}
           <ShareBaseDialog />

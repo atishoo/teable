@@ -676,6 +676,7 @@
       "cancel": "Annuler",
       "leave": "Quitter",
       "downAsCsv": "Télécharger csv",
+      "downAsXlsx": "Télécharger XLSX",
       "importData": "Importer les données",
       "duplicate": "Dupliquer",
       "duplicating": "Duplication en cours...",

@@ -1,21 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { IUpdateSettingRo, ISettingVo } from '@teable/openapi';
-import {
-  BillingProductLevel,
-  getInstanceUsage,
-  getSetting,
-  SettingKey,
-  updateSetting,
-} from '@teable/openapi';
+import { getSetting, SettingKey, updateSetting } from '@teable/openapi';
+import { ReactQueryKeys } from '@teable/sdk/config';
 import { useIsHydrated } from '@teable/sdk/hooks';
 import { Button, Label, Switch } from '@teable/ui-lib/shadcn';
 import { RotateCcwIcon } from 'lucide-react';
 import { useRouter } from 'next/router';
 import { useTranslation } from 'next-i18next';
 import { useEffect, useMemo, useRef } from 'react';
+import { notifyBrandUpdated } from '@/features/app/hooks/useBrand';
 import { useEnv } from '@/features/app/hooks/useEnv';
 import { useIsCloud } from '@/features/app/hooks/useIsCloud';
-import { useIsEE } from '@/features/app/hooks/useIsEE';
 import { CopyInstance } from './components';
 import { Branding } from './components/Branding';
 import { CanarySettings } from './components/canary';
@@ -45,19 +40,17 @@ export const SettingPage = (props: ISettingPageProps) => {
 
   const { mutateAsync: mutateUpdateSetting } = useMutation({
     mutationFn: (props: IUpdateSettingRo) => updateSetting(props),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['setting'] });
+      queryClient.invalidateQueries({ queryKey: ReactQueryKeys.getPublicSetting() });
+
+      if ('brandName' in variables) {
+        notifyBrandUpdated({ brandName: variables.brandName || 'Teable' });
+      }
     },
   });
 
-  const isEE = useIsEE();
   const isCloud = useIsCloud();
-
-  const { data: instanceUsage } = useQuery({
-    queryKey: ['instance-usage'],
-    queryFn: () => getInstanceUsage().then(({ data }) => data),
-    enabled: isEE,
-  });
 
   const onValueChange = (key: string, value: unknown) => {
     mutateUpdateSetting({ [key]: value });
@@ -116,14 +109,6 @@ export const SettingPage = (props: ISettingPageProps) => {
         path: '/admin/ai-setting?anchor=llm',
       },
       {
-        title: t('admin.configuration.list.appBuilderDomain.title'),
-        key: 'app' as const,
-        isRequired: true,
-        isComplete: Boolean(setting?.appConfig?.vercelToken),
-        group: 'appBuilder' as const,
-        path: '/admin/ai-setting?anchor=app',
-      },
-      {
         title: t('admin.configuration.list.email.title'),
         key: 'email' as const,
         anchor: emailRef,
@@ -138,7 +123,6 @@ export const SettingPage = (props: ISettingPageProps) => {
       publicDatabaseProxy,
       publicOrigin,
       setting?.aiConfig,
-      setting?.appConfig,
       setting?.notifyMailTransportConfig,
       t,
     ]
@@ -352,13 +336,11 @@ export const SettingPage = (props: ISettingPageProps) => {
           </div>
 
           {/* Branding Settings Section */}
-          {instanceUsage?.level === BillingProductLevel.Enterprise && (
-            <Branding
-              brandName={brandName}
-              brandLogo={brandLogo}
-              onChange={(brandName) => onValueChange('brandName', brandName)}
-            />
-          )}
+          <Branding
+            brandName={brandName}
+            brandLogo={brandLogo}
+            onChange={(brandName) => onValueChange('brandName', brandName)}
+          />
 
           <CopyInstance instanceId={instanceId} />
         </div>

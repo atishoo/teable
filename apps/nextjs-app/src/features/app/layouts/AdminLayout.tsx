@@ -1,5 +1,12 @@
 import type { DehydratedState } from '@tanstack/react-query';
-import { Settings, LayoutTemplate as TemplateIcon, ShieldUser } from '@teable/icons';
+import {
+  Database,
+  MagicAi,
+  Settings,
+  LayoutTemplate as TemplateIcon,
+  ShieldUser,
+  User,
+} from '@teable/icons';
 import type { IUser } from '@teable/sdk';
 import { SessionProvider } from '@teable/sdk';
 import { AppProvider } from '@teable/sdk/context';
@@ -29,10 +36,28 @@ export const AdminLayout: React.FC<{
 
   const routes = [
     {
+      Icon: User,
+      label: '用户管理',
+      route: '/admin/user',
+      pathTo: '/admin/user',
+    },
+    {
+      Icon: Database,
+      label: '空间管理',
+      route: '/admin/space',
+      pathTo: '/admin/space',
+    },
+    {
       Icon: Settings,
       label: t('settings.title'),
       route: '/admin/setting',
       pathTo: '/admin/setting',
+    },
+    {
+      Icon: MagicAi,
+      label: 'AI 设置',
+      route: '/admin/ai-setting',
+      pathTo: '/admin/ai-setting',
     },
     {
       Icon: TemplateIcon,

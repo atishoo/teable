@@ -1,5 +1,16 @@
-import { FieldType, fieldVoSchema, type IButtonFieldOptions, type IFieldVo } from '@teable/core';
-import { createWorkflow } from '@teable/openapi';
+import {
+  FieldType,
+  fieldVoSchema,
+  type IButtonFieldOptions,
+  type IConvertFieldRo,
+  type IFieldVo,
+} from '@teable/core';
+import {
+  BaseNodeResourceType,
+  convertField,
+  createBaseNode,
+  type IBaseNodeWorkflowResourceMeta,
+} from '@teable/openapi';
 import type { IFieldInstance } from '@teable/sdk';
 import { useBaseId, useField, useTableId } from '@teable/sdk';
 import { isEmpty } from 'lodash';
@@ -23,8 +34,11 @@ export const FieldSetting = () => {
       const options = field.options as IButtonFieldOptions;
       const workflow = options.workflow ?? {};
       let workflowId = workflow.id ?? '';
+      let workflowName = workflow.name ?? field.name;
+      let isActive = workflow.isActive ?? false;
       if (isEmpty(workflowId)) {
-        const result = await createWorkflow(baseId, {
+        const result = await createBaseNode(baseId, {
+          resourceType: BaseNodeResourceType.Workflow,
           name: field.name,
           trigger: {
             type: 'buttonClick', // WorkflowTriggerType.ButtonClick
@@ -33,9 +47,37 @@ export const FieldSetting = () => {
               watchFieldIds: [field.id],
             },
           },
+          isActive: false,
         });
-        const workflow = result.data as { id: string };
-        workflowId = workflow.id;
+        const resourceMeta = result.data.resourceMeta as IBaseNodeWorkflowResourceMeta;
+        workflowId = result.data.resourceId;
+        workflowName = resourceMeta.name;
+        isActive = resourceMeta.isActive ?? false;
+      }
+
+      if (workflow.id !== workflowId || workflow.name !== workflowName || !workflow.isActive) {
+        const fieldVo = field as IFieldVo;
+        const fieldRo: IConvertFieldRo = {
+          type: FieldType.Button,
+          name: fieldVo.name,
+          description: fieldVo.description,
+          dbFieldName: fieldVo.dbFieldName,
+          unique: fieldVo.unique,
+          notNull: fieldVo.notNull,
+          isLookup: fieldVo.isLookup,
+          isConditionalLookup: fieldVo.isConditionalLookup,
+          lookupOptions: fieldVo.lookupOptions,
+          aiConfig: fieldVo.aiConfig,
+          options: {
+            ...options,
+            workflow: {
+              id: workflowId,
+              name: workflowName,
+              isActive,
+            },
+          },
+        };
+        await convertField(tableId, field.id, fieldRo);
       }
       openModal(baseId, workflowId);
     }
@@ -56,16 +98,12 @@ export const FieldSetting = () => {
     return <></>;
   }
 
-  const fieldVo = fieldVoSchema.safeParse(field);
-  if (!fieldVo.success) {
-    console.log('errorField:', field);
-    console.error(fieldVo.error);
-  }
+  const fieldVo = field ? fieldVoSchema.safeParse(field) : undefined;
 
   return (
     <FieldSettingInner
       visible={visible}
-      field={fieldVo.success ? fieldVo.data : undefined}
+      field={fieldVo?.success ? fieldVo.data : undefined}
       order={order}
       operator={setting?.operator || FieldOperator.Add}
       onCancel={onCancel}

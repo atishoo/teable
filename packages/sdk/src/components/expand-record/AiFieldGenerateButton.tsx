@@ -1,8 +1,9 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { RefreshCcw } from '@teable/icons';
 import { autoFillCell } from '@teable/openapi';
 import { Button, cn, sonner } from '@teable/ui-lib';
 import { useCallback, useEffect, useState } from 'react';
+import { ReactQueryKeys } from '../../config';
 import { useTableListener } from '../../hooks';
 
 const { toast } = sonner;
@@ -14,6 +15,7 @@ export const AiFieldGenerateButton = (props: {
   isInTaskQueue: boolean;
 }) => {
   const { tableId, recordId, fieldId, isInTaskQueue } = props;
+  const queryClient = useQueryClient();
   const [pendingCell, setPendingCell] = useState<{
     recordId: string;
     fieldId: string;
@@ -22,6 +24,12 @@ export const AiFieldGenerateButton = (props: {
   const { mutate: mutateGenerate } = useMutation({
     mutationFn: ({ recordId, fieldId }: { recordId: string; fieldId: string }) =>
       autoFillCell(tableId!, recordId, fieldId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ReactQueryKeys.getTaskStatusCollection(tableId),
+      });
+      setPendingCell(null);
+    },
     onError: () => {
       setPendingCell(null);
     },

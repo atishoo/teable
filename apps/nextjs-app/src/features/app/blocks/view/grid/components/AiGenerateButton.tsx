@@ -1,7 +1,8 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { RefreshCcw } from '@teable/icons';
 import { autoFillCell } from '@teable/openapi';
 import {
+  ReactQueryKeys,
   Record,
   TaskStatusCollectionContext,
   useFields,
@@ -32,6 +33,7 @@ export const AiGenerateButton = forwardRef<{ onScrollHandler: () => void }, IAIB
   (props, ref) => {
     const { gridRef, activeCell, recordMap } = props;
     const tableId = useTableId() as string;
+    const queryClient = useQueryClient();
     const fields = useFields();
     const permission = useTablePermission();
     const taskStatusCollection = useContext(TaskStatusCollectionContext);
@@ -45,6 +47,12 @@ export const AiGenerateButton = forwardRef<{ onScrollHandler: () => void }, IAIB
     const { mutate: mutateGenerate } = useMutation({
       mutationFn: ({ recordId, fieldId }: { recordId: string; fieldId: string }) =>
         autoFillCell(tableId, recordId, fieldId),
+      onSuccess: async () => {
+        await queryClient.invalidateQueries({
+          queryKey: ReactQueryKeys.getTaskStatusCollection(tableId),
+        });
+        setPendingCell(null);
+      },
       onError: () => {
         // Clear pending state if API call fails
         setPendingCell(null);

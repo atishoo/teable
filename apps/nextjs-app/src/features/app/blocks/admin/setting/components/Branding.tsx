@@ -1,6 +1,6 @@
 import { Label, sonner } from '@teable/ui-lib/shadcn';
 import { useTranslation } from 'next-i18next';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { settingPluginConfig } from '@/features/i18n/setting-plugin.config';
 import { BrandingLogo } from './BrandingLogo';
 
@@ -15,6 +15,10 @@ export const Branding = ({
 }) => {
   const { t } = useTranslation(settingPluginConfig.i18nNamespaces);
   const [name, setName] = useState(brandName || '');
+
+  useEffect(() => {
+    setName(brandName || '');
+  }, [brandName]);
 
   return (
     <div className="pb-6">

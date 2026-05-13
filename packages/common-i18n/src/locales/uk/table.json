@@ -685,6 +685,7 @@
       "cancel": "Скасувати",
       "leave": "Залишити",
       "downAsCsv": "Завантажити csv",
+      "downAsXlsx": "Завантажити XLSX",
       "importData": "Імпорт даних",
       "duplicate": "Дублювати",
       "duplicating": "Дублювання...",

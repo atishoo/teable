@@ -894,6 +894,7 @@
       "cancel": "Cancel",
       "leave": "Leave",
       "downAsCsv": "Download CSV",
+      "downAsXlsx": "Download XLSX",
       "importData": "Import data",
       "duplicate": "Duplicate",
       "duplicating": "Duplicating...",

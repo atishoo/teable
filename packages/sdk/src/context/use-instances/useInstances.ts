@@ -595,46 +595,28 @@ export function useInstances<T, R extends { id: string }>({
   ]);
 
   const handleReady = useCallback((query: Query<T>) => {
-    console.log(
-      `${query.collection}:ready:`,
-      query.query,
-      localStorage.getItem('debug') && query.results.map((doc) => doc.data)
-    );
-    console.log('extra ready ->', query.extra);
     if (!query.results) {
       return;
     }
     dispatch({ type: 'ready', results: query.results, extra: query.extra });
     query.results.forEach((doc) => {
       opListeners.current.add(doc, (op) => {
-        console.log(`${query.collection} on op:`, op, doc);
         dispatch({ type: 'update', doc });
       });
     });
   }, []);
 
   const handleInsert = useCallback((docs: Doc<T>[], index: number) => {
-    console.log(
-      `${docs[0]?.collection}:insert:`,
-      docs.map((doc) => doc.id),
-      index
-    );
     dispatch({ type: 'insert', docs, index });
 
     docs.forEach((doc) => {
       opListeners.current.add(doc, (op) => {
-        console.log(`${docs[0]?.collection} on op:`, op);
         dispatch({ type: 'update', doc });
       });
     });
   }, []);
 
   const handleRemove = useCallback((docs: Doc<T>[], index: number) => {
-    console.log(
-      `${docs[0]?.collection}:remove:`,
-      docs.map((doc) => doc.id),
-      index
-    );
     dispatch({ type: 'remove', docs, index });
     docs.forEach((doc) => {
       opListeners.current.remove(doc);
@@ -642,17 +624,10 @@ export function useInstances<T, R extends { id: string }>({
   }, []);
 
   const handleMove = useCallback((docs: Doc<T>[], from: number, to: number) => {
-    console.log(
-      `${docs[0]?.collection}:move:`,
-      docs.map((doc) => doc.id),
-      from,
-      to
-    );
     dispatch({ type: 'move', docs, from, to });
   }, []);
 
   const handleExtra = useCallback((extra: unknown) => {
-    console.log('extra', extra);
     dispatch({ type: 'extra', extra });
   }, []);
 
@@ -757,20 +732,11 @@ export function useInstances<T, R extends { id: string }>({
     }
 
     const readyListener = () => handleReady(query);
-    const changedListener = (docs: Doc<T>[]) => {
-      console.log(
-        `${docs[0]?.collection}:changed:`,
-        docs.map((doc) => doc.id)
-      );
-    };
-
     if (query.ready) {
       readyListener();
     }
 
     query.on('ready', readyListener);
-
-    query.on('changed', changedListener);
 
     query.on('insert', handleInsert);
 
@@ -782,7 +748,6 @@ export function useInstances<T, R extends { id: string }>({
 
     return () => {
       query.removeListener('ready', readyListener);
-      query.removeListener('changed', changedListener);
       query.removeListener('insert', handleInsert);
       query.removeListener('remove', handleRemove);
       query.removeListener('move', handleMove);

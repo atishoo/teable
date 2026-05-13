@@ -28,12 +28,15 @@ export const useDownload = ({ downloadUrl, key }: IDownloadProps) => {
     };
   }, [key]);
 
-  const trigger = useCallback(() => {
-    if (iframeRef.current) {
-      const iframe = iframeRef.current;
-      iframe.src = downloadUrl;
-    }
-  }, [downloadUrl]);
+  const trigger = useCallback(
+    (nextDownloadUrl?: string) => {
+      if (iframeRef.current) {
+        const iframe = iframeRef.current;
+        iframe.src = nextDownloadUrl ?? downloadUrl;
+      }
+    },
+    [downloadUrl]
+  );
 
   return { trigger };
 };

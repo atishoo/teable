@@ -4567,6 +4567,7 @@ export type I18nTranslations = {
                 "cancel": string;
                 "leave": string;
                 "downAsCsv": string;
+                "downAsXlsx": string;
                 "importData": string;
                 "duplicate": string;
                 "duplicating": string;

@@ -439,7 +439,8 @@ export const TableOperation = (props: IBaseNodeMoreProps) => {
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const table = useMemo(() => tables.find((t) => t.id === resourceId), [tables, resourceId]);
-  const { trigger } = useDownload({ downloadUrl: `/api/export/${resourceId}`, key: 'table' });
+  const downloadUrl = `/api/export/${resourceId}`;
+  const { trigger } = useDownload({ downloadUrl, key: 'table' });
 
   const defaultTableName = useMemo(
     () =>
@@ -622,11 +623,18 @@ export const TableOperation = (props: IBaseNodeMoreProps) => {
           />
         )}
         {menuPermission.exportTable && (
-          <ListMenuItem
-            icon={<Download className="size-4" />}
-            label={t('table:import.menu.downAsCsv')}
-            onClick={() => trigger?.()}
-          />
+          <>
+            <ListMenuItem
+              icon={<Download className="size-4" />}
+              label={t('table:import.menu.downAsCsv')}
+              onClick={() => trigger?.()}
+            />
+            <ListMenuItem
+              icon={<FileExcel className="size-4" />}
+              label={t('table:import.menu.downAsXlsx')}
+              onClick={() => trigger?.(`${downloadUrl}?format=xlsx`)}
+            />
+          </>
         )}
         {menuPermission.importTable && (
           <>
@@ -746,10 +754,16 @@ export const TableOperation = (props: IBaseNodeMoreProps) => {
             menuPermission.exportTable && <DropdownMenuSeparator />}
 
           {menuPermission.exportTable && (
-            <DropdownMenuItem onClick={() => trigger?.()}>
-              <Download className="mr-2 size-4" />
-              {t('table:import.menu.downAsCsv')}
-            </DropdownMenuItem>
+            <>
+              <DropdownMenuItem onClick={() => trigger?.()}>
+                <Download className="mr-2 size-4" />
+                {t('table:import.menu.downAsCsv')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => trigger?.(`${downloadUrl}?format=xlsx`)}>
+                <FileExcel className="mr-2 size-4" />
+                {t('table:import.menu.downAsXlsx')}
+              </DropdownMenuItem>
+            </>
           )}
           {menuPermission.importTable && (
             <DropdownMenuSub>

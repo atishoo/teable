@@ -676,6 +676,7 @@
       "cancel": "Отмена",
       "leave": "Выйти",
       "downAsCsv": "Скачать csv",
+      "downAsXlsx": "Скачать XLSX",
       "importData": "Импортировать данные",
       "duplicate": "Дублировать",
       "duplicating": "Дублирование...",

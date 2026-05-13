@@ -7,8 +7,16 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
+import type { Prisma } from '@teable/db-main-prisma';
 import { PrismaService } from '@teable/db-main-prisma';
-import { PluginStatus, UploadType } from '@teable/openapi';
+import type {
+  IAdminListQuery,
+  IAdminSpaceListVo,
+  IAdminUpdateSpaceRo,
+  IAdminUpdateUserRo,
+  IAdminUserListVo,
+} from '@teable/openapi';
+import { CollaboratorType, PluginStatus, UploadType } from '@teable/openapi';
 import { Response } from 'express';
 import { Knex } from 'knex';
 import { InjectModel } from 'nest-knexjs';
@@ -16,16 +24,240 @@ import { PerformanceCacheService } from '../../../performance-cache';
 import { Timing } from '../../../utils/timing';
 import { AttachmentsCropQueueProcessor } from '../../attachments/attachments-crop.processor';
 import StorageAdapter from '../../attachments/plugins/adapter';
+import { getPublicFullStorageUrl } from '../../attachments/plugins/utils';
 
 @Injectable()
 export class AdminOpenApiService {
   private readonly logger = new Logger(AdminOpenApiService.name);
+  private static readonly defaultPageSize = 50;
+
   constructor(
     private readonly prismaService: PrismaService,
     @InjectModel('CUSTOM_KNEX') private readonly knex: Knex,
     private readonly attachmentsCropQueueProcessor: AttachmentsCropQueueProcessor,
     private readonly performanceCacheService: PerformanceCacheService
   ) {}
+
+  private getListParams(query: IAdminListQuery = {}) {
+    return {
+      search: query.search?.trim(),
+      skip: query.skip ?? 0,
+      take: query.take ?? AdminOpenApiService.defaultPageSize,
+    };
+  }
+
+  private toIso(value?: Date | null) {
+    return value?.toISOString() ?? null;
+  }
+
+  async listUsers(query: IAdminListQuery): Promise<IAdminUserListVo> {
+    const { search, skip, take } = this.getListParams(query);
+    const where: Prisma.UserWhereInput = {
+      isSystem: null,
+      deletedTime: null,
+      ...(search
+        ? {
+            OR: [
+              { id: { contains: search, mode: 'insensitive' } },
+              { name: { contains: search, mode: 'insensitive' } },
+              { email: { contains: search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
+
+    const [users, total] = await Promise.all([
+      this.prismaService.user.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          avatar: true,
+          isAdmin: true,
+          deactivatedTime: true,
+          lastSignTime: true,
+          createdTime: true,
+        },
+        orderBy: { createdTime: 'desc' },
+        skip,
+        take,
+      }),
+      this.prismaService.user.count({ where }),
+    ]);
+
+    return {
+      users: users.map((user) => ({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar ? getPublicFullStorageUrl(user.avatar) : null,
+        isAdmin: user.isAdmin,
+        deactivatedTime: this.toIso(user.deactivatedTime),
+        lastSignTime: this.toIso(user.lastSignTime),
+        createdTime: user.createdTime.toISOString(),
+      })),
+      total,
+    };
+  }
+
+  private async ensureAnotherActiveAdmin(userId: string) {
+    const activeAdminCount = await this.prismaService.user.count({
+      where: {
+        id: { not: userId },
+        isAdmin: true,
+        isSystem: null,
+        deletedTime: null,
+        deactivatedTime: null,
+      },
+    });
+
+    if (activeAdminCount === 0) {
+      throw new BadRequestException('At least one active admin is required');
+    }
+  }
+
+  async updateUser(
+    userId: string,
+    updateRo: IAdminUpdateUserRo,
+    actorUserId?: string
+  ): Promise<void> {
+    const targetUser = await this.prismaService.user.findFirst({
+      where: { id: userId, deletedTime: null, isSystem: null },
+      select: { id: true, isAdmin: true, deactivatedTime: true },
+    });
+
+    if (!targetUser) {
+      throw new BadRequestException('User not found');
+    }
+
+    if (userId === actorUserId && (updateRo.deactivated || updateRo.isAdmin === false)) {
+      throw new BadRequestException('Cannot remove your own admin access');
+    }
+
+    if (targetUser.isAdmin && (updateRo.deactivated || updateRo.isAdmin === false)) {
+      await this.ensureAnotherActiveAdmin(userId);
+    }
+
+    const data: Prisma.UserUpdateInput = {};
+    if (updateRo.isAdmin !== undefined) {
+      data.isAdmin = updateRo.isAdmin ? true : null;
+    }
+    if (updateRo.deactivated !== undefined) {
+      data.deactivatedTime = updateRo.deactivated ? new Date() : null;
+    }
+
+    if (Object.keys(data).length === 0) {
+      return;
+    }
+
+    await this.prismaService.user.update({
+      where: { id: userId },
+      data,
+    });
+  }
+
+  async listSpaces(query: IAdminListQuery): Promise<IAdminSpaceListVo> {
+    const { search, skip, take } = this.getListParams(query);
+    const where: Prisma.SpaceWhereInput = {
+      isTemplate: null,
+      ...(search
+        ? {
+            OR: [
+              { id: { contains: search, mode: 'insensitive' } },
+              { name: { contains: search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
+
+    const [spaces, total] = await Promise.all([
+      this.prismaService.space.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          createdBy: true,
+          deletedTime: true,
+          createdTime: true,
+          _count: {
+            select: {
+              baseGroup: true,
+            },
+          },
+        },
+        orderBy: { createdTime: 'desc' },
+        skip,
+        take,
+      }),
+      this.prismaService.space.count({ where }),
+    ]);
+
+    const spaceIds = spaces.map((space) => space.id);
+    const creatorIds = [...new Set(spaces.map((space) => space.createdBy))];
+    const [creators, collaboratorCounts] = await Promise.all([
+      this.prismaService.user.findMany({
+        where: { id: { in: creatorIds } },
+        select: { id: true, name: true, email: true },
+      }),
+      spaceIds.length
+        ? this.prismaService.collaborator.groupBy({
+            by: ['resourceId'],
+            where: {
+              resourceType: CollaboratorType.Space,
+              resourceId: { in: spaceIds },
+            },
+            _count: { _all: true },
+          })
+        : [],
+    ]);
+
+    const creatorMap = new Map(creators.map((user) => [user.id, user]));
+    const collaboratorCountMap = new Map(
+      collaboratorCounts.map((item) => [item.resourceId, item._count._all])
+    );
+
+    return {
+      spaces: spaces.map((space) => {
+        const creator = creatorMap.get(space.createdBy);
+        return {
+          id: space.id,
+          name: space.name,
+          createdBy: space.createdBy,
+          createdByName: creator?.name ?? null,
+          createdByEmail: creator?.email ?? null,
+          baseCount: space._count.baseGroup,
+          collaboratorCount: collaboratorCountMap.get(space.id) ?? 0,
+          deletedTime: this.toIso(space.deletedTime),
+          createdTime: space.createdTime.toISOString(),
+        };
+      }),
+      total,
+    };
+  }
+
+  async updateSpace(
+    spaceId: string,
+    updateRo: IAdminUpdateSpaceRo,
+    actorUserId?: string
+  ): Promise<void> {
+    const space = await this.prismaService.space.findFirst({
+      where: { id: spaceId, isTemplate: null },
+      select: { id: true },
+    });
+
+    if (!space) {
+      throw new BadRequestException('Space not found');
+    }
+
+    await this.prismaService.space.update({
+      where: { id: spaceId },
+      data: {
+        deletedTime: updateRo.deleted ? new Date() : null,
+        lastModifiedBy: actorUserId,
+      },
+    });
+  }
 
   async publishPlugin(pluginId: string) {
     return this.prismaService.plugin.update({

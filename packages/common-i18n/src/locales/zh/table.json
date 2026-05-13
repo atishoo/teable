@@ -895,6 +895,7 @@
       "cancel": "取消",
       "leave": "取消",
       "downAsCsv": "下载 CSV",
+      "downAsXlsx": "下载 XLSX",
       "importData": "导入数据",
       "duplicate": "复制",
       "duplicating": "复制中...",

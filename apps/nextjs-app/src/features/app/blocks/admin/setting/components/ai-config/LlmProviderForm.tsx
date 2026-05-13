@@ -114,9 +114,13 @@ function checkMissingV1Suffix(
   type: LLMProviderType
 ): string | null {
   const is404 = matchesKeywords(lowerError, ['404', 'not found', 'invalid url']);
+  const isInvalidJson = matchesKeywords(lowerError, [
+    'invalid json response',
+    'unexpected token <',
+  ]);
   const hasV1 = lowerUrl.endsWith('/v1') || lowerUrl.endsWith('/v1/');
   const needsV1 = type !== LLMProviderType.OLLAMA && type !== LLMProviderType.GOOGLE;
-  if (!is404 || hasV1 || !needsV1) return null;
+  if ((!is404 && !isInvalidJson) || hasV1 || !needsV1) return null;
 
   const placeholder = LLM_PROVIDERS.find((p) => p.value === type)?.baseUrlPlaceholder;
   return placeholder?.includes('/v1') ? 'hint.missingV1Suffix' : null;

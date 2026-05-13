@@ -1,5 +1,5 @@
 import { getUniqName, ViewType } from '@teable/core';
-import { FileCsv, FileExcel, Slack, Table2 } from '@teable/icons';
+import { FileCsv, FileExcel, Table2 } from '@teable/icons';
 import type { ICreateBaseNodeRo } from '@teable/openapi';
 import { BaseNodeResourceType, SUPPORTEDTYPE } from '@teable/openapi';
 import { useTables } from '@teable/sdk';
@@ -87,14 +87,12 @@ export const BaseNodeAddResourceButton = (props: BaseNodeAddResourceButtonProps)
         | BaseNodeResourceType.Dashboard
         | BaseNodeResourceType.Folder;
       label: string;
-      trailingIcon?: React.ReactNode;
     }> = [];
 
     if (canCreateWorkflow) {
       list.push({
         resourceType: BaseNodeResourceType.Workflow,
         label: t('common:noun.newAutomation'),
-        trailingIcon: <Slack className="size-4" />,
       });
     }
     if (canCreateApp) {
@@ -122,7 +120,7 @@ export const BaseNodeAddResourceButton = (props: BaseNodeAddResourceButtonProps)
     }
 
     return list.map((item) => {
-      const { resourceType, label, trailingIcon } = item;
+      const { resourceType, label } = item;
       const IconComponent = BaseNodeResourceIconMap[resourceType];
       return (
         <DropdownMenuItem
@@ -140,7 +138,6 @@ export const BaseNodeAddResourceButton = (props: BaseNodeAddResourceButtonProps)
             <IconComponent className="size-4" />
             {label}
           </Button>
-          {trailingIcon}
         </DropdownMenuItem>
       );
     });
