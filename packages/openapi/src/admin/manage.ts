@@ -27,6 +27,7 @@ export const adminUserListVoSchema = z.object({
 });
 
 export const adminUpdateUserRoSchema = z.object({
+  name: z.string().optional(),
   isAdmin: z.boolean().optional(),
   deactivated: z.boolean().optional(),
   deleted: z.boolean().optional(),

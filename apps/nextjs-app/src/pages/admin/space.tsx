@@ -122,6 +122,15 @@ const AdminSpacePage: NextPageWithLayout = () => {
     setPendingAction(undefined);
   };
 
+  const copySpaceId = async (spaceId: string) => {
+    try {
+      await navigator.clipboard.writeText(spaceId);
+      sonner.toast.success('复制成功');
+    } catch {
+      sonner.toast.error('复制失败');
+    }
+  };
+
   return (
     <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
       <div className="flex shrink-0 items-center justify-between border-b px-8 py-5">
@@ -146,10 +155,10 @@ const AdminSpacePage: NextPageWithLayout = () => {
         </div>
 
         <div className="min-h-0 overflow-auto rounded-md border">
-          <Table className="min-w-[1600px] table-fixed">
+          <Table className="min-w-[1494px] table-fixed">
             <TableHeader className="sticky top-0 z-20 bg-background">
               <TableRow>
-                <TableHead className="sticky left-0 z-30 w-[320px] whitespace-nowrap border-r bg-background">
+                <TableHead className="sticky left-0 z-30 w-[214px] whitespace-nowrap bg-background shadow-[inset_-1px_0_0_hsl(var(--border))]">
                   空间
                 </TableHead>
                 <TableHead className="w-[300px] whitespace-nowrap">创建者</TableHead>
@@ -158,7 +167,7 @@ const AdminSpacePage: NextPageWithLayout = () => {
                 <TableHead className="w-[120px] whitespace-nowrap">自动加入</TableHead>
                 <TableHead className="w-[110px] whitespace-nowrap">状态</TableHead>
                 <TableHead className="w-[170px] whitespace-nowrap">创建时间</TableHead>
-                <TableHead className="sticky right-0 z-30 w-[370px] whitespace-nowrap border-l bg-background text-right">
+                <TableHead className="sticky right-0 z-30 w-[370px] whitespace-nowrap bg-background text-right shadow-[inset_1px_0_0_hsl(var(--border))]">
                   操作
                 </TableHead>
               </TableRow>
@@ -183,13 +192,19 @@ const AdminSpacePage: NextPageWithLayout = () => {
               {data?.spaces.map((item) => {
                 const isDeleted = Boolean(item.deletedTime);
                 return (
-                  <TableRow key={item.id}>
-                    <TableCell className="sticky left-0 z-20 w-[320px] whitespace-nowrap border-r bg-background">
-                      <div className="flex min-w-0 items-center gap-3">
+                  <TableRow key={item.id} className="group">
+                    <TableCell className="sticky left-0 z-20 w-[214px] whitespace-nowrap bg-background shadow-[inset_-1px_0_0_hsl(var(--border))] before:pointer-events-none before:absolute before:inset-0 before:bg-primary/5 before:opacity-0 group-hover:before:opacity-100">
+                      <div className="relative z-[1] flex min-w-0 items-center gap-3">
                         <SpaceAvatar name={item.name} className="size-7 rounded-sm border" />
                         <div className="min-w-0">
                           <div className="truncate font-medium">{item.name}</div>
-                          <div className="truncate text-xs text-muted-foreground">{item.id}</div>
+                          <button
+                            type="button"
+                            className="block max-w-full truncate text-left text-xs text-muted-foreground hover:text-foreground"
+                            onClick={() => void copySpaceId(item.id)}
+                          >
+                            {item.id}
+                          </button>
                         </div>
                       </div>
                     </TableCell>
@@ -222,8 +237,8 @@ const AdminSpacePage: NextPageWithLayout = () => {
                     <TableCell className="w-[170px] whitespace-nowrap">
                       {formatDate(item.createdTime)}
                     </TableCell>
-                    <TableCell className="sticky right-0 z-10 w-[370px] whitespace-nowrap border-l bg-background">
-                      <div className="flex justify-end gap-2 whitespace-nowrap">
+                    <TableCell className="sticky right-0 z-20 w-[370px] whitespace-nowrap bg-background shadow-[inset_1px_0_0_hsl(var(--border))] before:pointer-events-none before:absolute before:inset-0 before:bg-primary/5 before:opacity-0 group-hover:before:opacity-100">
+                      <div className="relative z-[1] flex justify-end gap-2 whitespace-nowrap">
                         {!isDeleted && (
                           <Button size="xs" variant="outline" asChild>
                             <Link href={`/space/${item.id}`} target="_blank" rel="noreferrer">
@@ -301,10 +316,7 @@ const AdminSpacePage: NextPageWithLayout = () => {
           </Table>
         </div>
 
-        <div className="flex shrink-0 items-center justify-between">
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/admin/user">查看用户管理</Link>
-          </Button>
+        <div className="flex shrink-0 items-center justify-end">
           <div className="flex items-center gap-2">
             <Button
               size="sm"

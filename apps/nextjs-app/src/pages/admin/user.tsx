@@ -6,19 +6,29 @@ import { ConfirmDialog, Spin } from '@teable/ui-lib/base';
 import {
   Badge,
   Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   Input,
+  Label,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
   sonner,
 } from '@teable/ui-lib/shadcn';
 import dayjs from 'dayjs';
 import { RotateCcw, ShieldCheck, ShieldOff, Trash2, UserCheck, UserX } from 'lucide-react';
 import type { GetServerSideProps } from 'next';
-import Link from 'next/link';
 import { useTranslation } from 'next-i18next';
 import { useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
@@ -99,6 +109,8 @@ const AdminUserPage: NextPageWithLayout = () => {
     user: IAdminUserVo;
     action: UserAction;
   }>();
+  const [editingUser, setEditingUser] = useState<IAdminUserVo>();
+  const [editingName, setEditingName] = useState('');
 
   const query = useMemo(
     () => ({
@@ -142,6 +154,15 @@ const AdminUserPage: NextPageWithLayout = () => {
     },
   });
 
+  const { mutateAsync: updateUserName, isPending: isUpdatingUserName } = useMutation({
+    mutationFn: ({ target, name }: { target: IAdminUserVo; name: string }) =>
+      adminUpdateUser(target.id, { name }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      sonner.toast(t('actions.updateSucceed'));
+    },
+  });
+
   const total = data?.total ?? 0;
   const hasPrevious = page > 0;
   const hasNext = (page + 1) * PAGE_SIZE < total;
@@ -156,6 +177,42 @@ const AdminUserPage: NextPageWithLayout = () => {
       action: pendingAction.action,
     });
     setPendingAction(undefined);
+  };
+
+  const copyEmail = async (email: string) => {
+    try {
+      await navigator.clipboard.writeText(email);
+      sonner.toast.success('复制成功');
+    } catch {
+      sonner.toast.error('复制失败');
+    }
+  };
+
+  const openEditUserName = (target: IAdminUserVo) => {
+    setEditingUser(target);
+    setEditingName(target.name);
+  };
+
+  const closeEditUserName = () => {
+    setEditingUser(undefined);
+    setEditingName('');
+  };
+
+  const handleUpdateUserName = async () => {
+    if (!editingUser) {
+      return;
+    }
+    const name = editingName.trim();
+    if (!name) {
+      sonner.toast('用户名不能为空');
+      return;
+    }
+    if (name === editingUser.name) {
+      closeEditUserName();
+      return;
+    }
+    await updateUserName({ target: editingUser, name });
+    closeEditUserName();
   };
 
   return (
@@ -182,194 +239,217 @@ const AdminUserPage: NextPageWithLayout = () => {
         </div>
 
         <div className="min-h-0 overflow-auto rounded-md border">
-          <Table className="min-w-[1290px] table-fixed">
-            <TableHeader className="sticky top-0 z-20 bg-background">
-              <TableRow>
-                <TableHead className="sticky left-0 z-30 w-[360px] whitespace-nowrap border-r bg-background">
-                  用户
-                </TableHead>
-                <TableHead className="w-[110px] whitespace-nowrap">角色</TableHead>
-                <TableHead className="w-[120px] whitespace-nowrap">状态</TableHead>
-                <TableHead className="w-[170px] whitespace-nowrap">最近登录</TableHead>
-                <TableHead className="w-[170px] whitespace-nowrap">创建时间</TableHead>
-                <TableHead className="sticky right-0 z-30 w-[360px] whitespace-nowrap border-l bg-background text-right">
-                  操作
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading && (
+          <TooltipProvider delayDuration={200}>
+            <Table className="min-w-[1110px] table-fixed">
+              <TableHeader className="sticky top-0 z-20 bg-background">
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center">
-                    <Spin />
-                  </TableCell>
+                  <TableHead className="sticky left-0 z-30 w-[180px] whitespace-nowrap bg-background shadow-[inset_-1px_0_0_hsl(var(--border))]">
+                    用户
+                  </TableHead>
+                  <TableHead className="w-[110px] whitespace-nowrap">角色</TableHead>
+                  <TableHead className="w-[120px] whitespace-nowrap">状态</TableHead>
+                  <TableHead className="w-[170px] whitespace-nowrap">最近登录</TableHead>
+                  <TableHead className="w-[170px] whitespace-nowrap">创建时间</TableHead>
+                  <TableHead className="sticky right-0 z-30 w-[360px] whitespace-nowrap bg-background text-right shadow-[inset_1px_0_0_hsl(var(--border))]">
+                    操作
+                  </TableHead>
                 </TableRow>
-              )}
-
-              {!isLoading && data?.users.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                    没有匹配的用户
-                  </TableCell>
-                </TableRow>
-              )}
-
-              {data?.users.map((item) => {
-                const isSelf = item.id === user.id;
-                const isDeactivated = Boolean(item.deactivatedTime);
-                const isDeleted = Boolean(item.deletedTime);
-                return (
-                  <TableRow key={item.id}>
-                    <TableCell className="sticky left-0 z-20 w-[360px] whitespace-nowrap border-r bg-background">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <UserAvatar user={item} />
-                        <div className="min-w-0">
-                          <div className="truncate font-medium">{item.name}</div>
-                          <div className="truncate text-xs text-muted-foreground">{item.email}</div>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="w-[110px] whitespace-nowrap">
-                      {item.isAdmin ? <Badge>管理员</Badge> : <Badge variant="outline">成员</Badge>}
-                    </TableCell>
-                    <TableCell className="w-[120px] whitespace-nowrap">
-                      {isDeleted ? (
-                        <Badge variant="destructive">已删除</Badge>
-                      ) : isDeactivated ? (
-                        <Badge variant="destructive">已停用</Badge>
-                      ) : (
-                        <Badge variant="secondary">正常</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="w-[170px] whitespace-nowrap">
-                      {formatDate(item.lastSignTime)}
-                    </TableCell>
-                    <TableCell className="w-[170px] whitespace-nowrap">
-                      {formatDate(item.createdTime)}
-                    </TableCell>
-                    <TableCell className="sticky right-0 z-10 w-[360px] whitespace-nowrap border-l bg-background">
-                      <div className="flex justify-end gap-2 whitespace-nowrap">
-                        {isDeleted ? (
-                          <>
-                            <Button
-                              size="xs"
-                              variant="outline"
-                              onClick={() =>
-                                setPendingAction({
-                                  user: item,
-                                  action: 'restore',
-                                })
-                              }
-                            >
-                              <RotateCcw className="size-4" />
-                              恢复
-                            </Button>
-                            <Button
-                              size="xs"
-                              variant="destructive"
-                              disabled={isSelf}
-                              onClick={() =>
-                                setPendingAction({
-                                  user: item,
-                                  action: 'permanentDelete',
-                                })
-                              }
-                            >
-                              <Trash2 className="size-4" />
-                              永久删除
-                            </Button>
-                          </>
-                        ) : (
-                          <>
-                            {item.isAdmin ? (
-                              <Button
-                                size="xs"
-                                variant="outline"
-                                disabled={isSelf}
-                                onClick={() =>
-                                  setPendingAction({
-                                    user: item,
-                                    action: 'revokeAdmin',
-                                  })
-                                }
-                              >
-                                <ShieldOff className="size-4" />
-                                移除管理员
-                              </Button>
-                            ) : (
-                              <Button
-                                size="xs"
-                                variant="outline"
-                                onClick={() =>
-                                  setPendingAction({
-                                    user: item,
-                                    action: 'grantAdmin',
-                                  })
-                                }
-                              >
-                                <ShieldCheck className="size-4" />
-                                设为管理员
-                              </Button>
-                            )}
-                            {isDeactivated ? (
-                              <Button
-                                size="xs"
-                                variant="outline"
-                                onClick={() =>
-                                  setPendingAction({
-                                    user: item,
-                                    action: 'activate',
-                                  })
-                                }
-                              >
-                                <UserCheck className="size-4" />
-                                激活
-                              </Button>
-                            ) : (
-                              <Button
-                                size="xs"
-                                variant="outline"
-                                disabled={isSelf}
-                                onClick={() =>
-                                  setPendingAction({
-                                    user: item,
-                                    action: 'deactivate',
-                                  })
-                                }
-                              >
-                                <UserX className="size-4" />
-                                停用
-                              </Button>
-                            )}
-                            <Button
-                              size="xs"
-                              variant="outline"
-                              disabled={isSelf}
-                              onClick={() =>
-                                setPendingAction({
-                                  user: item,
-                                  action: 'delete',
-                                })
-                              }
-                            >
-                              <Trash2 className="size-4" />
-                              删除
-                            </Button>
-                          </>
-                        )}
-                      </div>
+              </TableHeader>
+              <TableBody>
+                {isLoading && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-24 text-center">
+                      <Spin />
                     </TableCell>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                )}
+
+                {!isLoading && data?.users.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                      没有匹配的用户
+                    </TableCell>
+                  </TableRow>
+                )}
+
+                {data?.users.map((item) => {
+                  const isSelf = item.id === user.id;
+                  const isDeactivated = Boolean(item.deactivatedTime);
+                  const isDeleted = Boolean(item.deletedTime);
+                  return (
+                    <TableRow key={item.id} className="group">
+                      <TableCell className="sticky left-0 z-20 w-[180px] whitespace-nowrap bg-background shadow-[inset_-1px_0_0_hsl(var(--border))] before:pointer-events-none before:absolute before:inset-0 before:bg-primary/5 before:opacity-0 group-hover:before:opacity-100">
+                        <div className="relative z-[1] flex min-w-0 items-center gap-3">
+                          <UserAvatar user={item} />
+                          <div className="min-w-0">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="block max-w-full cursor-pointer truncate rounded-sm text-left font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                  onDoubleClick={(event) => {
+                                    event.stopPropagation();
+                                    openEditUserName(item);
+                                  }}
+                                >
+                                  {item.name}
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>双击编辑</TooltipContent>
+                            </Tooltip>
+                            <button
+                              type="button"
+                              className="block max-w-full truncate text-left text-xs text-muted-foreground hover:text-foreground"
+                              onClick={() => void copyEmail(item.email)}
+                            >
+                              {item.email}
+                            </button>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="w-[110px] whitespace-nowrap">
+                        {item.isAdmin ? (
+                          <Badge>管理员</Badge>
+                        ) : (
+                          <Badge variant="outline">成员</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="w-[120px] whitespace-nowrap">
+                        {isDeleted ? (
+                          <Badge variant="destructive">已删除</Badge>
+                        ) : isDeactivated ? (
+                          <Badge variant="destructive">已停用</Badge>
+                        ) : (
+                          <Badge variant="secondary">正常</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="w-[170px] whitespace-nowrap">
+                        {formatDate(item.lastSignTime)}
+                      </TableCell>
+                      <TableCell className="w-[170px] whitespace-nowrap">
+                        {formatDate(item.createdTime)}
+                      </TableCell>
+                      <TableCell className="sticky right-0 z-20 w-[360px] whitespace-nowrap bg-background shadow-[inset_1px_0_0_hsl(var(--border))] before:pointer-events-none before:absolute before:inset-0 before:bg-primary/5 before:opacity-0 group-hover:before:opacity-100">
+                        <div className="relative z-[1] flex justify-end gap-2 whitespace-nowrap">
+                          {isDeleted ? (
+                            <>
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                onClick={() =>
+                                  setPendingAction({
+                                    user: item,
+                                    action: 'restore',
+                                  })
+                                }
+                              >
+                                <RotateCcw className="size-4" />
+                                恢复
+                              </Button>
+                              <Button
+                                size="xs"
+                                variant="destructive"
+                                disabled={isSelf}
+                                onClick={() =>
+                                  setPendingAction({
+                                    user: item,
+                                    action: 'permanentDelete',
+                                  })
+                                }
+                              >
+                                <Trash2 className="size-4" />
+                                永久删除
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              {item.isAdmin ? (
+                                <Button
+                                  size="xs"
+                                  variant="outline"
+                                  disabled={isSelf}
+                                  onClick={() =>
+                                    setPendingAction({
+                                      user: item,
+                                      action: 'revokeAdmin',
+                                    })
+                                  }
+                                >
+                                  <ShieldOff className="size-4" />
+                                  移除管理员
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="xs"
+                                  variant="outline"
+                                  onClick={() =>
+                                    setPendingAction({
+                                      user: item,
+                                      action: 'grantAdmin',
+                                    })
+                                  }
+                                >
+                                  <ShieldCheck className="size-4" />
+                                  设为管理员
+                                </Button>
+                              )}
+                              {isDeactivated ? (
+                                <Button
+                                  size="xs"
+                                  variant="outline"
+                                  onClick={() =>
+                                    setPendingAction({
+                                      user: item,
+                                      action: 'activate',
+                                    })
+                                  }
+                                >
+                                  <UserCheck className="size-4" />
+                                  激活
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="xs"
+                                  variant="outline"
+                                  disabled={isSelf}
+                                  onClick={() =>
+                                    setPendingAction({
+                                      user: item,
+                                      action: 'deactivate',
+                                    })
+                                  }
+                                >
+                                  <UserX className="size-4" />
+                                  停用
+                                </Button>
+                              )}
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                disabled={isSelf}
+                                onClick={() =>
+                                  setPendingAction({
+                                    user: item,
+                                    action: 'delete',
+                                  })
+                                }
+                              >
+                                <Trash2 className="size-4" />
+                                删除
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TooltipProvider>
         </div>
 
-        <div className="flex shrink-0 items-center justify-between">
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/admin/space">查看空间管理</Link>
-          </Button>
+        <div className="flex shrink-0 items-center justify-end">
           <div className="flex items-center gap-2">
             <Button
               size="sm"
@@ -411,6 +491,45 @@ const AdminUserPage: NextPageWithLayout = () => {
         }}
         onConfirm={handleConfirm}
       />
+      <Dialog
+        open={Boolean(editingUser)}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeEditUserName();
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>修改用户名</DialogTitle>
+            <DialogDescription>为 {editingUser?.email} 设置新的用户名。</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2 py-2">
+            <Label htmlFor="admin-user-name">用户名</Label>
+            <Input
+              id="admin-user-name"
+              value={editingName}
+              onChange={(event) => setEditingName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  void handleUpdateUserName();
+                }
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeEditUserName} disabled={isUpdatingUserName}>
+              取消
+            </Button>
+            <Button
+              onClick={() => void handleUpdateUserName()}
+              disabled={isUpdatingUserName || !editingName.trim()}
+            >
+              保存
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

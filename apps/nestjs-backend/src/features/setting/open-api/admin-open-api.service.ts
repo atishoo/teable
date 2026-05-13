@@ -139,6 +139,27 @@ export class AdminOpenApiService {
     );
   }
 
+  private getUserUpdateData(updateRo: IAdminUpdateUserRo): Prisma.UserUpdateInput {
+    const data: Prisma.UserUpdateInput = {};
+    if (updateRo.name !== undefined) {
+      const name = updateRo.name.trim();
+      if (!name) {
+        throw new BadRequestException('User name is required');
+      }
+      data.name = name;
+    }
+    if (updateRo.isAdmin !== undefined) {
+      data.isAdmin = updateRo.isAdmin ? true : null;
+    }
+    if (updateRo.deactivated !== undefined) {
+      data.deactivatedTime = updateRo.deactivated ? new Date() : null;
+    }
+    if (updateRo.deleted !== undefined) {
+      data.deletedTime = updateRo.deleted ? new Date() : null;
+    }
+    return data;
+  }
+
   async updateUser(
     userId: string,
     updateRo: IAdminUpdateUserRo,
@@ -166,17 +187,7 @@ export class AdminOpenApiService {
       return;
     }
 
-    const data: Prisma.UserUpdateInput = {};
-    if (updateRo.isAdmin !== undefined) {
-      data.isAdmin = updateRo.isAdmin ? true : null;
-    }
-    if (updateRo.deactivated !== undefined) {
-      data.deactivatedTime = updateRo.deactivated ? new Date() : null;
-    }
-    if (updateRo.deleted !== undefined) {
-      data.deletedTime = updateRo.deleted ? new Date() : null;
-    }
-
+    const data = this.getUserUpdateData(updateRo);
     if (Object.keys(data).length === 0) {
       return;
     }
