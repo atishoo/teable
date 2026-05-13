@@ -25,6 +25,7 @@ import { Timing } from '../../../utils/timing';
 import { AttachmentsCropQueueProcessor } from '../../attachments/attachments-crop.processor';
 import StorageAdapter from '../../attachments/plugins/adapter';
 import { getPublicFullStorageUrl } from '../../attachments/plugins/utils';
+import { DeleteUserService } from '../../user/delete-user/delete-user.service';
 
 @Injectable()
 export class AdminOpenApiService {
@@ -35,7 +36,8 @@ export class AdminOpenApiService {
     private readonly prismaService: PrismaService,
     @InjectModel('CUSTOM_KNEX') private readonly knex: Knex,
     private readonly attachmentsCropQueueProcessor: AttachmentsCropQueueProcessor,
-    private readonly performanceCacheService: PerformanceCacheService
+    private readonly performanceCacheService: PerformanceCacheService,
+    private readonly deleteUserService: DeleteUserService
   ) {}
 
   private getListParams(query: IAdminListQuery = {}) {
@@ -54,7 +56,7 @@ export class AdminOpenApiService {
     const { search, skip, take } = this.getListParams(query);
     const where: Prisma.UserWhereInput = {
       isSystem: null,
-      deletedTime: null,
+      permanentDeletedTime: null,
       ...(search
         ? {
             OR: [
@@ -76,6 +78,7 @@ export class AdminOpenApiService {
           avatar: true,
           isAdmin: true,
           deactivatedTime: true,
+          deletedTime: true,
           lastSignTime: true,
           createdTime: true,
         },
@@ -94,6 +97,7 @@ export class AdminOpenApiService {
         avatar: user.avatar ? getPublicFullStorageUrl(user.avatar) : null,
         isAdmin: user.isAdmin,
         deactivatedTime: this.toIso(user.deactivatedTime),
+        deletedTime: this.toIso(user.deletedTime),
         lastSignTime: this.toIso(user.lastSignTime),
         createdTime: user.createdTime.toISOString(),
       })),
@@ -117,26 +121,49 @@ export class AdminOpenApiService {
     }
   }
 
+  private isUserAccessRemoval(updateRo: IAdminUpdateUserRo) {
+    return Boolean(
+      updateRo.deactivated ||
+        updateRo.deleted ||
+        updateRo.permanentDeleted ||
+        updateRo.isAdmin === false
+    );
+  }
+
+  private shouldEnsureAnotherActiveAdmin(
+    targetUser: { isAdmin?: boolean | null; deletedTime?: Date | null },
+    updateRo: IAdminUpdateUserRo
+  ) {
+    return Boolean(
+      targetUser.isAdmin && !targetUser.deletedTime && this.isUserAccessRemoval(updateRo)
+    );
+  }
+
   async updateUser(
     userId: string,
     updateRo: IAdminUpdateUserRo,
     actorUserId?: string
   ): Promise<void> {
     const targetUser = await this.prismaService.user.findFirst({
-      where: { id: userId, deletedTime: null, isSystem: null },
-      select: { id: true, isAdmin: true, deactivatedTime: true },
+      where: { id: userId, permanentDeletedTime: null, isSystem: null },
+      select: { id: true, isAdmin: true, deactivatedTime: true, deletedTime: true },
     });
 
     if (!targetUser) {
       throw new BadRequestException('User not found');
     }
 
-    if (userId === actorUserId && (updateRo.deactivated || updateRo.isAdmin === false)) {
+    if (userId === actorUserId && this.isUserAccessRemoval(updateRo)) {
       throw new BadRequestException('Cannot remove your own admin access');
     }
 
-    if (targetUser.isAdmin && (updateRo.deactivated || updateRo.isAdmin === false)) {
+    if (this.shouldEnsureAnotherActiveAdmin(targetUser, updateRo)) {
       await this.ensureAnotherActiveAdmin(userId);
+    }
+
+    if (updateRo.permanentDeleted) {
+      await this.deleteUserService.deleteUserById(userId, { skipCollaboratorValidation: true });
+      return;
     }
 
     const data: Prisma.UserUpdateInput = {};
@@ -145,6 +172,9 @@ export class AdminOpenApiService {
     }
     if (updateRo.deactivated !== undefined) {
       data.deactivatedTime = updateRo.deactivated ? new Date() : null;
+    }
+    if (updateRo.deleted !== undefined) {
+      data.deletedTime = updateRo.deleted ? new Date() : null;
     }
 
     if (Object.keys(data).length === 0) {
@@ -179,6 +209,7 @@ export class AdminOpenApiService {
           name: true,
           createdBy: true,
           deletedTime: true,
+          enableAutoJoin: true,
           createdTime: true,
           _count: {
             select: {
@@ -228,6 +259,7 @@ export class AdminOpenApiService {
           createdByEmail: creator?.email ?? null,
           baseCount: space._count.baseGroup,
           collaboratorCount: collaboratorCountMap.get(space.id) ?? 0,
+          enableAutoJoin: space.enableAutoJoin,
           deletedTime: this.toIso(space.deletedTime),
           createdTime: space.createdTime.toISOString(),
         };
@@ -250,12 +282,19 @@ export class AdminOpenApiService {
       throw new BadRequestException('Space not found');
     }
 
+    const data: Prisma.SpaceUpdateInput = {
+      lastModifiedBy: actorUserId,
+    };
+    if (updateRo.deleted !== undefined) {
+      data.deletedTime = updateRo.deleted ? new Date() : null;
+    }
+    if (updateRo.enableAutoJoin !== undefined) {
+      data.enableAutoJoin = updateRo.enableAutoJoin;
+    }
+
     await this.prismaService.space.update({
       where: { id: spaceId },
-      data: {
-        deletedTime: updateRo.deleted ? new Date() : null,
-        lastModifiedBy: actorUserId,
-      },
+      data,
     });
   }
 

@@ -49,7 +49,7 @@ export class DeleteUserService {
     await this.prismaService.txClient().user.update({
       where: { id: userId, permanentDeletedTime: null },
       data: {
-        email: `deleted-${getRandomString(10)}@teable.ai`,
+        email: `${getRandomString(10)}@deleteduser.info`,
         name: 'Deleted User',
         permanentDeletedTime: new Date().toISOString(),
         deletedTime: new Date().toISOString(),
@@ -204,9 +204,11 @@ export class DeleteUserService {
     }
   }
 
-  async deleteUserById(userId: string) {
+  async deleteUserById(userId: string, options?: { skipCollaboratorValidation?: boolean }) {
     await this.prismaService.$tx(async () => {
-      await this.validateDeleteUser(userId);
+      if (!options?.skipCollaboratorValidation) {
+        await this.validateDeleteUser(userId);
+      }
       await this.clearUserData(userId);
       await this.permanentlyDeleteUser(userId);
     });

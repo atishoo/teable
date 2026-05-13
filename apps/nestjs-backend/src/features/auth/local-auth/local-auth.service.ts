@@ -259,7 +259,7 @@ export class LocalAuthService {
     const { salt, hashPassword } = await this.encodePassword(password);
     const res = await this.prismaService.$tx(async (prisma) => {
       if (user) {
-        return await prisma.user.update({
+        const updatedUser = await prisma.user.update({
           where: { id: user.id, deletedTime: null },
           data: {
             salt,
@@ -268,6 +268,8 @@ export class LocalAuthService {
             refMeta: refMeta ? JSON.stringify(refMeta) : undefined,
           },
         });
+        await this.userService.applyAutoJoinSpaces(updatedUser.id);
+        return updatedUser;
       }
       return await this.userService.createUserWithSettingCheck(
         {

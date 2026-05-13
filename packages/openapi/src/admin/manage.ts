@@ -16,6 +16,7 @@ export const adminUserSchema = z.object({
   avatar: z.string().nullable().optional(),
   isAdmin: z.boolean().nullable().optional(),
   deactivatedTime: z.string().nullable().optional(),
+  deletedTime: z.string().nullable().optional(),
   lastSignTime: z.string().nullable().optional(),
   createdTime: z.string(),
 });
@@ -28,6 +29,8 @@ export const adminUserListVoSchema = z.object({
 export const adminUpdateUserRoSchema = z.object({
   isAdmin: z.boolean().optional(),
   deactivated: z.boolean().optional(),
+  deleted: z.boolean().optional(),
+  permanentDeleted: z.boolean().optional(),
 });
 
 export const adminSpaceSchema = z.object({
@@ -38,6 +41,7 @@ export const adminSpaceSchema = z.object({
   createdByEmail: z.string().nullable().optional(),
   baseCount: z.number(),
   collaboratorCount: z.number(),
+  enableAutoJoin: z.boolean(),
   deletedTime: z.string().nullable().optional(),
   createdTime: z.string(),
 });
@@ -48,7 +52,8 @@ export const adminSpaceListVoSchema = z.object({
 });
 
 export const adminUpdateSpaceRoSchema = z.object({
-  deleted: z.boolean(),
+  deleted: z.boolean().optional(),
+  enableAutoJoin: z.boolean().optional(),
 });
 
 export type IAdminListQuery = z.infer<typeof adminListQuerySchema>;

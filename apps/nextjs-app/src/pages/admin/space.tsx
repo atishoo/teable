@@ -15,7 +15,7 @@ import {
   sonner,
 } from '@teable/ui-lib/shadcn';
 import dayjs from 'dayjs';
-import { ExternalLink, RotateCcw, Trash2 } from 'lucide-react';
+import { ExternalLink, RotateCcw, Trash2, UserMinus, UserPlus } from 'lucide-react';
 import type { GetServerSideProps } from 'next';
 import Link from 'next/link';
 import { useTranslation } from 'next-i18next';
@@ -31,7 +31,7 @@ import withEnv from '@/lib/withEnv';
 
 const PAGE_SIZE = 30;
 
-type SpaceAction = 'delete' | 'restore';
+type SpaceAction = 'delete' | 'restore' | 'enableAutoJoin' | 'disableAutoJoin';
 
 const actionConfig: Record<
   SpaceAction,
@@ -50,6 +50,16 @@ const actionConfig: Record<
     title: '恢复空间',
     description: (space) => `空间「${space.name}」会恢复到正常状态。`,
     confirmText: '恢复',
+  },
+  enableAutoJoin: {
+    title: '允许自动加入',
+    description: (space) => `开启后，新注册用户会自动加入空间「${space.name}」并获得只读权限。`,
+    confirmText: '允许自动加入',
+  },
+  disableAutoJoin: {
+    title: '禁止自动加入',
+    description: (space) => `关闭后，新注册用户不会再自动加入空间「${space.name}」。`,
+    confirmText: '禁止自动加入',
   },
 };
 
@@ -81,8 +91,15 @@ const AdminSpacePage: NextPageWithLayout = () => {
   });
 
   const { mutateAsync: updateSpace, isPending } = useMutation({
-    mutationFn: ({ target, action }: { target: IAdminSpaceVo; action: SpaceAction }) =>
-      adminUpdateSpace(target.id, { deleted: action === 'delete' }),
+    mutationFn: ({ target, action }: { target: IAdminSpaceVo; action: SpaceAction }) => {
+      if (action === 'delete') {
+        return adminUpdateSpace(target.id, { deleted: true });
+      }
+      if (action === 'restore') {
+        return adminUpdateSpace(target.id, { deleted: false });
+      }
+      return adminUpdateSpace(target.id, { enableAutoJoin: action === 'enableAutoJoin' });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-spaces'] });
       sonner.toast(t('actions.updateSucceed'));
@@ -129,22 +146,25 @@ const AdminSpacePage: NextPageWithLayout = () => {
         </div>
 
         <div className="min-h-0 overflow-auto rounded-md border">
-          <Table>
-            <TableHeader className="sticky top-0 bg-background">
+          <Table className="min-w-[1600px] table-fixed">
+            <TableHeader className="sticky top-0 z-20 bg-background">
               <TableRow>
-                <TableHead className="w-[30%]">空间</TableHead>
-                <TableHead>创建者</TableHead>
-                <TableHead>数据库</TableHead>
-                <TableHead>协作者</TableHead>
-                <TableHead>状态</TableHead>
-                <TableHead>创建时间</TableHead>
-                <TableHead className="w-[190px] text-right">操作</TableHead>
+                <TableHead className="w-[320px] whitespace-nowrap">空间</TableHead>
+                <TableHead className="w-[300px] whitespace-nowrap">创建者</TableHead>
+                <TableHead className="w-[100px] whitespace-nowrap">数据库</TableHead>
+                <TableHead className="w-[110px] whitespace-nowrap">协作者</TableHead>
+                <TableHead className="w-[120px] whitespace-nowrap">自动加入</TableHead>
+                <TableHead className="w-[110px] whitespace-nowrap">状态</TableHead>
+                <TableHead className="w-[170px] whitespace-nowrap">创建时间</TableHead>
+                <TableHead className="sticky right-0 z-30 w-[370px] whitespace-nowrap border-l bg-background text-right">
+                  操作
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading && (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center">
+                  <TableCell colSpan={8} className="h-24 text-center">
                     <Spin />
                   </TableCell>
                 </TableRow>
@@ -152,7 +172,7 @@ const AdminSpacePage: NextPageWithLayout = () => {
 
               {!isLoading && data?.spaces.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                     没有匹配的空间
                   </TableCell>
                 </TableRow>
@@ -162,7 +182,7 @@ const AdminSpacePage: NextPageWithLayout = () => {
                 const isDeleted = Boolean(item.deletedTime);
                 return (
                   <TableRow key={item.id}>
-                    <TableCell>
+                    <TableCell className="w-[320px] whitespace-nowrap">
                       <div className="flex min-w-0 items-center gap-3">
                         <SpaceAvatar name={item.name} className="size-7 rounded-sm border" />
                         <div className="min-w-0">
@@ -171,7 +191,7 @@ const AdminSpacePage: NextPageWithLayout = () => {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="w-[300px] whitespace-nowrap">
                       <div className="min-w-0">
                         <div className="truncate">{item.createdByName ?? '-'}</div>
                         <div className="truncate text-xs text-muted-foreground">
@@ -179,23 +199,34 @@ const AdminSpacePage: NextPageWithLayout = () => {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>{item.baseCount}</TableCell>
-                    <TableCell>{item.collaboratorCount}</TableCell>
-                    <TableCell>
+                    <TableCell className="w-[100px] whitespace-nowrap">{item.baseCount}</TableCell>
+                    <TableCell className="w-[110px] whitespace-nowrap">
+                      {item.collaboratorCount}
+                    </TableCell>
+                    <TableCell className="w-[120px] whitespace-nowrap">
+                      {item.enableAutoJoin ? (
+                        <Badge variant="secondary">已允许</Badge>
+                      ) : (
+                        <Badge variant="outline">已禁止</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="w-[110px] whitespace-nowrap">
                       {isDeleted ? (
                         <Badge variant="destructive">回收站</Badge>
                       ) : (
                         <Badge variant="secondary">正常</Badge>
                       )}
                     </TableCell>
-                    <TableCell>{formatDate(item.createdTime)}</TableCell>
-                    <TableCell>
-                      <div className="flex justify-end gap-2">
+                    <TableCell className="w-[170px] whitespace-nowrap">
+                      {formatDate(item.createdTime)}
+                    </TableCell>
+                    <TableCell className="sticky right-0 z-10 w-[370px] whitespace-nowrap border-l bg-background">
+                      <div className="flex justify-end gap-2 whitespace-nowrap">
                         {!isDeleted && (
                           <Button size="xs" variant="outline" asChild>
-                            <Link href={`/space/${item.id}`}>
+                            <Link href={`/space/${item.id}`} target="_blank" rel="noreferrer">
                               <ExternalLink className="size-4" />
-                              打开
+                              查看
                             </Link>
                           </Button>
                         )}
@@ -214,19 +245,50 @@ const AdminSpacePage: NextPageWithLayout = () => {
                             恢复
                           </Button>
                         ) : (
-                          <Button
-                            size="xs"
-                            variant="outline"
-                            onClick={() =>
-                              setPendingAction({
-                                space: item,
-                                action: 'delete',
-                              })
-                            }
-                          >
-                            <Trash2 className="size-4" />
-                            移入回收站
-                          </Button>
+                          <>
+                            {item.enableAutoJoin ? (
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                onClick={() =>
+                                  setPendingAction({
+                                    space: item,
+                                    action: 'disableAutoJoin',
+                                  })
+                                }
+                              >
+                                <UserMinus className="size-4" />
+                                禁止自动加入
+                              </Button>
+                            ) : (
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                onClick={() =>
+                                  setPendingAction({
+                                    space: item,
+                                    action: 'enableAutoJoin',
+                                  })
+                                }
+                              >
+                                <UserPlus className="size-4" />
+                                允许自动加入
+                              </Button>
+                            )}
+                            <Button
+                              size="xs"
+                              variant="outline"
+                              onClick={() =>
+                                setPendingAction({
+                                  space: item,
+                                  action: 'delete',
+                                })
+                              }
+                            >
+                              <Trash2 className="size-4" />
+                              移入回收站
+                            </Button>
+                          </>
                         )}
                       </div>
                     </TableCell>

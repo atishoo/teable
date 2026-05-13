@@ -5,6 +5,7 @@ import {
   actionPrefixMap,
   getPermissionMap,
   HttpErrorCode,
+  Role,
   TemplateRolePermission,
 } from '@teable/core';
 import { PrismaService } from '@teable/db-main-prisma';
@@ -57,6 +58,13 @@ export class TablePermissionService {
           },
         });
       });
+    if (this.cls.get('user.isAdmin')) {
+      return this.getTablePermissionMapByPermissions(
+        baseId,
+        getPermissionMap(Role.Owner),
+        tableIds
+      );
+    }
     const collaborators = await this.prismaService.txClient().collaborator.findMany({
       where: {
         principalId: { in: [userId, ...(departmentIds || [])] },

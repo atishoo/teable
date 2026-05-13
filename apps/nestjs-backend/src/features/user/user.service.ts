@@ -3,6 +3,7 @@ import { join } from 'path';
 import { Injectable } from '@nestjs/common';
 import {
   generateAccountId,
+  getRandomString,
   generateSpaceId,
   generateUserId,
   HttpErrorCode,
@@ -198,7 +199,54 @@ export class UserService {
         await this.createSpaceBySignup({ name: defaultSpaceName || `${name}'s space` });
       });
     }
+    if (user.password || user.lastSignTime || account) {
+      await this.applyAutoJoinSpaces(id);
+    }
     return newUser;
+  }
+
+  async applyAutoJoinSpaces(userId: string) {
+    const spaces = await this.prismaService.txClient().space.findMany({
+      where: {
+        enableAutoJoin: true,
+        deletedTime: null,
+        isTemplate: null,
+      },
+      select: { id: true },
+    });
+
+    if (!spaces.length) {
+      return;
+    }
+
+    const spaceIds = spaces.map(({ id }) => id);
+    const existingCollaborators = await this.prismaService.txClient().collaborator.findMany({
+      where: {
+        resourceId: { in: spaceIds },
+        resourceType: CollaboratorType.Space,
+        principalId: userId,
+        principalType: PrincipalType.User,
+      },
+      select: { resourceId: true },
+    });
+    const existingSpaceIds = new Set(existingCollaborators.map(({ resourceId }) => resourceId));
+    const missingSpaceIds = spaceIds.filter((id) => !existingSpaceIds.has(id));
+
+    if (!missingSpaceIds.length) {
+      return;
+    }
+
+    await this.prismaService.txClient().collaborator.createMany({
+      data: missingSpaceIds.map((id) => ({
+        id: getRandomString(16),
+        resourceId: id,
+        resourceType: CollaboratorType.Space,
+        roleName: Role.Viewer,
+        principalId: userId,
+        principalType: PrincipalType.User,
+        createdBy: userId,
+      })),
+    });
   }
 
   async updateUserName(id: string, name: string) {

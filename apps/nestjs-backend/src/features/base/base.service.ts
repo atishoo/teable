@@ -3,12 +3,12 @@ import {
   ActionPrefix,
   actionPrefixMap,
   generateBaseId,
+  generateTemplateId,
   HttpErrorCode,
   Role,
-  generateTemplateId,
 } from '@teable/core';
-import { PrismaService, ProvisionState } from '@teable/db-main-prisma';
 import { DataPrismaService } from '@teable/db-data-prisma';
+import { PrismaService, ProvisionState } from '@teable/db-main-prisma';
 import type {
   IBaseErdVo,
   ICreateBaseFromTemplateRo,
@@ -69,6 +69,13 @@ export class BaseService {
   ) {}
 
   private async getRoleByBaseId(baseId: string, spaceId: string) {
+    if (this.cls.get('user.isAdmin')) {
+      return {
+        role: Role.Owner,
+        collaboratorType: CollaboratorType.Space,
+      };
+    }
+
     const userId = this.cls.get('user.id');
     const departmentIds = this.cls.get('organization.departments')?.map((d) => d.id);
 

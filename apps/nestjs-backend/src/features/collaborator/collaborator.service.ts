@@ -516,6 +516,12 @@ export class CollaboratorService {
 
     const currentColl = colls.find((coll) => coll.principalId === currentPrincipalId);
     const targetColl = colls.find((coll) => coll.principalId === targetPrincipalId);
+    if (this.cls.get('user.isAdmin') && targetColl) {
+      return {
+        currentColl: { ...targetColl, principalId: currentPrincipalId, roleName: Role.Owner },
+        targetColl,
+      };
+    }
     if (!currentColl || !targetColl) {
       throw new CustomHttpException(
         'User not found in collaborator',
@@ -693,6 +699,30 @@ export class CollaboratorService {
   }
 
   async getCurrentUserCollaboratorsBaseAndSpaceArray(searchRoles?: IRole[]) {
+    if (this.cls.get('user.isAdmin')) {
+      if (searchRoles?.length && !searchRoles.includes(Role.Owner)) {
+        return { baseIds: [], spaceIds: [], roleMap: {} };
+      }
+
+      const spaces = await this.prismaService.txClient().space.findMany({
+        where: { deletedTime: null, isTemplate: null },
+        select: { id: true },
+      });
+      const roleMap = spaces.reduce(
+        (acc, { id }) => {
+          acc[id] = Role.Owner;
+          return acc;
+        },
+        {} as Record<string, IRole>
+      );
+
+      return {
+        baseIds: [],
+        spaceIds: spaces.map(({ id }) => id),
+        roleMap,
+      };
+    }
+
     const userId = this.cls.get('user.id');
     const departmentIds = this.cls.get('organization.departments')?.map((d) => d.id);
     const collaborators = await this.prismaService.txClient().collaborator.findMany({
@@ -951,6 +981,9 @@ export class CollaboratorService {
           });
         });
       spaceId = base.spaceId;
+    }
+    if (this.cls.get('user.isAdmin')) {
+      return;
     }
     const collaborators = await this.prismaService.txClient().collaborator.findMany({
       where: {

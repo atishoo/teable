@@ -16,7 +16,7 @@ import {
   sonner,
 } from '@teable/ui-lib/shadcn';
 import dayjs from 'dayjs';
-import { RotateCcw, ShieldCheck, ShieldOff, UserX } from 'lucide-react';
+import { RotateCcw, ShieldCheck, ShieldOff, Trash2, UserCheck, UserX } from 'lucide-react';
 import type { GetServerSideProps } from 'next';
 import Link from 'next/link';
 import { useTranslation } from 'next-i18next';
@@ -32,7 +32,14 @@ import withEnv from '@/lib/withEnv';
 
 const PAGE_SIZE = 30;
 
-type UserAction = 'deactivate' | 'activate' | 'grantAdmin' | 'revokeAdmin';
+type UserAction =
+  | 'deactivate'
+  | 'activate'
+  | 'delete'
+  | 'restore'
+  | 'permanentDelete'
+  | 'grantAdmin'
+  | 'revokeAdmin';
 
 const actionConfig: Record<
   UserAction,
@@ -48,9 +55,24 @@ const actionConfig: Record<
     confirmText: '停用',
   },
   activate: {
+    title: '激活用户',
+    description: (user) => `激活后，${user.email} 可以重新登录当前实例。`,
+    confirmText: '激活',
+  },
+  delete: {
+    title: '删除用户',
+    description: (user) => `删除后，${user.email} 将无法登录，用户信息会保留以便恢复。`,
+    confirmText: '删除',
+  },
+  restore: {
     title: '恢复用户',
-    description: (user) => `恢复后，${user.email} 可以重新登录当前实例。`,
+    description: (user) => `恢复后，${user.email} 将回到删除前的账号状态。`,
     confirmText: '恢复',
+  },
+  permanentDelete: {
+    title: '永久删除用户',
+    description: (user) => `永久删除会清理 ${user.email} 的账号数据，此操作不可撤销。`,
+    confirmText: '永久删除',
   },
   grantAdmin: {
     title: '设为管理员',
@@ -99,6 +121,15 @@ const AdminUserPage: NextPageWithLayout = () => {
       }
       if (action === 'activate') {
         return adminUpdateUser(target.id, { deactivated: false });
+      }
+      if (action === 'delete') {
+        return adminUpdateUser(target.id, { deleted: true });
+      }
+      if (action === 'restore') {
+        return adminUpdateUser(target.id, { deleted: false });
+      }
+      if (action === 'permanentDelete') {
+        return adminUpdateUser(target.id, { permanentDeleted: true });
       }
       if (action === 'grantAdmin') {
         return adminUpdateUser(target.id, { isAdmin: true });
@@ -151,15 +182,17 @@ const AdminUserPage: NextPageWithLayout = () => {
         </div>
 
         <div className="min-h-0 overflow-auto rounded-md border">
-          <Table>
-            <TableHeader className="sticky top-0 bg-background">
+          <Table className="min-w-[1290px] table-fixed">
+            <TableHeader className="sticky top-0 z-20 bg-background">
               <TableRow>
-                <TableHead className="w-[32%]">用户</TableHead>
-                <TableHead>角色</TableHead>
-                <TableHead>状态</TableHead>
-                <TableHead>最近登录</TableHead>
-                <TableHead>创建时间</TableHead>
-                <TableHead className="w-[240px] text-right">操作</TableHead>
+                <TableHead className="w-[360px] whitespace-nowrap">用户</TableHead>
+                <TableHead className="w-[110px] whitespace-nowrap">角色</TableHead>
+                <TableHead className="w-[120px] whitespace-nowrap">状态</TableHead>
+                <TableHead className="w-[170px] whitespace-nowrap">最近登录</TableHead>
+                <TableHead className="w-[170px] whitespace-nowrap">创建时间</TableHead>
+                <TableHead className="sticky right-0 z-30 w-[360px] whitespace-nowrap border-l bg-background text-right">
+                  操作
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -182,9 +215,10 @@ const AdminUserPage: NextPageWithLayout = () => {
               {data?.users.map((item) => {
                 const isSelf = item.id === user.id;
                 const isDeactivated = Boolean(item.deactivatedTime);
+                const isDeleted = Boolean(item.deletedTime);
                 return (
                   <TableRow key={item.id}>
-                    <TableCell>
+                    <TableCell className="w-[360px] whitespace-nowrap">
                       <div className="flex min-w-0 items-center gap-3">
                         <UserAvatar user={item} />
                         <div className="min-w-0">
@@ -193,79 +227,133 @@ const AdminUserPage: NextPageWithLayout = () => {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="w-[110px] whitespace-nowrap">
                       {item.isAdmin ? <Badge>管理员</Badge> : <Badge variant="outline">成员</Badge>}
                     </TableCell>
-                    <TableCell>
-                      {isDeactivated ? (
+                    <TableCell className="w-[120px] whitespace-nowrap">
+                      {isDeleted ? (
+                        <Badge variant="destructive">已删除</Badge>
+                      ) : isDeactivated ? (
                         <Badge variant="destructive">已停用</Badge>
                       ) : (
                         <Badge variant="secondary">正常</Badge>
                       )}
                     </TableCell>
-                    <TableCell>{formatDate(item.lastSignTime)}</TableCell>
-                    <TableCell>{formatDate(item.createdTime)}</TableCell>
-                    <TableCell>
-                      <div className="flex justify-end gap-2">
-                        {item.isAdmin ? (
-                          <Button
-                            size="xs"
-                            variant="outline"
-                            disabled={isSelf}
-                            onClick={() =>
-                              setPendingAction({
-                                user: item,
-                                action: 'revokeAdmin',
-                              })
-                            }
-                          >
-                            <ShieldOff className="size-4" />
-                            移除管理员
-                          </Button>
+                    <TableCell className="w-[170px] whitespace-nowrap">
+                      {formatDate(item.lastSignTime)}
+                    </TableCell>
+                    <TableCell className="w-[170px] whitespace-nowrap">
+                      {formatDate(item.createdTime)}
+                    </TableCell>
+                    <TableCell className="sticky right-0 z-10 w-[360px] whitespace-nowrap border-l bg-background">
+                      <div className="flex justify-end gap-2 whitespace-nowrap">
+                        {isDeleted ? (
+                          <>
+                            <Button
+                              size="xs"
+                              variant="outline"
+                              onClick={() =>
+                                setPendingAction({
+                                  user: item,
+                                  action: 'restore',
+                                })
+                              }
+                            >
+                              <RotateCcw className="size-4" />
+                              恢复
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="destructive"
+                              disabled={isSelf}
+                              onClick={() =>
+                                setPendingAction({
+                                  user: item,
+                                  action: 'permanentDelete',
+                                })
+                              }
+                            >
+                              <Trash2 className="size-4" />
+                              永久删除
+                            </Button>
+                          </>
                         ) : (
-                          <Button
-                            size="xs"
-                            variant="outline"
-                            onClick={() =>
-                              setPendingAction({
-                                user: item,
-                                action: 'grantAdmin',
-                              })
-                            }
-                          >
-                            <ShieldCheck className="size-4" />
-                            设为管理员
-                          </Button>
-                        )}
-                        {isDeactivated ? (
-                          <Button
-                            size="xs"
-                            variant="outline"
-                            onClick={() =>
-                              setPendingAction({
-                                user: item,
-                                action: 'activate',
-                              })
-                            }
-                          >
-                            <RotateCcw className="size-4" />
-                            恢复
-                          </Button>
-                        ) : (
-                          <Button
-                            size="xs"
-                            variant="outline"
-                            disabled={isSelf}
-                            onClick={() =>
-                              setPendingAction({
-                                user: item,
-                                action: 'deactivate',
-                              })
-                            }
-                          >
-                            <UserX className="size-4" />
-                            停用
-                          </Button>
+                          <>
+                            {item.isAdmin ? (
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                disabled={isSelf}
+                                onClick={() =>
+                                  setPendingAction({
+                                    user: item,
+                                    action: 'revokeAdmin',
+                                  })
+                                }
+                              >
+                                <ShieldOff className="size-4" />
+                                移除管理员
+                              </Button>
+                            ) : (
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                onClick={() =>
+                                  setPendingAction({
+                                    user: item,
+                                    action: 'grantAdmin',
+                                  })
+                                }
+                              >
+                                <ShieldCheck className="size-4" />
+                                设为管理员
+                              </Button>
+                            )}
+                            {isDeactivated ? (
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                onClick={() =>
+                                  setPendingAction({
+                                    user: item,
+                                    action: 'activate',
+                                  })
+                                }
+                              >
+                                <UserCheck className="size-4" />
+                                激活
+                              </Button>
+                            ) : (
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                disabled={isSelf}
+                                onClick={() =>
+                                  setPendingAction({
+                                    user: item,
+                                    action: 'deactivate',
+                                  })
+                                }
+                              >
+                                <UserX className="size-4" />
+                                停用
+                              </Button>
+                            )}
+                            <Button
+                              size="xs"
+                              variant="outline"
+                              disabled={isSelf}
+                              onClick={() =>
+                                setPendingAction({
+                                  user: item,
+                                  action: 'delete',
+                                })
+                              }
+                            >
+                              <Trash2 className="size-4" />
+                              删除
+                            </Button>
+                          </>
                         )}
                       </div>
                     </TableCell>
