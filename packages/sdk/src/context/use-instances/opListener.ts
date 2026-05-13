@@ -1,7 +1,7 @@
 import type { Doc } from 'sharedb/lib/client';
 
 export class OpListenersManager<T> {
-  private opListeners: Map<string, () => void> = new Map();
+  private opListeners: Map<string, { doc: Doc<T>; cleanup: () => void }> = new Map();
   private collection: string;
 
   constructor(collection: string) {
@@ -9,24 +9,33 @@ export class OpListenersManager<T> {
   }
 
   add(doc: Doc<T>, handler: (op: unknown[]) => void) {
-    if (this.opListeners.has(doc.id)) {
+    const listener = this.opListeners.get(doc.id);
+    if (listener?.doc === doc) {
       return;
     }
+    listener?.cleanup();
+
     doc.on('op batch', handler);
-    this.opListeners.set(doc.id, () => {
-      doc.removeListener('op batch', handler);
-      doc.listenerCount('op batch') === 0 && doc.destroy();
+    this.opListeners.set(doc.id, {
+      doc,
+      cleanup: () => {
+        doc.removeListener('op batch', handler);
+        doc.listenerCount('op batch') === 0 && doc.destroy();
+      },
     });
   }
 
   remove(doc: Doc<T>) {
-    const cleanupFunction = this.opListeners.get(doc.id);
-    cleanupFunction && cleanupFunction();
+    const listener = this.opListeners.get(doc.id);
+    if (listener?.doc !== doc) {
+      return;
+    }
+    listener.cleanup();
     this.opListeners.delete(doc.id);
   }
 
   clear() {
-    this.opListeners.forEach((cleanupFunction) => cleanupFunction());
+    this.opListeners.forEach(({ cleanup }) => cleanup());
     this.opListeners.clear();
   }
 }

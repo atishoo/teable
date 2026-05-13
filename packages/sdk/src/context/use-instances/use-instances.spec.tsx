@@ -8,6 +8,7 @@ import { createAppContext } from '../__tests__/createAppContext';
 import { createConnectionContext } from '../__tests__/createConnectionContext';
 import { createSessionContext } from '../__tests__/createSessionContext';
 import type { IAppContext } from '../app';
+import { OpListenersManager } from './opListener';
 import type { IUseInstancesProps } from './useInstances';
 import { useInstances } from './useInstances';
 
@@ -338,6 +339,32 @@ describe('useInstances hook', () => {
       result.current.instances[0].doc.data,
       result.current.instances[0].doc
     );
+  });
+
+  it('replaces op listener when a new doc instance has the same id', () => {
+    const listeners = new OpListenersManager('testCollection');
+    const staleDoc = createTrackedDoc({
+      data: { id: '1', name: 'stale' },
+      collection: mockProps.collection,
+      id: '1',
+    });
+    const freshDoc = createTrackedDoc({
+      data: { id: '1', name: 'fresh' },
+      collection: mockProps.collection,
+      id: '1',
+    });
+    const staleHandler = vi.fn();
+    const freshHandler = vi.fn();
+
+    listeners.add(staleDoc.doc, staleHandler);
+    listeners.add(freshDoc.doc, freshHandler);
+
+    staleDoc.doc.emit('op batch', ['stale']);
+    freshDoc.doc.emit('op batch', ['fresh']);
+
+    expect(staleHandler).not.toHaveBeenCalled();
+    expect(freshHandler).toHaveBeenCalledWith(['fresh']);
+    expect(staleDoc.doc.removeListener).toHaveBeenCalledWith('op batch', staleHandler);
   });
 
   it('ignores op-batch updates for docs whose data has been cleared before remove', () => {
