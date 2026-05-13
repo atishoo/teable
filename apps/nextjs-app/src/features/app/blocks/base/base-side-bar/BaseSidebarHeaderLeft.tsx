@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { hasPermission } from '@teable/core';
-import { ChevronsLeft, ChevronDown, Database, HelpCircle, Pencil, Share2 } from '@teable/icons';
+import { ChevronsLeft, ChevronDown, Database, Pencil, Share2 } from '@teable/icons';
 import { CollaboratorType, getBaseList, getSharedBase, updateBase } from '@teable/openapi';
 import { ReactQueryKeys } from '@teable/sdk/config';
 import { useBase } from '@teable/sdk/hooks';
@@ -164,20 +164,6 @@ const BaseDropdownMenu = ({
               </DropdownMenuItem>
             </PublishBaseDialog>
           )}
-
-          <DropdownMenuSeparator />
-          <DropdownMenuItem asChild>
-            <Link
-              href={t('help.mainLink')}
-              title={t('help.title')}
-              target="_blank"
-              rel="noreferrer"
-              className="flex w-full cursor-pointer items-center gap-2"
-            >
-              <HelpCircle className="size-4" />
-              {t('help.title')}
-            </Link>
-          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       <BaseShareDialog
