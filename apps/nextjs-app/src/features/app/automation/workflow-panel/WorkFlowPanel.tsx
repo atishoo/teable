@@ -2,9 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CellValueType,
   ColorUtils,
+  DateFormattingPreset,
   FieldKeyType,
   FieldType,
   type ITimeZoneString,
+  TimeFormatting,
   ViewType,
 } from '@teable/core';
 import {
@@ -12,6 +14,7 @@ import {
   Calendar as FieldCalendarIcon,
   CheckCircle2 as FieldSingleSelectIcon,
   CheckSquare as FieldCheckboxIcon,
+  ChevronRight as TeableChevronRight,
   Clock4 as FieldCreatedTimeIcon,
   Code as FieldFormulaIcon,
   ConditionalLookup as FieldConditionalLookupIcon,
@@ -33,27 +36,39 @@ import {
   UserPlus as FieldCreatedByIcon,
 } from '@teable/icons';
 import {
+  getBaseAll,
   getFields,
   getRecords as getTableRecords,
   getTableList,
   getUserCollaborators,
   getWorkflow,
+  getWorkflowRunSummary,
   listWorkflowRuns,
   testWorkflow,
   updateWorkflow,
   updateWorkflowActive,
+  BaseNodeResourceType,
+  type IBaseNodeTreeVo,
   type IWorkflowEdge,
   type IWorkflowNode,
+  type IWorkflowRunListRo,
+  type IWorkflowRunVo,
   type IWorkflowVo,
 } from '@teable/openapi';
 import { DateEditor, RatingEditor, UserAvatar, ViewSelect } from '@teable/sdk/components';
-import { DateRangePicker } from '@teable/sdk/components/filter/view-filter/component/filterDatePicker/DateRangePicker';
+import {
+  DateRangePicker,
+  type IDateRangeValue,
+} from '@teable/sdk/components/filter/view-filter/component/filterDatePicker/DateRangePicker';
 import { ReactQueryKeys } from '@teable/sdk/config';
 import {
   Badge,
   Button,
   Checkbox,
   cn,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
   Command,
   CommandEmpty,
   CommandGroup,
@@ -62,6 +77,8 @@ import {
   CommandList,
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogTitle,
   DialogTrigger,
   Input,
@@ -76,6 +93,10 @@ import {
   SelectTrigger,
   SelectValue,
   Separator,
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetTitle,
   sonner,
   Switch,
   Tooltip,
@@ -84,11 +105,16 @@ import {
   TooltipTrigger,
 } from '@teable/ui-lib/shadcn';
 import {
+  ArrowDownUp,
+  ArrowRight,
   Check,
   CheckCircle2,
   ChevronDown,
-  ChevronRight,
+  ChevronUp,
+  CircleMinus,
+  Clock,
   Copy,
+  Bell,
   GitBranch,
   Globe2,
   Hash,
@@ -96,13 +122,13 @@ import {
   Maximize2,
   Mail,
   Minus,
+  MoreHorizontal,
   MousePointerClick,
   Play,
   Plus,
   PlusCircle,
   Pencil,
   RefreshCw,
-  Save,
   Search,
   Send,
   SquareMousePointer,
@@ -127,6 +153,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { BaseNodeMore } from '@/features/app/blocks/base/base-side-bar/BaseNodeMore';
 
 export interface WorkFlowPanelRef {
   getWorkflow?: () => unknown | undefined;
@@ -170,7 +197,7 @@ interface IVariableOption {
   group: string;
   groupNodeId?: string;
   groupNodeType?: string;
-  groupNodeStatus?: 'incomplete' | 'success' | 'untested';
+  groupNodeStatus?: 'incomplete' | 'success' | 'untested' | 'expired';
   groupNodeStatusLabel?: string;
   groupNodeDescription?: string;
   field?: TableField;
@@ -201,6 +228,9 @@ type TableField = {
   isMultipleCellValue?: boolean;
   isLookup?: boolean;
   isConditionalLookup?: boolean;
+  isComputed?: boolean;
+  recordCreate?: boolean;
+  recordRead?: boolean;
 };
 
 type FilterRow = {
@@ -234,6 +264,8 @@ type NodeTestResult = {
   testedAt: string;
   node: IWorkflowNode;
 };
+
+type WorkflowRunStep = NonNullable<IWorkflowRunVo['steps']>[number];
 
 type TestResultRow = {
   label: string;
@@ -439,6 +471,12 @@ const NodeIconBadge = (props: { type?: string; className?: string; iconClassName
   );
 };
 
+const NodePlainIcon = (props: { type?: string; className?: string }) => {
+  const Icon = (props.type && NODE_ICONS[props.type]) || SquareMousePointer;
+  const style = getNodeIconStyle(props.type);
+  return <Icon className={cn('size-4 shrink-0', style.iconClassName, props.className)} />;
+};
+
 const NodeTypeSelectValue = (props: { item: INodeCatalogItem }) => (
   <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden text-left">
     <NodeIconBadge className="size-6 rounded" iconClassName="size-3.5" type={props.item.type} />
@@ -482,8 +520,33 @@ const NodeTypeSelectGroup = (props: {
 
 const workflowQueryKey = (baseId: string, workflowId: string) =>
   ['workflow', baseId, workflowId] as const;
-const workflowRunQueryKey = (baseId: string, workflowId: string) =>
-  ['workflow-run', baseId, workflowId] as const;
+const workflowRunQueryKey = (baseId: string, workflowId: string, params: IWorkflowRunListRo) =>
+  ['workflow-run', baseId, workflowId, params] as const;
+const workflowRunSummaryQueryKey = (baseId: string, workflowId: string) =>
+  ['workflow-run-summary', baseId, workflowId] as const;
+const RUN_HISTORY_TAKE = 100;
+
+const getWorkflowDraftSignature = (name: string, nodes: IWorkflowNode[], edges: IWorkflowEdge[]) =>
+  JSON.stringify({ name, nodes, edges });
+
+const getWorkflowRuntimeNodes = (nodes: IWorkflowNode[]) => nodes.map(cloneWorkflowNode);
+
+const getWorkflowRuntimeSignature = (nodes: IWorkflowNode[], edges: IWorkflowEdge[]) =>
+  JSON.stringify({ nodes: getWorkflowRuntimeNodes(nodes), edges });
+
+const getWorkflowActiveRuntimeSignature = (workflow?: IWorkflowVo) => {
+  const snapshot = workflow?.activeSnapshot;
+  if (snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)) {
+    const graph = snapshot as { nodes?: unknown; edges?: unknown };
+    if (Array.isArray(graph.nodes)) {
+      return getWorkflowRuntimeSignature(
+        graph.nodes as IWorkflowNode[],
+        Array.isArray(graph.edges) ? (graph.edges as IWorkflowEdge[]) : []
+      );
+    }
+  }
+  return getWorkflowRuntimeSignature(workflow?.nodes ?? [], workflow?.edges ?? []);
+};
 
 const EMPTY_SELECT_VALUE = '__empty__';
 const CONDITION_TRUE_HANDLE = 'true';
@@ -491,7 +554,7 @@ const CONDITION_FALSE_HANDLE = 'false';
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 1.6;
 const ZOOM_STEP = 0.1;
-const WORKFLOW_NODE_WIDTH = 340;
+const WORKFLOW_NODE_WIDTH = 370;
 const CONDITION_LAYOUT_WIDTH = 960;
 const CONDITION_BRANCH_WIDTH = 440;
 const CONDITION_BRANCH_GAP = 80;
@@ -650,8 +713,218 @@ const formatRelativeTime = (value?: string | null) => {
   return formatTime(value);
 };
 
-const cloneWorkflowNode = (node: IWorkflowNode): IWorkflowNode =>
-  JSON.parse(JSON.stringify(node)) as IWorkflowNode;
+const formatDuration = (ms?: number) => {
+  if (!Number.isFinite(ms)) return '-';
+  const value = Number(ms);
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(1)} s`;
+  }
+  return `${Math.max(0, Math.round(value))} ms`;
+};
+
+const getRunDuration = (run: IWorkflowRunVo) => {
+  const stepDuration = run.steps?.reduce((sum, step) => sum + (step.spent ?? 0), 0) ?? 0;
+  if (stepDuration > 0) return stepDuration;
+  if (!run.finishedTime) return undefined;
+  const started = new Date(run.startedTime).getTime();
+  const finished = new Date(run.finishedTime).getTime();
+  if (!Number.isFinite(started) || !Number.isFinite(finished)) return undefined;
+  return Math.max(0, finished - started);
+};
+
+const getRunStatusMeta = (status: IWorkflowRunVo['status'] | string) => {
+  switch (status) {
+    case 'success':
+      return { label: '执行成功', className: 'text-emerald-600', Icon: Check };
+    case 'failed':
+      return { label: '执行失败', className: 'text-destructive', Icon: X };
+    case 'running':
+      return { label: '运行中', className: 'text-amber-600', Icon: RefreshCw };
+    case 'waiting':
+      return { label: '等待中', className: 'text-sky-500', Icon: Clock };
+    case 'skipped':
+      return { label: '已取消', className: 'text-muted-foreground', Icon: Minus };
+    default:
+      return { label: status, className: 'text-muted-foreground', Icon: Minus };
+  }
+};
+
+const RUN_STATUS_FILTERS = [
+  { value: 'all', label: '全部状态' },
+  { value: 'success', label: '执行成功' },
+  { value: 'failed', label: '执行失败' },
+  { value: 'running', label: '运行中' },
+  { value: 'waiting', label: '等待中' },
+  { value: 'skipped', label: '已取消' },
+];
+
+const RUN_DURATION_FILTERS = [
+  { value: 'all', label: '全部耗时' },
+  { value: 'lt_5s', label: '< 5 秒' },
+  { value: '5_10s', label: '5 - 10 秒' },
+  { value: '10_30s', label: '10 - 30 秒' },
+  { value: '30s_1m', label: '30 秒 - 1 分钟' },
+  { value: '1_5m', label: '1 - 5 分钟' },
+  { value: 'gt_5m', label: '> 5 分钟' },
+];
+
+const getRunDateRangeParams = (range: IDateRangeValue | null) => {
+  if (!range?.exactDate) return {};
+  const from = new Date(range.exactDate).getTime();
+  const to = range.exactDateEnd
+    ? new Date(range.exactDateEnd).getTime()
+    : from + 24 * 60 * 60 * 1000 - 1;
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return {};
+  return {
+    startedTimeFrom: new Date(Math.min(from, to)).toISOString(),
+    startedTimeTo: new Date(Math.max(from, to)).toISOString(),
+  };
+};
+
+const getRunStepInputRows = (
+  step: WorkflowRunStep,
+  node: IWorkflowNode | undefined,
+  tables: { id: string; name: string }[],
+  fields: TableField[]
+): TestResultRow[] => {
+  const input = isPlainRecord(step.input) ? step.input : {};
+  const rows: TestResultRow[] = [];
+  const inputFields = isPlainRecord(input.fields) ? input.fields : undefined;
+  const tableId = typeof input.tableId === 'string' ? input.tableId : node?.config?.tableId;
+
+  if (inputFields) {
+    rows.push({
+      label: '字段值',
+      children: Object.entries(inputFields).map(([fieldId, value]) => ({
+        label: getFieldLabel(fields, fieldId),
+        value: formatCellValue(value),
+      })),
+    });
+  }
+  if (typeof tableId === 'string') {
+    rows.push({ label: '表格', value: getTableLabel(tables, tableId) || tableId });
+  }
+  rows.push({ label: '原始数据', raw: step.input ?? {} });
+  return rows;
+};
+
+const getRecordLikeOutput = (output: unknown) => {
+  if (Array.isArray(output)) return output.find(isPlainRecord);
+  if (!isPlainRecord(output)) return undefined;
+  if (Array.isArray(output.records)) return output.records.find(isPlainRecord);
+  return output;
+};
+
+const getFieldValueRows = (
+  values: Record<string, unknown>,
+  fields: TableField[]
+): TestResultRow[] =>
+  Object.entries(values).map(([fieldId, value]) => ({
+    label: getFieldLabel(fields, fieldId),
+    value: formatCellValue(value),
+  }));
+
+const getTriggerUserRows = (user: unknown): TestResultRow[] => {
+  if (!isPlainRecord(user)) return [];
+  const children = [
+    { label: 'ID', value: typeof user.id === 'string' ? user.id : undefined },
+    { label: '名称', value: formatCellValue(user.name) },
+    { label: '邮箱', value: formatCellValue(user.email) },
+  ].filter((row) => row.value) as TestResultRow[];
+  return children.length ? [{ label: '触发人', children }] : [];
+};
+
+const getTriggerRecordRows = (recordValue: unknown, fields: TableField[]): TestResultRow[] => {
+  if (!isPlainRecord(recordValue)) return [];
+  const record = recordValue as Record<string, unknown>;
+  const children: TestResultRow[] = [
+    { label: '记录 ID', value: formatCellValue(record.id) },
+    { label: '记录 URL', value: formatCellValue(record.url) },
+    { label: '记录名', value: formatCellValue(record.name) },
+  ].filter((row) => row.value);
+  if (isPlainRecord(record.fields)) {
+    children.push({
+      label: '字段值',
+      children: getFieldValueRows(record.fields, fields),
+    });
+  }
+  return [{ label: '记录', children }];
+};
+
+const getOutputTableId = (step: WorkflowRunStep, node?: IWorkflowNode) => {
+  if (isPlainRecord(step.input) && typeof step.input.tableId === 'string') {
+    return step.input.tableId;
+  }
+  return typeof node?.config?.tableId === 'string' ? node.config.tableId : undefined;
+};
+
+const getOutputRecordRows = (
+  outputRecord: Record<string, unknown> | undefined,
+  tableId: string | undefined,
+  baseId: string,
+  fields: TableField[]
+) => {
+  const rows: TestResultRow[] = [];
+  if (outputRecord?.id) {
+    rows.push({ label: '记录 ID', value: String(outputRecord.id) });
+  }
+  if (outputRecord?.url) {
+    rows.push({ label: '记录 URL', value: String(outputRecord.url) });
+  } else if (outputRecord?.id && tableId) {
+    rows.push({
+      label: '记录 URL',
+      value: `/base/${baseId}/table/${tableId}?recordId=${String(outputRecord.id)}`,
+    });
+  }
+  if (outputRecord?.name || outputRecord?.title) {
+    rows.push({ label: '记录名', value: String(outputRecord.name ?? outputRecord.title) });
+  }
+  if (isPlainRecord(outputRecord?.fields)) {
+    rows.push({
+      label: '字段值',
+      children: getFieldValueRows(outputRecord.fields, fields),
+    });
+  }
+  return rows;
+};
+
+const getRunStepOutputRows = (
+  step: WorkflowRunStep,
+  node: IWorkflowNode | undefined,
+  baseId: string,
+  fields: TableField[]
+): TestResultRow[] => {
+  const output = isPlainRecord(step.output) ? step.output : undefined;
+  const triggerRows =
+    step.category === 'trigger' && output
+      ? [...getTriggerUserRows(output.user), ...getTriggerRecordRows(output.record, fields)]
+      : [];
+  if (triggerRows.length) {
+    return [...triggerRows, { label: '原始数据', raw: step.output ?? {} }];
+  }
+
+  const outputRecord = getRecordLikeOutput(step.output) as Record<string, unknown> | undefined;
+  const rows = getOutputRecordRows(outputRecord, getOutputTableId(step, node), baseId, fields);
+  if (!rows.length && step.output !== undefined) {
+    rows.push({ label: '返回值', value: formatCellValue(step.output) });
+  }
+  rows.push({ label: '原始数据', raw: step.output ?? {} });
+  return rows;
+};
+
+const getRunStepCallRows = (step: WorkflowRunStep, node?: IWorkflowNode): TestResultRow[] => [
+  { label: '节点 ID', value: step.nodeId },
+  { label: '节点类型', value: step.type },
+  { label: '节点名称', value: node ? getNodeLabel(node) : step.type },
+  { label: '执行状态', value: getRunStatusMeta(step.status).label },
+  { label: '花费时长', value: formatDuration(step.spent) },
+];
+
+const cloneWorkflowNode = (node: IWorkflowNode): IWorkflowNode => {
+  const cloned = JSON.parse(JSON.stringify(node)) as IWorkflowNode;
+  delete cloned.testResult;
+  return cloned;
+};
 
 const getNodeSignature = (node: IWorkflowNode) =>
   JSON.stringify({
@@ -659,6 +932,40 @@ const getNodeSignature = (node: IWorkflowNode) =>
     category: node.category,
     config: node.config ?? {},
   });
+
+const isNodeTestResult = (value: unknown): value is NodeTestResult => {
+  if (!isPlainRecord(value)) return false;
+  return (
+    typeof value.signature === 'string' &&
+    typeof value.testedAt === 'string' &&
+    isPlainRecord(value.node)
+  );
+};
+
+const getValidNodeTestResult = (
+  node: IWorkflowNode,
+  nodeTestResults: Record<string, NodeTestResult>
+) => {
+  const currentSignature = getNodeSignature(node);
+  const localResult = nodeTestResults[node.id];
+  if (localResult?.signature === currentSignature) return localResult;
+  const persistedResult = isNodeTestResult(node.testResult) ? node.testResult : undefined;
+  return persistedResult?.signature === currentSignature ? persistedResult : undefined;
+};
+
+const getAnyNodeTestResult = (
+  node: IWorkflowNode,
+  nodeTestResults: Record<string, NodeTestResult>
+) => nodeTestResults[node.id] ?? (isNodeTestResult(node.testResult) ? node.testResult : undefined);
+
+const getNodeTestResultState = (
+  node: IWorkflowNode,
+  nodeTestResults: Record<string, NodeTestResult>
+) => {
+  const result = getAnyNodeTestResult(node, nodeTestResults);
+  if (!result) return 'missing' as const;
+  return result.signature === getNodeSignature(node) ? ('current' as const) : ('expired' as const);
+};
 
 const clampZoom = (value: number) => {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(value.toFixed(2))));
@@ -729,7 +1036,8 @@ const isOptionalConditionComplete = (condition: unknown) => {
 
 const getFindMode = (config: Record<string, unknown>) => {
   if (hasText(config.findMode)) return String(config.findMode);
-  return hasText(config.viewId) ? 'view' : 'condition';
+  if (hasText(config.viewId)) return 'view';
+  return hasConditionItems(config.filter) ? 'condition' : '';
 };
 
 const NODE_COMPLETION_CHECKS: Record<string, (config: Record<string, unknown>) => boolean> = {
@@ -752,13 +1060,14 @@ const NODE_COMPLETION_CHECKS: Record<string, (config: Record<string, unknown>) =
     const findMode = getFindMode(config);
     return (
       hasText(config.tableId) &&
+      hasText(findMode) &&
       Number(config.take ?? 100) > 0 &&
       (findMode !== 'view' || hasText(config.viewId)) &&
       (findMode !== 'condition' || isOptionalConditionComplete(config.filter))
     );
   },
   sendEmail: (config) => hasText(config.to) && hasText(config.subject) && hasText(config.body),
-  httpRequest: (config) => hasText(config.method ?? 'GET') && hasText(config.url),
+  httpRequest: (config) => hasText(config.method) && hasText(config.url),
   condition: (config) => isConditionComplete(config),
 };
 
@@ -779,12 +1088,20 @@ const getWorkflowNodeEditStatus = (
       Icon: TriangleAlert,
     };
   }
-  if (nodeTestResults[node.id]?.signature === getNodeSignature(node)) {
+  if (getValidNodeTestResult(node, nodeTestResults)) {
     return {
       type: 'success' as const,
       label: '运行测试成功',
       iconClassName: 'text-emerald-600',
       Icon: CheckCircle2,
+    };
+  }
+  if (getNodeTestResultState(node, nodeTestResults) === 'expired') {
+    return {
+      type: 'expired' as const,
+      label: '测试结果已过期,请重新执行测试步骤获取结果',
+      iconClassName: 'text-amber-600',
+      Icon: TriangleAlert,
     };
   }
   return {
@@ -836,14 +1153,12 @@ const getDefaultConfig = (type: string, tableId?: string): Record<string, unknow
     case 'getRecords':
       return {
         tableId,
-        findMode: 'condition',
         filter: { conjunction: 'and', filterSet: [] },
-        take: 100,
       };
     case 'sendEmail':
       return { to: '', cc: '', bcc: '', senderName: '', replyTo: '', subject: '', body: '' };
     case 'httpRequest':
-      return { method: 'GET', url: '', headers: {}, bodyType: 'none' };
+      return { method: '', url: '', headers: {}, bodyType: 'none' };
     case 'condition':
       return { conjunction: 'and', filterSet: [] };
     default:
@@ -851,7 +1166,6 @@ const getDefaultConfig = (type: string, tableId?: string): Record<string, unknow
   }
 };
 
-const optionValue = (value?: string) => value || EMPTY_SELECT_VALUE;
 const fromOptionValue = (value: string) => (value === EMPTY_SELECT_VALUE ? '' : value);
 
 const recordToRows = (value: unknown) => {
@@ -1017,6 +1331,9 @@ const toTableField = (field: {
   isMultipleCellValue?: boolean;
   isLookup?: boolean;
   isConditionalLookup?: boolean;
+  isComputed?: boolean;
+  recordCreate?: boolean;
+  recordRead?: boolean;
 }): TableField => ({
   id: field.id,
   name: field.name,
@@ -1026,9 +1343,43 @@ const toTableField = (field: {
   isMultipleCellValue: field.isMultipleCellValue,
   isLookup: field.isLookup,
   isConditionalLookup: field.isConditionalLookup,
+  isComputed: field.isComputed,
+  recordCreate: field.recordCreate,
+  recordRead: field.recordRead,
 });
 
 const isFilterableField = (field: TableField) => field.type !== FieldType.Button;
+
+const getFieldWriteDisabledReason = (field: TableField) => {
+  if (field.recordCreate === false) {
+    return '无写入权限';
+  }
+  if (field.type === FieldType.Button) {
+    return '按钮字段不可写入';
+  }
+  if (field.isLookup || field.isConditionalLookup) {
+    return '查找字段不可写入';
+  }
+  if (field.isComputed) {
+    return '计算字段不可写入';
+  }
+  switch (field.type) {
+    case FieldType.Formula:
+      return '公式字段不可写入';
+    case FieldType.Rollup:
+    case FieldType.ConditionalRollup:
+      return '汇总字段不可写入';
+    case FieldType.AutoNumber:
+      return '自动编号字段不可写入';
+    case FieldType.CreatedTime:
+    case FieldType.LastModifiedTime:
+    case FieldType.CreatedBy:
+    case FieldType.LastModifiedBy:
+      return '系统字段不可写入';
+    default:
+      return undefined;
+  }
+};
 
 const isMultipleUserField = (field?: TableField) => {
   const options = field?.options as { isMultiple?: boolean } | undefined;
@@ -1594,13 +1945,16 @@ const getVariableLabel = (variables: IVariableOption[], value?: string) => {
   const parsed = parseVariableExpression(value);
   if (!parsed) return value ?? '';
   const option = getVariableOption(variables, value);
-  const modifierLabels = parsed.modifiers
+  const modifierLabels = getVariableModifierLabels(parsed.modifiers);
+  const label = option ? `${option.group}|${option.label}` : parsed.path;
+  return [label, modifierLabels].filter(Boolean).join(' · ');
+};
+
+const getVariableModifierLabels = (modifiers: string[]) =>
+  modifiers
     .map((modifier) => VARIABLE_MODIFIERS.find((item) => item.value === modifier)?.label)
     .filter(Boolean)
     .join(' / ');
-  const label = option ? `${option.group}  ${option.label}` : parsed.path;
-  return [label, modifierLabels].filter(Boolean).join(' · ');
-};
 
 const formatToggledVariableModifier = (value: string, modifier: string) => {
   const parsed = parseVariableExpression(value);
@@ -1628,6 +1982,9 @@ const splitVariableText = (value: string): VariableTextToken[] => {
   }
   return tokens.length ? tokens : [{ type: 'text', value }];
 };
+
+const hasVariableTextToken = (value: string) =>
+  splitVariableText(value).some((token) => token.type === 'variable');
 
 const readVariableTextNode = (node: ChildNode): string => {
   if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? '';
@@ -1661,6 +2018,31 @@ const FieldBlock = (props: {
     </div>
   );
 };
+
+const PanelSection = (props: { title: string; children: ReactNode; defaultOpen?: boolean }) => {
+  const [open, setOpen] = useState(props.defaultOpen ?? true);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="border-t pt-3">
+      <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 py-1 text-left text-sm font-medium">
+        <span>{props.title}</span>
+        <ChevronDown className={cn('size-4 text-muted-foreground', !open && '-rotate-90')} />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="space-y-4 pt-3">{props.children}</CollapsibleContent>
+    </Collapsible>
+  );
+};
+
+const LoopButton = (props: { onClick: () => void }) => (
+  <Button
+    className="h-7 px-2 text-xs font-normal"
+    size="sm"
+    type="button"
+    variant="outline"
+    onClick={props.onClick}
+  >
+    循环执行
+  </Button>
+);
 
 const FIELD_TYPE_ICONS: Partial<Record<FieldType, IconComponent>> = {
   [FieldType.SingleLineText]: FieldTextIcon,
@@ -1711,14 +2093,17 @@ const getSelectChoices = (field?: TableField): SelectChoice[] => {
     .filter((choice) => choice.name);
 };
 
-const FieldOptionContent = (props: { field: TableField }) => {
+const FieldOptionContent = (props: { field: TableField; disabledReason?: string }) => {
   const Icon = getFieldIcon(props.field);
   return (
-    <span className="inline-flex min-w-0 flex-1 items-center truncate align-middle">
+    <span className="inline-flex min-w-0 flex-1 items-center gap-1 truncate align-middle">
       <Icon className="size-4 shrink-0 text-muted-foreground" />
-      <span className="truncate pl-1 text-[13px] leading-4">
+      <span className="min-w-0 flex-1 truncate text-[13px] leading-4">
         {props.field.name || props.field.id}
       </span>
+      {props.disabledReason && (
+        <span className="shrink-0 text-[11px] text-muted-foreground">{props.disabledReason}</span>
+      )}
     </span>
   );
 };
@@ -1769,6 +2154,88 @@ const TableSelect = (props: {
   );
 };
 
+const BaseSelect = (props: {
+  value?: string;
+  bases: { id: string; name: string }[];
+  onChange: (value: string) => void;
+}) => {
+  return (
+    <Select value={props.value ?? ''} onValueChange={props.onChange}>
+      <SelectTrigger>
+        <SelectValue placeholder="请选择..." />
+      </SelectTrigger>
+      <SelectContent>
+        {props.bases.map((base) => (
+          <SelectItem key={base.id} value={base.id}>
+            {base.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+};
+
+const CrossDatabaseAccessConfig = (props: {
+  value?: string;
+  bases: { id: string; name: string }[];
+  onChange: (value: string) => void;
+  onCancel: () => void;
+}) => {
+  return (
+    <FieldBlock
+      label="数据库"
+      action={
+        <Button
+          className="h-7 px-2 text-xs font-normal"
+          size="sm"
+          type="button"
+          variant="outline"
+          onClick={props.onCancel}
+        >
+          取消
+        </Button>
+      }
+      description="外部数据库将通过自动化配置人员的权限和身份进行访问。若配置人员失去目标数据库的访问权限，则自动化将执行失败。"
+    >
+      <BaseSelect bases={props.bases} value={props.value} onChange={props.onChange} />
+    </FieldBlock>
+  );
+};
+
+const LoopConfigBlock = (props: {
+  value?: string;
+  variables: IVariableOption[];
+  onChange: (value: string) => void;
+  onCancel: () => void;
+}) => {
+  return (
+    <FieldBlock
+      label="循环执行"
+      required
+      action={
+        <Button
+          className="h-7 px-2 text-xs font-normal"
+          size="sm"
+          type="button"
+          variant="outline"
+          onClick={props.onCancel}
+        >
+          取消
+        </Button>
+      }
+      description="选择一个数组变量作为循环源。动作将对数组中的每个元素依次执行。动作参数中选择数组内部的变量时，将每次循环将获取单个元素的值，而不是整个数组。"
+    >
+      <RuntimeVariableSelectButton
+        className="!h-9 !w-full"
+        value={props.value}
+        variables={props.variables}
+        placeholder="请选择..."
+        onChange={props.onChange}
+      />
+    </FieldBlock>
+  );
+};
+
 const RecordFilterOperatorSelect = (props: {
   value?: string;
   operators: FilterOperatorOption[];
@@ -1804,9 +2271,9 @@ const RecordFilterOperatorSelect = (props: {
 
 const MethodSelect = (props: { value?: string; onChange: (value: string) => void }) => {
   return (
-    <Select value={props.value ?? 'GET'} onValueChange={props.onChange}>
+    <Select value={props.value ?? ''} onValueChange={props.onChange}>
       <SelectTrigger>
-        <SelectValue />
+        <SelectValue placeholder="请选择..." />
       </SelectTrigger>
       <SelectContent>
         {['GET', 'POST', 'HEAD', 'PATCH', 'PUT', 'DELETE'].map((method) => (
@@ -1903,6 +2370,58 @@ const VariableOptionIcon = (props: {
   );
 };
 
+const VariableReferenceLabel = (props: {
+  option?: IVariableOption;
+  value: string;
+  fallback?: string;
+}) => {
+  const parsed = parseVariableExpression(props.value);
+  const modifierLabels = parsed ? getVariableModifierLabels(parsed.modifiers) : '';
+  const label = props.option?.label || props.fallback || props.value;
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1 truncate">
+      {props.option?.group && (
+        <>
+          <span className="min-w-0 truncate font-light">{props.option.group}</span>
+          <span className="shrink-0 text-muted-foreground">|</span>
+        </>
+      )}
+      <VariableOptionIcon
+        className="size-4 rounded-none border-0 bg-transparent"
+        iconClassName="size-3.5"
+        option={props.option}
+      />
+      <span className="truncate font-normal">{label}</span>
+      {modifierLabels && (
+        <span className="shrink-0 font-normal text-muted-foreground">· {modifierLabels}</span>
+      )}
+    </span>
+  );
+};
+
+const VariableSourceStatus = (props: { option?: IVariableOption }) => {
+  if (!props.option?.groupNodeStatus || !props.option.groupNodeStatusLabel) return null;
+  const status =
+    props.option.groupNodeStatus === 'success'
+      ? { Icon: CheckCircle2, className: 'text-emerald-600' }
+      : props.option.groupNodeStatus === 'untested' || props.option.groupNodeStatus === 'expired'
+        ? { Icon: TriangleAlert, className: 'text-amber-600' }
+        : { Icon: TriangleAlert, className: 'text-destructive' };
+  const { Icon } = status;
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="ml-auto inline-flex size-5 shrink-0 items-center justify-center">
+            <Icon className={cn('size-4', status.className)} />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{props.option.groupNodeStatusLabel}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+};
+
 const VariablePicker = (props: {
   variables: IVariableOption[];
   onSelect: (value: string) => void;
@@ -1926,13 +2445,15 @@ const VariablePicker = (props: {
   const groupNames = Object.keys(grouped);
   const selectedGroup = activeGroup && grouped[activeGroup] ? activeGroup : groupNames[0];
   const selectedOptions = selectedGroup
-    ? grouped[selectedGroup].filter(
-        (item) =>
-          !keyword.trim() ||
-          item.label.toLowerCase().includes(keyword.trim().toLowerCase()) ||
-          item.value.toLowerCase().includes(keyword.trim().toLowerCase())
-      )
+    ? grouped[selectedGroup].filter((item) => !item.sourceOnly)
     : [];
+  const keywordValue = keyword.trim().toLowerCase();
+  const filteredOptions = selectedOptions.filter(
+    (item) =>
+      !keywordValue ||
+      item.label.toLowerCase().includes(keywordValue) ||
+      item.value.toLowerCase().includes(keywordValue)
+  );
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -1953,8 +2474,7 @@ const VariablePicker = (props: {
             <ScrollArea className="h-[276px]">
               <div className="p-2">
                 {groupNames.map((group, index) => {
-                  const firstOption =
-                    grouped[group]?.find((item) => !item.field) ?? grouped[group]?.[0];
+                  const firstOption = grouped[group]?.[0];
                   const nodeStyle = getNodeIconStyle(firstOption?.groupNodeType);
                   const sourceOption = firstOption?.groupNodeType
                     ? {
@@ -1982,6 +2502,7 @@ const VariablePicker = (props: {
                         option={sourceOption}
                       />
                       <span className="truncate">{group.replace(/^\d+\.\s*/, '')}</span>
+                      <VariableSourceStatus option={firstOption} />
                     </button>
                   );
                 })}
@@ -2001,12 +2522,12 @@ const VariablePicker = (props: {
             </div>
             <ScrollArea className="h-[230px]">
               <div className="px-2 py-1">
-                {selectedOptions.some((item) => item.field) && (
+                {filteredOptions.some((item) => item.field) && (
                   <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
                     从字段插入值
                   </div>
                 )}
-                {selectedOptions.map((item) => (
+                {filteredOptions.map((item) => (
                   <button
                     key={`${item.group}-${item.value}`}
                     className="relative flex h-8 w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
@@ -2023,7 +2544,7 @@ const VariablePicker = (props: {
                     <span className="min-w-0 truncate">{item.label}</span>
                   </button>
                 ))}
-                {!selectedOptions.length && (
+                {!filteredOptions.length && (
                   <div className="px-2 py-8 text-center text-xs text-muted-foreground">
                     未找到结果
                   </div>
@@ -2083,7 +2604,7 @@ const RuntimePickerDrillItem = (props: {
           <span className="block truncate text-xs text-muted-foreground">{props.description}</span>
         )}
       </span>
-      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+      <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
     </button>
   );
 };
@@ -2164,28 +2685,6 @@ const RuntimeVariablePicker = (props: {
   const hasTriggerTree = Boolean(
     triggerFields.length || recordMetadata.length || triggerUser.length
   );
-  const renderNodeStatus = (option?: IVariableOption) => {
-    if (!option?.groupNodeStatus || !option.groupNodeStatusLabel) return null;
-    const status =
-      option.groupNodeStatus === 'success'
-        ? { Icon: CheckCircle2, className: 'text-emerald-600' }
-        : option.groupNodeStatus === 'untested'
-          ? { Icon: TriangleAlert, className: 'text-amber-600' }
-          : { Icon: TriangleAlert, className: 'text-destructive' };
-    const { Icon } = status;
-    return (
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="ml-auto inline-flex size-5 shrink-0 items-center justify-center">
-              <Icon className={cn('size-4', status.className)} />
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>{option.groupNodeStatusLabel}</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    );
-  };
   const renderSection = (title: string, options: IVariableOption[]) =>
     options.length ? (
       <>
@@ -2253,13 +2752,11 @@ const RuntimeVariablePicker = (props: {
         <>
           {triggerFields.length > 0 && (
             <>
-              <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-                从字段插入值
-              </div>
+              <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">字段</div>
               <RuntimePickerDrillItem label="字段值" onClick={() => setView('fields')} />
             </>
           )}
-          {renderSection('插入元数据', recordMetadata)}
+          {renderSection('元数据', recordMetadata)}
         </>
       );
     }
@@ -2267,7 +2764,7 @@ const RuntimeVariablePicker = (props: {
     if (view === 'fields') {
       return (
         <>
-          <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">从字段插入值</div>
+          <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">字段</div>
           {triggerFields.map((item) => {
             const children = item.field?.id
               ? rightOptions.filter((option) => option.parentFieldId === item.field?.id)
@@ -2311,7 +2808,7 @@ const RuntimeVariablePicker = (props: {
     }
 
     if (view === 'user') {
-      return renderSection('从字段插入值', triggerUser);
+      return renderSection('触发人', triggerUser);
     }
 
     return (
@@ -2398,7 +2895,7 @@ const RuntimeVariablePicker = (props: {
                       ) : (
                         <span className="truncate">{groupLabel}</span>
                       )}
-                      {renderNodeStatus(firstOption)}
+                      <VariableSourceStatus option={firstOption} />
                     </button>
                   );
                 })}
@@ -2417,7 +2914,7 @@ const RuntimeVariablePicker = (props: {
                     if (view === 'objectField') setObjectFieldId(undefined);
                   }}
                 >
-                  <ChevronRight className="size-4 rotate-180" />
+                  <TeableChevronRight className="size-4 rotate-180" />
                 </Button>
               )}
               <span className="min-w-0 flex-1 truncate">选择数据</span>
@@ -2438,38 +2935,6 @@ const RuntimeVariablePicker = (props: {
         </div>
       </PopoverContent>
     </Popover>
-  );
-};
-
-const VariableSelectButton = (props: {
-  value?: string;
-  placeholder?: string;
-  variables: IVariableOption[];
-  compact?: boolean;
-  className?: string;
-  onChange: (value: string) => void;
-}) => {
-  const value = props.value ?? '';
-  const hasValue = Boolean(value);
-  const option = getVariableOption(props.variables, value);
-  const label = props.compact
-    ? option?.label || props.placeholder
-    : getVariableLabel(props.variables, value) || props.placeholder;
-  return (
-    <VariablePicker
-      variables={props.variables}
-      onSelect={props.onChange}
-      trigger={
-        <Button
-          className={cn('h-9 w-full min-w-0 justify-start px-3 font-normal', props.className)}
-          disabled={!props.variables.length}
-          variant="outline"
-        >
-          {hasValue ? <VariableOptionIcon option={option} /> : <Plus className="size-4 shrink-0" />}
-          <span className="truncate">{label}</span>
-        </Button>
-      }
-    />
   );
 };
 
@@ -2514,9 +2979,7 @@ const RuntimeVariableSelectButton = (props: {
           <span className={cn('min-w-0 truncate', !option && 'text-muted-foreground')}>
             {label}
           </span>
-          <span className="absolute right-1 inline-flex size-6 shrink-0 items-center justify-center rounded-md bg-blue-600 text-white">
-            <Plus className="size-4" />
-          </span>
+          <Plus className="absolute right-2 size-4 rounded-sm bg-blue-600 text-white" />
         </Button>
       }
     />
@@ -2577,12 +3040,7 @@ const VariableReferenceEditor = (props: {
           )}
           variant="outline"
         >
-          <VariableOptionIcon
-            className={props.compact ? 'size-4 rounded-sm' : undefined}
-            iconClassName={props.compact ? 'size-3' : undefined}
-            option={option}
-          />
-          <span className="truncate">{label}</span>
+          <VariableReferenceLabel fallback={label} option={option} value={props.value} />
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72 p-1" data-no-pan="true">
@@ -2593,7 +3051,7 @@ const VariableReferenceEditor = (props: {
               variant="ghost"
               onClick={() => setShowModifiers(false)}
             >
-              <ChevronRight className="size-4 rotate-180" />
+              <TeableChevronRight className="size-4 rotate-180" />
               修饰符
             </Button>
             <div className="my-1 h-px bg-border" />
@@ -2659,12 +3117,11 @@ const InlineVariableToken = (props: {
           data-variable-value={props.value}
           type="button"
         >
-          <VariableOptionIcon className="mr-1 size-4 rounded-sm" option={option} />
-          <span className="truncate">{label}</span>
+          <VariableReferenceLabel fallback={label} option={option} value={props.value} />
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 p-1" data-no-pan="true">
-        <VariablePicker
+        <RuntimeVariablePicker
           variables={props.variables}
           onSelect={(value) => {
             const next = parseVariableExpression(value);
@@ -2812,12 +3269,12 @@ const ConditionValueInput = (props: {
         placeholder={props.placeholder}
         onChange={(e) => props.onChange(e.target.value)}
       />
-      <VariablePicker
+      <RuntimeVariablePicker
         variables={props.variables}
         onSelect={props.onChange}
         trigger={
           <Button
-            className="absolute right-1 top-1/2 size-6 -translate-y-1/2 rounded-md bg-blue-600 p-0 text-white hover:bg-blue-600/90"
+            className="absolute right-1 top-1/2 size-6 -translate-y-1/2 rounded-md border border-input bg-background p-0 text-muted-foreground hover:bg-accent"
             disabled={!props.variables.length}
             size="icon-xs"
             title="选择变量"
@@ -3457,6 +3914,7 @@ const VariableInput = (props: {
         <VariableReferenceEditor
           value={value}
           variables={props.variables}
+          pickerType="runtime"
           placeholder={props.placeholder}
           onChange={props.onChange}
         />
@@ -3464,6 +3922,58 @@ const VariableInput = (props: {
           variables={props.variables}
           onStatic={() => props.onChange('')}
           onVariable={props.onChange}
+        />
+      </div>
+    );
+  }
+
+  if (!props.multiline && hasVariableTextToken(value)) {
+    return (
+      <div className="relative" data-no-pan="true">
+        <div
+          ref={editorRef}
+          className="flex min-h-9 w-full items-center overflow-hidden rounded-md border border-input bg-background px-3 py-1 pr-10 text-sm outline-none ring-offset-background empty:before:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          contentEditable
+          role="textbox"
+          tabIndex={0}
+          aria-label={props.placeholder ?? '输入内容'}
+          suppressContentEditableWarning
+          onBlur={syncContentEditable}
+          onInput={syncContentEditable}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') event.preventDefault();
+          }}
+        >
+          {splitVariableText(value).map((token, index) =>
+            token.type === 'variable' ? (
+              <InlineVariableToken
+                key={`${token.value}-${index}`}
+                value={token.value}
+                variables={props.variables}
+                onChange={(nextValue) => replaceToken(index, nextValue)}
+                onDelete={() => deleteToken(index)}
+              />
+            ) : (
+              <span key={`text-${index}`} className="truncate whitespace-pre">
+                {token.value}
+              </span>
+            )
+          )}
+        </div>
+        <RuntimeVariablePicker
+          variables={props.variables}
+          onSelect={insertVariable}
+          trigger={
+            <Button
+              className="absolute right-1 top-1/2 size-6 -translate-y-1/2 rounded-md border border-input bg-background p-0 text-muted-foreground hover:bg-accent"
+              disabled={!props.variables.length}
+              size="icon-xs"
+              title="选择变量"
+              variant="ghost"
+            >
+              <Plus className="size-4" />
+            </Button>
+          }
         />
       </div>
     );
@@ -3501,12 +4011,12 @@ const VariableInput = (props: {
             {props.placeholder}
           </div>
         )}
-        <VariablePicker
+        <RuntimeVariablePicker
           variables={props.variables}
           onSelect={insertVariable}
           trigger={
             <Button
-              className="absolute right-2 top-2 size-6 rounded-md bg-blue-600 p-0 text-white hover:bg-blue-600/90"
+              className="absolute right-2 top-2 size-6 rounded-md border border-input bg-background p-0 text-muted-foreground hover:bg-accent"
               disabled={!props.variables.length}
               size="icon-xs"
               title="选择变量"
@@ -3524,12 +4034,12 @@ const VariableInput = (props: {
     <div className="flex gap-2" data-no-pan="true">
       <div className="relative min-w-0 flex-1">
         <Input className="min-w-0 pr-10" {...inputProps} />
-        <VariablePicker
+        <RuntimeVariablePicker
           variables={props.variables}
           onSelect={insertVariable}
           trigger={
             <Button
-              className="absolute right-1 top-1/2 size-6 -translate-y-1/2 rounded-md bg-blue-600 p-0 text-white hover:bg-blue-600/90"
+              className="absolute right-1 top-1/2 size-6 -translate-y-1/2 rounded-md border border-input bg-background p-0 text-muted-foreground hover:bg-accent"
               disabled={!props.variables.length}
               size="icon-xs"
               title="选择变量"
@@ -3570,6 +4080,7 @@ const KeyValueEditor = (props: {
 
   return (
     <div className="space-y-2" data-no-pan="true">
+      {!rows.length && <div className="text-xs text-muted-foreground">点击添加按钮添加键值对</div>}
       {rows.map((row, index) => (
         <div
           key={`${row.key}-${index}`}
@@ -3613,57 +4124,280 @@ const FieldMappingEditor = (props: {
   variables: IVariableOption[];
   onChange: (value: Record<string, unknown>) => void;
 }) => {
-  const rows = recordToRows(props.value);
-  const updateRows = (nextRows: { key: string; value: string }[]) =>
-    props.onChange(rowsToRecord(nextRows));
-  const updateRow = (index: number, patch: Partial<{ key: string; value: string }>) => {
-    updateRows(rows.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
+  const [fieldPickerOpen, setFieldPickerOpen] = useState(false);
+  const valueRecord = isPlainRecord(props.value) ? props.value : {};
+  const selectedFields = Object.keys(valueRecord).map((fieldId) => ({
+    fieldId,
+    field: props.fields.find((field) => field.id === fieldId),
+  }));
+  const remainingFields = props.fields.filter(
+    (field) => !Object.prototype.hasOwnProperty.call(valueRecord, field.id)
+  );
+  const updateField = (fieldId: string, value: string) => {
+    props.onChange({ ...valueRecord, [fieldId]: value });
+  };
+  const removeField = (fieldId: string) => {
+    props.onChange(
+      Object.fromEntries(Object.entries(valueRecord).filter(([currentId]) => currentId !== fieldId))
+    );
+  };
+  const getDescription = (field: TableField) => {
+    if (
+      [FieldType.User, FieldType.CreatedBy, FieldType.LastModifiedBy].includes(
+        field.type as FieldType
+      )
+    ) {
+      return '可使用用户id、用户名、邮箱来写入，多条值英文逗号分隔';
+    }
+    return undefined;
   };
 
   return (
     <div className="space-y-2" data-no-pan="true">
-      {rows.map((row, index) => (
-        <div
-          key={`${row.key}-${index}`}
-          className="grid grid-cols-[minmax(120px,1fr)_minmax(0,1.2fr)_auto] gap-2"
-        >
-          {props.fields.length ? (
-            <FieldSelect
-              fields={props.fields}
-              value={row.key}
-              onChange={(fieldId) => updateRow(index, { key: fieldId })}
-            />
-          ) : (
-            <Input
-              value={row.key}
-              placeholder="字段 ID"
-              onChange={(e) => updateRow(index, { key: e.target.value })}
-            />
-          )}
-          <ConditionValueInput
-            value={row.value}
-            variables={props.variables}
-            placeholder="固定值或变量"
-            onChange={(value) => updateRow(index, { value })}
-          />
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            onClick={() => updateRows(rows.filter((_, rowIndex) => rowIndex !== index))}
-          >
-            <X className="size-4" />
+      {selectedFields.map(({ fieldId, field }) => {
+        if (!field) {
+          const invalidReason = '字段异常: 该字段可能已被删除，请删除此字段并重新添加。';
+          return (
+            <div key={fieldId} className="group m-1 flex flex-col">
+              <div className="flex items-center justify-between">
+                <span className="leading-8 text-red-500">字段异常</span>
+                <Button
+                  className="invisible mr-1 mt-1 group-hover:visible"
+                  size="icon-xs"
+                  type="button"
+                  variant="ghost"
+                  onClick={() => removeField(fieldId)}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+              <div className="flex items-center text-red-500">
+                <TriangleAlert className="size-4 shrink-0" />
+                <span className="pl-1 text-xs leading-4">{invalidReason}</span>
+              </div>
+            </div>
+          );
+        }
+        const disabledReason = getFieldWriteDisabledReason(field);
+        return (
+          <div key={fieldId} className="group">
+            <FieldBlock
+              label={field.name}
+              description={disabledReason ?? getDescription(field)}
+              action={
+                <Button
+                  className="invisible group-hover:visible"
+                  size="icon-xs"
+                  type="button"
+                  variant="ghost"
+                  onClick={() => removeField(fieldId)}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              }
+            >
+              {disabledReason ? (
+                <div className="rounded-md border border-dashed bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                  {disabledReason}
+                </div>
+              ) : (
+                <VariableInput
+                  value={valueRecord[fieldId] === undefined ? '' : String(valueRecord[fieldId])}
+                  variables={props.variables}
+                  placeholder="输入 / 选择变量"
+                  onChange={(value) => updateField(fieldId, value)}
+                />
+              )}
+            </FieldBlock>
+          </div>
+        );
+      })}
+      <Popover open={fieldPickerOpen} onOpenChange={setFieldPickerOpen}>
+        <PopoverTrigger asChild>
+          <Button size="sm" variant="outline" disabled={!remainingFields.length}>
+            <Plus className="size-4" />
+            添加字段
           </Button>
-        </div>
-      ))}
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={() => updateRows([...rows, { key: props.fields[0]?.id ?? '', value: '' }])}
-      >
-        <Plus className="size-4" />
-        添加字段
-      </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-64 p-1" data-no-pan="true">
+          <Command>
+            <CommandInput placeholder="搜索字段..." className="placeholder:text-sm" />
+            <CommandEmpty>没有可添加字段</CommandEmpty>
+            <CommandList>
+              <CommandGroup>
+                {remainingFields.map((field) => {
+                  const disabledReason = getFieldWriteDisabledReason(field);
+                  return (
+                    <CommandItem
+                      key={field.id}
+                      value={field.name || field.id}
+                      disabled={Boolean(disabledReason)}
+                      onSelect={() => {
+                        if (disabledReason) return;
+                        updateField(field.id, '');
+                        setFieldPickerOpen(false);
+                      }}
+                    >
+                      <FieldOptionContent field={field} disabledReason={disabledReason} />
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
     </div>
+  );
+};
+
+type MailTransportDraft = {
+  host: string;
+  port: string;
+  secure: boolean;
+  user: string;
+  pass: string;
+  sender: string;
+  senderName: string;
+};
+
+const normalizeMailTransportDraft = (value: unknown): MailTransportDraft => {
+  const config = isPlainRecord(value) ? value : {};
+  const auth = isPlainRecord(config.auth) ? config.auth : {};
+  return {
+    host: typeof config.host === 'string' ? config.host : '',
+    port: config.port === undefined || config.port === null ? '' : String(config.port),
+    secure: Boolean(config.secure),
+    user: typeof auth.user === 'string' ? auth.user : '',
+    pass: typeof auth.pass === 'string' ? auth.pass : '',
+    sender: typeof config.sender === 'string' ? config.sender : '',
+    senderName: typeof config.senderName === 'string' ? config.senderName : '',
+  };
+};
+
+const buildMailTransportConfig = (draft: MailTransportDraft) =>
+  omitUndefined({
+    host: draft.host.trim(),
+    port: draft.port.trim() ? Number(draft.port) : undefined,
+    secure: draft.secure,
+    auth: {
+      user: draft.user.trim(),
+      pass: draft.pass,
+    },
+    sender: draft.sender.trim(),
+    senderName: draft.senderName.trim(),
+  });
+
+const MailTransportConfigDialog = (props: {
+  value: unknown;
+  onChange: (value: Record<string, unknown>) => void;
+}) => {
+  const [open, setOpen] = useState(false);
+  const [testEmail, setTestEmail] = useState('');
+  const [draft, setDraft] = useState<MailTransportDraft>(() =>
+    normalizeMailTransportDraft(props.value)
+  );
+  const sourceSignature = JSON.stringify(props.value ?? {});
+
+  useEffect(() => {
+    if (!open) {
+      setDraft(normalizeMailTransportDraft(props.value));
+      setTestEmail('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceSignature, open]);
+
+  const updateDraft = (patch: Partial<MailTransportDraft>) => {
+    setDraft((current) => ({ ...current, ...patch }));
+  };
+  const handleConfirm = () => {
+    props.onChange(buildMailTransportConfig(draft));
+    setOpen(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline">
+          添加配置
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-xl">
+        <DialogTitle>邮件配置</DialogTitle>
+        <DialogDescription className="sr-only">配置发送邮件节点使用的 SMTP 服务</DialogDescription>
+        <div className="space-y-4">
+          <FieldBlock
+            label="服务器地址"
+            description="请输入 SMTP 邮件服务器地址，例如：smtp.example.com"
+            required
+          >
+            <Input
+              value={draft.host}
+              placeholder="请输入服务器地址"
+              onChange={(e) => updateDraft({ host: e.target.value })}
+            />
+          </FieldBlock>
+          <FieldBlock label="端口" required>
+            <Input
+              type="number"
+              value={draft.port}
+              placeholder="请输入端口"
+              onChange={(e) => updateDraft({ port: e.target.value })}
+            />
+          </FieldBlock>
+          <FieldBlock label="SSL/TLS">
+            <Switch checked={draft.secure} onCheckedChange={(secure) => updateDraft({ secure })} />
+          </FieldBlock>
+          <FieldBlock label="用户名" required>
+            <Input
+              value={draft.user}
+              placeholder="请输入用户名"
+              onChange={(e) => updateDraft({ user: e.target.value })}
+            />
+          </FieldBlock>
+          <FieldBlock label="密码" required>
+            <Input
+              type="password"
+              value={draft.pass}
+              placeholder="请输入密码"
+              onChange={(e) => updateDraft({ pass: e.target.value })}
+            />
+          </FieldBlock>
+          <FieldBlock label="发件人地址" required>
+            <Input
+              value={draft.sender}
+              placeholder="请输入发件人地址"
+              onChange={(e) => updateDraft({ sender: e.target.value })}
+            />
+          </FieldBlock>
+          <FieldBlock label="发件人名称">
+            <Input
+              value={draft.senderName}
+              placeholder="请输入发件人名称"
+              onChange={(e) => updateDraft({ senderName: e.target.value })}
+            />
+          </FieldBlock>
+        </div>
+        <DialogFooter className="items-center gap-2 sm:justify-between">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <Input
+              value={testEmail}
+              placeholder="请输入测试邮箱"
+              onChange={(e) => setTestEmail(e.target.value)}
+            />
+            <Button disabled={!testEmail.trim()} variant="outline">
+              发送
+            </Button>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              取消
+            </Button>
+            <Button onClick={handleConfirm}>确认</Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 
@@ -4364,7 +5098,7 @@ const ResultDataRow = (props: { row: TestResultRow; level?: number }) => {
           )}
         </span>
         {hasDetail &&
-          (open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />)}
+          (open ? <ChevronDown className="size-3" /> : <TeableChevronRight className="size-3" />)}
       </button>
       {open && props.row.children?.length
         ? props.row.children.map((child) => (
@@ -4390,6 +5124,83 @@ const ResultSection = (props: { title: string; rows: TestResultRow[] }) => (
     </div>
   </div>
 );
+
+const WorkflowRunStepDetail = (props: {
+  baseId: string;
+  fields: TableField[];
+  node?: IWorkflowNode;
+  runStartedTime: string;
+  step: WorkflowRunStep;
+  tables: { id: string; name: string }[];
+}) => {
+  const [open, setOpen] = useState(false);
+  const statusMeta = getRunStatusMeta(props.step.status);
+  const nodeLabel = props.node ? getNodeLabel(props.node) : props.step.type;
+
+  return (
+    <div className="border-b last:border-b-0">
+      <button
+        className="flex w-full items-center gap-2 p-4 text-left text-sm font-medium hover:bg-muted"
+        onClick={() => setOpen((current) => !current)}
+      >
+        <NodePlainIcon type={props.step.type} />
+        <span className="min-w-0 flex-1 truncate">{nodeLabel}</span>
+        <span
+          className={cn(
+            'inline-flex shrink-0 items-center gap-2 text-[13px]',
+            statusMeta.className
+          )}
+        >
+          <statusMeta.Icon className="size-4" />
+          {statusMeta.label}
+        </span>
+        <ChevronDown
+          className={cn(
+            'size-4 shrink-0 text-muted-foreground transition-transform',
+            !open && '-rotate-90'
+          )}
+        />
+      </button>
+      {open && (
+        <div className="px-4 pb-4 pt-2 text-xs">
+          <div className="space-y-2">
+            <div
+              className={cn(
+                'flex flex-row items-start gap-2 rounded-md border bg-muted px-4 py-3 text-sm',
+                statusMeta.className
+              )}
+            >
+              <statusMeta.Icon className="size-4" />
+              <span>{statusMeta.label === '执行成功' ? '运行成功' : statusMeta.label}</span>
+            </div>
+            <div className="space-x-1 text-xs text-muted-foreground">
+              <span>运行于</span>
+              <span>{formatRelativeTime(props.runStartedTime)}</span>
+            </div>
+            <div className="space-x-1 text-xs text-muted-foreground">
+              <span>花费时长</span>
+              <span>{formatDuration(props.step.spent)}</span>
+            </div>
+            {props.step.error && (
+              <div className="rounded border border-destructive/30 bg-destructive/5 p-2 text-destructive">
+                {props.step.error}
+              </div>
+            )}
+            <ResultSection
+              title="输入"
+              rows={getRunStepInputRows(props.step, props.node, props.tables, props.fields)}
+            />
+            <ResultSection
+              title="输出"
+              rows={getRunStepOutputRows(props.step, props.node, props.baseId, props.fields)}
+            />
+            <ResultSection title="调用细节" rows={getRunStepCallRows(props.step, props.node)} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const NodePickerButton = (props: { item: INodeCatalogItem; onClick: () => void }) => {
   return (
@@ -4465,6 +5276,17 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
   const [nodeTestResults, setNodeTestResults] = useState<Record<string, NodeTestResult>>({});
   const [viewport, setViewport] = useState({ x: 0, y: 0, scale: 1 });
   const [isPanning, setIsPanning] = useState(false);
+  const [isRunHistoryOpen, setIsRunHistoryOpen] = useState(false);
+  const [expandedRunId, setExpandedRunId] = useState<string>();
+  const [runStatusFilter, setRunStatusFilter] = useState('all');
+  const [runDurationFilter, setRunDurationFilter] = useState('all');
+  const [runDateRange, setRunDateRange] = useState<IDateRangeValue | null>(null);
+  const [isRunOverviewOpen, setIsRunOverviewOpen] = useState(true);
+  const [nodeDescriptionDraft, setNodeDescriptionDraft] = useState('');
+  const workflowNameInputRef = useRef<HTMLInputElement>(null);
+  const loadedWorkflowIdRef = useRef<string>();
+  const lastSavedDraftSignatureRef = useRef('');
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const panStartRef = useRef<{
     pointerId: number;
     x: number;
@@ -4485,10 +5307,38 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
     enabled: Boolean(baseId),
   });
 
+  const { data: bases = [] } = useQuery({
+    queryKey: ['workflow-base-all'],
+    queryFn: () => getBaseAll().then((res) => res.data),
+  });
+
+  const runListParams = useMemo<IWorkflowRunListRo>(() => {
+    const params: IWorkflowRunListRo = {
+      skip: 0,
+      take: RUN_HISTORY_TAKE,
+    };
+    if (runStatusFilter !== 'all') {
+      params.status = runStatusFilter as IWorkflowRunListRo['status'];
+    }
+    if (runDurationFilter !== 'all') {
+      params.duration = runDurationFilter;
+    }
+    return {
+      ...params,
+      ...getRunDateRangeParams(runDateRange),
+    };
+  }, [runDateRange, runDurationFilter, runStatusFilter]);
+
   const { data: runList, refetch: refetchRuns } = useQuery({
-    queryKey: workflowRunQueryKey(baseId, workflowId),
-    queryFn: () => listWorkflowRuns(baseId, workflowId).then((res) => res.data),
-    enabled: Boolean(baseId && workflowId),
+    queryKey: workflowRunQueryKey(baseId, workflowId, runListParams),
+    queryFn: () => listWorkflowRuns(baseId, workflowId, runListParams).then((res) => res.data),
+    enabled: Boolean(baseId && workflowId && isRunHistoryOpen),
+  });
+
+  const { data: runSummary, refetch: refetchRunSummary } = useQuery({
+    queryKey: workflowRunSummaryQueryKey(baseId, workflowId),
+    queryFn: () => getWorkflowRunSummary(baseId, workflowId).then((res) => res.data),
+    enabled: Boolean(baseId && workflowId && isRunHistoryOpen),
   });
 
   const { data: collaborators = [] } = useQuery({
@@ -4511,17 +5361,64 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
 
   useEffect(() => {
     if (!workflow) return;
-    setWorkflowName(workflow.name ?? t('noun.automation'));
-    setNodes(workflow.nodes ?? []);
-    setEdges(workflow.edges ?? []);
-    setSelectedNodeId((workflow.nodes ?? [])[0]?.id);
-    setNodeTestResults({});
+    if (loadedWorkflowIdRef.current === workflow.id) return;
+    const nextName = workflow.name ?? t('noun.automation');
+    const nextNodes = workflow.nodes ?? [];
+    const nextEdges = workflow.edges ?? [];
+    loadedWorkflowIdRef.current = workflow.id;
+    lastSavedDraftSignatureRef.current = getWorkflowDraftSignature(nextName, nextNodes, nextEdges);
+    setWorkflowName(nextName);
+    setNodes(nextNodes);
+    setEdges(nextEdges);
+    setSelectedNodeId(nextNodes[0]?.id);
+    setNodeTestResults(
+      Object.fromEntries(
+        nextNodes
+          .map((node) => [node.id, getValidNodeTestResult(node, {})] as const)
+          .filter((item): item is readonly [string, NodeTestResult] => Boolean(item[1]))
+      )
+    );
   }, [workflow, t]);
+
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, []);
 
   const selectedNode = useMemo(
     () => nodes.find((node) => node.id === selectedNodeId),
     [nodes, selectedNodeId]
   );
+  useEffect(() => {
+    setNodeDescriptionDraft(
+      typeof selectedNode?.config?.note === 'string' ? selectedNode.config.note : ''
+    );
+  }, [selectedNode?.config?.note, selectedNode?.id]);
+
+  const selectedConfigExternalBaseValue =
+    typeof selectedNode?.config?.externalBaseId === 'string'
+      ? selectedNode.config.externalBaseId
+      : undefined;
+  const selectedExternalBaseId = selectedConfigExternalBaseValue || undefined;
+  const shouldLoadExternalTables = Boolean(
+    selectedExternalBaseId && selectedExternalBaseId !== baseId
+  );
+
+  const { data: externalTables = [] } = useQuery({
+    queryKey: selectedExternalBaseId
+      ? ReactQueryKeys.tableList(selectedExternalBaseId)
+      : ['workflow-external-tables', 'empty'],
+    queryFn: () => getTableList(selectedExternalBaseId!).then((res) => res.data),
+    enabled: shouldLoadExternalTables,
+  });
+
+  const configTables = shouldLoadExternalTables ? externalTables : tables;
+  const knownTables = useMemo(() => {
+    const tableMap = new Map(tables.map((table) => [table.id, table]));
+    externalTables.forEach((table) => tableMap.set(table.id, table));
+    return Array.from(tableMap.values());
+  }, [externalTables, tables]);
 
   const firstTableId = tables[0]?.id;
   const triggerTableId = useMemo(() => {
@@ -4551,6 +5448,11 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
     selectedConfigTableId && selectedConfigTableId === triggerTableId
       ? triggerFields
       : selectedTableFields;
+  const workflowFields = useMemo(() => {
+    const fieldMap = new Map<string, TableField>();
+    [...triggerFields, ...selectedTableFields].forEach((field) => fieldMap.set(field.id, field));
+    return Array.from(fieldMap.values());
+  }, [selectedTableFields, triggerFields]);
   const buttonFields = useMemo(
     () => configFields.filter((field) => field.type === FieldType.Button),
     [configFields]
@@ -4571,67 +5473,200 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
     () => buildVariableOptions(upstreamNodes, triggerFields, nodeTestResults),
     [nodeTestResults, triggerFields, upstreamNodes]
   );
+  const collaboratorById = useMemo(
+    () => new Map(collaborators.map((collaborator) => [collaborator.id, collaborator])),
+    [collaborators]
+  );
+  const lastModifiedUserId = workflow?.lastModifiedBy ?? workflow?.activeBy ?? undefined;
+  const lastModifiedUser = lastModifiedUserId
+    ? collaboratorById.get(lastModifiedUserId)
+    : undefined;
+  const lastModifiedUserName =
+    lastModifiedUser?.name ||
+    lastModifiedUser?.email ||
+    lastModifiedUserId ||
+    '最后更新此自动化的人';
 
-  const workflowSignature = useMemo(() => JSON.stringify({ nodes, edges }), [edges, nodes]);
+  const savedWorkflowName = workflowName.trim() || t('noun.automation');
+  const workflowSignature = useMemo(
+    () => getWorkflowRuntimeSignature(nodes, edges),
+    [edges, nodes]
+  );
+  const activeRuntimeSignature = useMemo(
+    () => getWorkflowActiveRuntimeSignature(workflow),
+    [workflow]
+  );
+  const draftSignature = useMemo(
+    () => getWorkflowDraftSignature(savedWorkflowName, nodes, edges),
+    [edges, nodes, savedWorkflowName]
+  );
   const workflowValidation = useMemo(() => validateWorkflow(nodes), [nodes]);
   const hasPassedAllNodeTests =
-    Boolean(nodes.length) &&
-    nodes.every((node) => nodeTestResults[node.id]?.signature === getNodeSignature(node));
+    Boolean(nodes.length) && nodes.every((node) => getValidNodeTestResult(node, nodeTestResults));
   const getNodeStatus = useCallback(
     (node: IWorkflowNode) => getWorkflowNodeEditStatus(node, nodeTestResults),
     [nodeTestResults]
   );
-
-  const saveDraft = useCallback(async () => {
-    setIsSaving(true);
-    try {
-      const res = await updateWorkflow(baseId, workflowId, {
-        name: workflowName.trim() || t('noun.automation'),
-        nodes,
-        edges,
+  const updateWorkflowBaseNodeCache = useCallback(
+    (data: IWorkflowVo) => {
+      queryClient.setQueryData<IBaseNodeTreeVo>(ReactQueryKeys.baseNodeTree(baseId), (current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          nodes: current.nodes.map((node) =>
+            node.resourceType === BaseNodeResourceType.Workflow && node.resourceId === workflowId
+              ? {
+                  ...node,
+                  resourceMeta: {
+                    ...node.resourceMeta,
+                    name: data.name ?? t('noun.automation'),
+                    isActive: Boolean(data.isActive),
+                  },
+                }
+              : node
+          ),
+        };
       });
-      queryClient.setQueryData(workflowQueryKey(baseId, workflowId), res.data);
-      sonner.toast(t('actions.saveSucceed'));
-      return res.data;
-    } finally {
-      setIsSaving(false);
-    }
-  }, [baseId, edges, nodes, queryClient, t, workflowId, workflowName]);
+    },
+    [baseId, queryClient, t, workflowId]
+  );
+
+  const saveDraft = useCallback(
+    async (options?: {
+      silent?: boolean;
+      name?: string;
+      nodes?: IWorkflowNode[];
+      edges?: IWorkflowEdge[];
+    }) => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+      setIsSaving(true);
+      const nameToSave = options?.name ?? savedWorkflowName;
+      const nodesToSave = options?.nodes ?? nodes;
+      const edgesToSave = options?.edges ?? edges;
+      try {
+        const res = await updateWorkflow(baseId, workflowId, {
+          name: nameToSave,
+          nodes: nodesToSave,
+          edges: edgesToSave,
+        });
+        queryClient.setQueryData(workflowQueryKey(baseId, workflowId), res.data);
+        updateWorkflowBaseNodeCache(res.data);
+        lastSavedDraftSignatureRef.current = getWorkflowDraftSignature(
+          nameToSave,
+          nodesToSave,
+          edgesToSave
+        );
+        if (!options?.silent) {
+          sonner.toast(t('actions.saveSucceed'));
+        }
+        return res.data;
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [
+      baseId,
+      edges,
+      nodes,
+      queryClient,
+      savedWorkflowName,
+      t,
+      updateWorkflowBaseNodeCache,
+      workflowId,
+    ]
+  );
+
+  useEffect(() => {
+    if (!workflow || loadedWorkflowIdRef.current !== workflow.id) return;
+    if (draftSignature === lastSavedDraftSignatureRef.current) return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      void saveDraft({ silent: true });
+    }, 800);
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [draftSignature, saveDraft, workflow]);
 
   const activeMutation = useMutation({
-    mutationFn: async (method: 'activate' | 'deactivate') => {
-      if (method === 'activate') {
-        await saveDraft();
+    mutationFn: async (params: {
+      method: 'activate' | 'deactivate' | 'discard';
+      successMessage: string;
+    }) => {
+      if (params.method === 'discard' && autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
       }
-      return updateWorkflowActive(baseId, workflowId, { method }).then((res) => res.data);
+      if (params.method === 'activate') {
+        await saveDraft({ silent: true });
+      }
+      return updateWorkflowActive(baseId, workflowId, { method: params.method }).then(
+        (res) => res.data
+      );
     },
-    onSuccess: (data) => {
+    onSuccess: (data, params) => {
       queryClient.setQueryData(workflowQueryKey(baseId, workflowId), data);
-      sonner.toast(data.isActive ? '自动化已启用' : '自动化已停用');
+      updateWorkflowBaseNodeCache(data);
+      queryClient.invalidateQueries({ queryKey: ReactQueryKeys.baseNodeTree(baseId) });
+      if (params.method === 'discard') {
+        const nextName = data.name ?? t('noun.automation');
+        const nextNodes = data.nodes ?? [];
+        const nextEdges = data.edges ?? [];
+        lastSavedDraftSignatureRef.current = getWorkflowDraftSignature(
+          nextName,
+          nextNodes,
+          nextEdges
+        );
+        setWorkflowName(nextName);
+        setNodes(nextNodes);
+        setEdges(nextEdges);
+        setSelectedNodeId((current) =>
+          nextNodes.some((node) => node.id === current) ? current : nextNodes[0]?.id
+        );
+        setNodeTestResults(
+          Object.fromEntries(
+            nextNodes
+              .map((node) => [node.id, getValidNodeTestResult(node, {})] as const)
+              .filter((item): item is readonly [string, NodeTestResult] => Boolean(item[1]))
+          )
+        );
+      }
+      sonner.toast(params.successMessage);
     },
   });
 
   const testMutation = useMutation({
     mutationFn: async () => {
       const signature = workflowSignature;
-      await saveDraft();
+      await saveDraft({ silent: true });
       const data = await testWorkflow(baseId, workflowId).then((res) => res.data);
       return { data, signature };
     },
-    onSuccess: () => {
-      setNodeTestResults(
-        Object.fromEntries(
-          nodes.map((node) => [
-            node.id,
-            {
-              signature: getNodeSignature(node),
-              testedAt: new Date().toISOString(),
-              node: cloneWorkflowNode(node),
-            },
-          ])
-        )
+    onSuccess: ({ data }) => {
+      if (data.status !== 'success') {
+        refetchRuns();
+        refetchRunSummary();
+        sonner.toast(data.error || '测试运行失败');
+        return;
+      }
+      const nextResults = Object.fromEntries(
+        nodes.map((node) => [
+          node.id,
+          {
+            signature: getNodeSignature(node),
+            testedAt: new Date().toISOString(),
+            node: cloneWorkflowNode(node),
+          },
+        ])
       );
+      const nextNodes = nodes.map((node) => ({
+        ...node,
+        testResult: nextResults[node.id],
+      }));
+      setNodeTestResults(nextResults);
+      setNodes(nextNodes);
+      void saveDraft({ silent: true, nodes: nextNodes });
       refetchRuns();
+      refetchRunSummary();
       sonner.toast('测试运行已完成');
     },
   });
@@ -4643,6 +5678,15 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
         message: workflowValidation.message,
       };
     }
+    const expiredNode = nodes.find(
+      (node) => getNodeTestResultState(node, nodeTestResults) === 'expired'
+    );
+    if (expiredNode) {
+      return {
+        canActive: false,
+        message: `「${getNodeLabel(expiredNode)}」测试结果已过期,请重新执行测试步骤获取结果`,
+      };
+    }
     if (!hasPassedAllNodeTests) {
       return {
         canActive: false,
@@ -4650,7 +5694,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
       };
     }
     return { canActive: true, message: '' };
-  }, [hasPassedAllNodeTests, workflowValidation]);
+  }, [hasPassedAllNodeTests, nodeTestResults, nodes, workflowValidation]);
 
   const handleActivate = useCallback(async () => {
     const check = checkCanActive();
@@ -4658,8 +5702,21 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
       sonner.toast(check.message);
       return;
     }
-    await activeMutation.mutateAsync('activate');
+    await activeMutation.mutateAsync({ method: 'activate', successMessage: '自动化已启用' });
   }, [activeMutation, checkCanActive]);
+
+  const handlePublish = useCallback(async () => {
+    const check = checkCanActive();
+    if (!check.canActive) {
+      sonner.toast(check.message);
+      return;
+    }
+    await activeMutation.mutateAsync({ method: 'activate', successMessage: '自动化已更新' });
+  }, [activeMutation, checkCanActive]);
+
+  const handleDiscardDraft = useCallback(async () => {
+    await activeMutation.mutateAsync({ method: 'discard', successMessage: '已重置为已发布版本' });
+  }, [activeMutation]);
 
   const handleActiveToggle = useCallback(
     async (checked: boolean) => {
@@ -4667,7 +5724,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
         await handleActivate();
         return;
       }
-      await activeMutation.mutateAsync('deactivate');
+      await activeMutation.mutateAsync({ method: 'deactivate', successMessage: '自动化已停用' });
     },
     [activeMutation, handleActivate]
   );
@@ -4686,16 +5743,19 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
       sonner.toast('请先补全当前节点的必填配置');
       return;
     }
-    setNodeTestResults((current) => ({
-      ...current,
-      [selectedNode.id]: {
-        signature: getNodeSignature(selectedNode),
-        testedAt: new Date().toISOString(),
-        node: cloneWorkflowNode(selectedNode),
-      },
-    }));
+    const result = {
+      signature: getNodeSignature(selectedNode),
+      testedAt: new Date().toISOString(),
+      node: cloneWorkflowNode(selectedNode),
+    };
+    const nextNodes = nodes.map((node) =>
+      node.id === selectedNode.id ? { ...node, testResult: result } : node
+    );
+    setNodeTestResults((current) => ({ ...current, [selectedNode.id]: result }));
+    setNodes(nextNodes);
+    void saveDraft({ silent: true, nodes: nextNodes });
     sonner.toast('测试步骤已完成');
-  }, [selectedNode]);
+  }, [nodes, saveDraft, selectedNode]);
 
   const copyNodeId = useCallback(async (nodeId: string) => {
     try {
@@ -4816,8 +5876,31 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
     ) {
       nextConfig.filter = { conjunction: 'and', filterSet: [] };
     }
-    if (['createRecord', 'updateRecord'].includes(selectedNode.type)) {
-      nextConfig.fields = {};
+    updateNode(selectedNode.id, { config: omitUndefined(nextConfig) });
+  };
+
+  const updateSelectedExternalBase = (externalBaseId: string) => {
+    if (!selectedNode) return;
+    const nextConfig: Record<string, unknown> = {
+      ...(selectedNode.config ?? {}),
+      externalBaseId,
+      tableId: '',
+    };
+    if (selectedNode.type === 'formSubmitted') {
+      nextConfig.viewId = '';
+    }
+    if (['buttonClick', 'recordUpdated'].includes(selectedNode.type)) {
+      nextConfig.watchFieldIds = [];
+    }
+    if (
+      [
+        'buttonClick',
+        'recordCreated',
+        'recordCreatedOrUpdated',
+        'recordMatchesConditions',
+      ].includes(selectedNode.type)
+    ) {
+      nextConfig.filter = { conjunction: 'and', filterSet: [] };
     }
     updateNode(selectedNode.id, { config: omitUndefined(nextConfig) });
   };
@@ -4981,10 +6064,9 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
     }
 
     const config = selectedNode.config ?? {};
-    const nodeResult = nodeTestResults[selectedNode.id];
-    const selectedNodeResult = nodeResult;
-    const selectedNodeResultIsCurrent =
-      selectedNodeResult?.signature === getNodeSignature(selectedNode);
+    const selectedNodeResult = getAnyNodeTestResult(selectedNode, nodeTestResults);
+    const selectedNodeResultState = getNodeTestResultState(selectedNode, nodeTestResults);
+    const selectedNodeResultIsCurrent = selectedNodeResultState === 'current';
     const resultNode = selectedNodeResult?.node ?? selectedNode;
     const isTableNode = [
       'buttonClick',
@@ -4997,21 +6079,15 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
       'getRecords',
       'updateRecord',
     ].includes(selectedNode.type);
+    const hasCrossDatabaseConfig = Object.prototype.hasOwnProperty.call(config, 'externalBaseId');
+    const hasLoopConfig = Object.prototype.hasOwnProperty.call(config, 'loopSource');
+    const showGenericLoopConfig =
+      hasLoopConfig &&
+      selectedNode.category === 'action' &&
+      !['createRecord', 'updateRecord'].includes(selectedNode.type);
 
     return (
       <div className="space-y-4">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <NodeIconBadge type={selectedNode.type} />
-            <div className="truncate text-sm font-medium">
-              {NODE_LABELS[selectedNode.type] ?? selectedNode.type}
-            </div>
-          </div>
-          <Button size="icon-xs" variant="ghost" onClick={deleteSelectedNode}>
-            <Trash2 className="size-4" />
-          </Button>
-        </div>
-
         {selectedNode.category === 'trigger' && (
           <FieldBlock label="触发器类型" required>
             <Select value={selectedNode.type} onValueChange={changeSelectedTriggerType}>
@@ -5053,276 +6129,362 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
         )}
 
         {selectedNode.category === 'action' && (
-          <div className="space-y-3">
+          <PanelSection title="标签">
             <FieldBlock label="描述">
               <Input
-                value={String(config.note ?? '')}
+                value={nodeDescriptionDraft}
                 placeholder="输入描述"
-                onChange={(e) => updateNodeConfig('note', e.target.value)}
+                onBlur={(e) => updateNodeConfig('note', e.currentTarget.value)}
+                onChange={(e) => setNodeDescriptionDraft(e.target.value)}
               />
             </FieldBlock>
-          </div>
+          </PanelSection>
         )}
 
-        {isTableNode && (
-          <FieldBlock label="表格" required>
-            <TableSelect
-              tables={tables}
-              value={String(config.tableId ?? '')}
-              onChange={updateSelectedTable}
+        <PanelSection title="配置">
+          {isTableNode && selectedNode.category === 'action' && hasCrossDatabaseConfig && (
+            <CrossDatabaseAccessConfig
+              bases={bases}
+              value={String(config.externalBaseId ?? '')}
+              onChange={updateSelectedExternalBase}
+              onCancel={() => updateNodeConfig('externalBaseId', undefined)}
             />
-          </FieldBlock>
-        )}
+          )}
 
-        {selectedNode.type === 'buttonClick' && selectedConfigTableId && (
-          <>
-            {renderConditionEditor('filter')}
-            <FieldBlock label="监听字段" description="选择一个按钮字段" required>
+          {isTableNode && (
+            <FieldBlock
+              label="表格"
+              required
+              action={
+                selectedNode.category === 'action' && !hasCrossDatabaseConfig ? (
+                  <Button
+                    className="h-7 px-2 text-xs font-normal"
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                    onClick={() => updateNodeConfig('externalBaseId', '')}
+                  >
+                    跨数据库访问
+                  </Button>
+                ) : undefined
+              }
+            >
+              <TableSelect
+                tables={configTables}
+                value={String(config.tableId ?? '')}
+                onChange={updateSelectedTable}
+              />
+            </FieldBlock>
+          )}
+
+          {showGenericLoopConfig && (
+            <LoopConfigBlock
+              value={String(config.loopSource ?? '')}
+              variables={variableOptions}
+              onChange={(value) => updateNodeConfig('loopSource', value)}
+              onCancel={() => updateNodeConfig('loopSource', undefined)}
+            />
+          )}
+
+          {selectedNode.type === 'buttonClick' && selectedConfigTableId && (
+            <>
+              {renderConditionEditor('filter')}
+              <FieldBlock label="监听字段" description="选择一个按钮字段" required>
+                <WatchFieldEditor
+                  fields={buttonFields}
+                  value={config.watchFieldIds}
+                  placeholder="添加字段"
+                  emptyText={buttonFields.length ? false : '当前表格没有按钮字段。'}
+                  onChange={(watchFieldIds) => updateNodeConfig('watchFieldIds', watchFieldIds)}
+                />
+              </FieldBlock>
+            </>
+          )}
+
+          {selectedNode.type === 'recordUpdated' && selectedConfigTableId && (
+            <FieldBlock
+              label="监听字段"
+              description="对选定字段的更新将触发触发器。监听所有字段时，新创建的字段也会被监听。"
+              required
+            >
               <WatchFieldEditor
-                fields={buttonFields}
+                fields={configFields}
                 value={config.watchFieldIds}
                 placeholder="添加字段"
-                emptyText={buttonFields.length ? false : '当前表格没有按钮字段。'}
                 onChange={(watchFieldIds) => updateNodeConfig('watchFieldIds', watchFieldIds)}
               />
             </FieldBlock>
-          </>
-        )}
+          )}
 
-        {selectedNode.type === 'recordUpdated' && selectedConfigTableId && (
-          <FieldBlock
-            label="监听字段"
-            description="对选定字段的更新将触发触发器。监听所有字段时，新创建的字段也会被监听。"
-            required
-          >
-            <WatchFieldEditor
-              fields={configFields}
-              value={config.watchFieldIds}
-              placeholder="添加字段"
-              onChange={(watchFieldIds) => updateNodeConfig('watchFieldIds', watchFieldIds)}
-            />
-          </FieldBlock>
-        )}
+          {['recordCreated', 'recordCreatedOrUpdated'].includes(selectedNode.type) &&
+            selectedConfigTableId &&
+            renderConditionEditor('filter')}
 
-        {['recordCreated', 'recordCreatedOrUpdated'].includes(selectedNode.type) &&
-          selectedConfigTableId &&
-          renderConditionEditor('filter')}
+          {selectedNode.type === 'recordMatchesConditions' &&
+            selectedConfigTableId &&
+            renderConditionEditor('filter', true)}
 
-        {selectedNode.type === 'recordMatchesConditions' &&
-          selectedConfigTableId &&
-          renderConditionEditor('filter', true)}
-
-        {selectedNode.type === 'formSubmitted' && selectedConfigTableId && (
-          <FieldBlock label="表单" required>
-            <ViewSelect
-              tableId={selectedConfigTableId}
-              typeFilter={ViewType.Form}
-              value={String(config.viewId ?? '') || null}
-              onChange={(viewId) => updateNodeConfig('viewId', viewId ?? '')}
-              className="my-0 h-9 w-full max-w-none"
-            />
-          </FieldBlock>
-        )}
-
-        {selectedNode.type === 'createRecord' && (
-          <FieldBlock label="字段" required>
-            <FieldMappingEditor
-              value={config.fields}
-              fields={configFields}
-              variables={variableOptions}
-              onChange={(value) => updateNodeConfig('fields', value)}
-            />
-          </FieldBlock>
-        )}
-
-        {selectedNode.type === 'getRecords' && (
-          <>
-            <FieldBlock label="基于以下条件查找记录" required>
-              <Select
-                value={getFindMode(config)}
-                onValueChange={(findMode) => {
-                  updateNode(selectedNode.id, {
-                    config: omitUndefined({
-                      ...(selectedNode.config ?? {}),
-                      findMode,
-                      viewId: findMode === 'view' ? selectedNode.config?.viewId : '',
-                      filter:
-                        findMode === 'condition'
-                          ? selectedNode.config?.filter ?? { conjunction: 'and', filterSet: [] }
-                          : undefined,
-                    }),
-                  });
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="请选择..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="condition">条件</SelectItem>
-                  <SelectItem value="view">视图</SelectItem>
-                </SelectContent>
-              </Select>
+          {selectedNode.type === 'formSubmitted' && selectedConfigTableId && (
+            <FieldBlock label="表单" required>
+              <ViewSelect
+                tableId={selectedConfigTableId}
+                typeFilter={ViewType.Form}
+                value={String(config.viewId ?? '') || null}
+                onChange={(viewId) => updateNodeConfig('viewId', viewId ?? '')}
+                className="my-0 h-9 w-full max-w-none"
+              />
             </FieldBlock>
-            {getFindMode(config) === 'view' && selectedConfigTableId ? (
-              <FieldBlock label="视图" required>
-                <ViewSelect
-                  tableId={selectedConfigTableId}
-                  value={String(config.viewId ?? '') || null}
-                  onChange={(viewId) => updateNodeConfig('viewId', viewId ?? '')}
-                  className="my-0 h-9 w-full max-w-none"
+          )}
+
+          {selectedNode.type === 'createRecord' && (
+            <>
+              {hasLoopConfig && (
+                <LoopConfigBlock
+                  value={String(config.loopSource ?? '')}
+                  variables={variableOptions}
+                  onChange={(value) => updateNodeConfig('loopSource', value)}
+                  onCancel={() => updateNodeConfig('loopSource', undefined)}
                 />
-              </FieldBlock>
-            ) : (
-              <FieldBlock label="条件">
-                <FilterBuilder
-                  value={config.filter}
+              )}
+              <FieldBlock
+                label="字段"
+                required
+                action={
+                  !hasLoopConfig ? (
+                    <LoopButton onClick={() => updateNodeConfig('loopSource', '')} />
+                  ) : undefined
+                }
+              >
+                <FieldMappingEditor
+                  value={config.fields}
                   fields={configFields}
                   variables={variableOptions}
-                  baseId={baseId}
-                  collaborators={collaborators}
-                  onChange={(value) => updateNodeConfig('filter', value)}
+                  onChange={(value) => updateNodeConfig('fields', value)}
                 />
               </FieldBlock>
-            )}
-            <FieldBlock label="跳过">
-              <ConditionValueInput
-                value={String(config.skip ?? '')}
-                variables={variableOptions}
-                placeholder="输入 / 选择变量"
-                onChange={(value) => updateNodeConfig('skip', value)}
-              />
-            </FieldBlock>
-            <FieldBlock label="查询数量" description="每次查询最多返回1000条记录。">
-              <ConditionValueInput
-                value={String(config.take ?? 100)}
-                variables={variableOptions}
-                placeholder="输入 / 选择变量"
-                onChange={(value) => updateNodeConfig('take', value)}
-              />
-            </FieldBlock>
-          </>
-        )}
+            </>
+          )}
 
-        {selectedNode.type === 'updateRecord' && (
-          <>
-            <FieldBlock
-              label="记录 ID"
-              description="要更新的记录的 ID。要更新前一个步骤中的记录，请使用 + 菜单选择步骤及其记录 ID。"
-              required
-            >
-              <ConditionValueInput
-                value={String(config.recordId ?? '')}
-                variables={variableOptions}
-                placeholder="输入 / 选择变量"
-                onChange={(value) => updateNodeConfig('recordId', value)}
-              />
-            </FieldBlock>
-            <FieldBlock label="字段" required>
-              <FieldMappingEditor
-                value={config.fields}
-                fields={configFields}
-                variables={variableOptions}
-                onChange={(value) => updateNodeConfig('fields', value)}
-              />
-            </FieldBlock>
-          </>
-        )}
+          {selectedNode.type === 'getRecords' && (
+            <>
+              <FieldBlock label="基于以下条件查找记录" required>
+                <Select
+                  value={getFindMode(config)}
+                  onValueChange={(findMode) => {
+                    updateNode(selectedNode.id, {
+                      config: omitUndefined({
+                        ...(selectedNode.config ?? {}),
+                        findMode,
+                        viewId: findMode === 'view' ? selectedNode.config?.viewId : '',
+                        filter:
+                          findMode === 'condition'
+                            ? selectedNode.config?.filter ?? { conjunction: 'and', filterSet: [] }
+                            : undefined,
+                      }),
+                    });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="请选择..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="condition">条件</SelectItem>
+                    <SelectItem value="view">视图</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FieldBlock>
+              {getFindMode(config) === 'view' && selectedConfigTableId && (
+                <FieldBlock label="视图" required>
+                  <ViewSelect
+                    tableId={selectedConfigTableId}
+                    value={String(config.viewId ?? '') || null}
+                    onChange={(viewId) => updateNodeConfig('viewId', viewId ?? '')}
+                    className="my-0 h-9 w-full max-w-none"
+                  />
+                </FieldBlock>
+              )}
+              {getFindMode(config) === 'condition' && (
+                <FieldBlock label="条件">
+                  <FilterBuilder
+                    value={config.filter}
+                    fields={configFields}
+                    variables={variableOptions}
+                    baseId={baseId}
+                    collaborators={collaborators}
+                    onChange={(value) => updateNodeConfig('filter', value)}
+                  />
+                </FieldBlock>
+              )}
+              <FieldBlock label="跳过">
+                <VariableInput
+                  value={String(config.skip ?? '')}
+                  variables={variableOptions}
+                  multiline
+                  placeholder="输入 / 选择变量"
+                  onChange={(value) => updateNodeConfig('skip', value)}
+                />
+              </FieldBlock>
+              <FieldBlock label="查询数量" description="每次查询最多返回1000条记录。">
+                <VariableInput
+                  value={String(config.take ?? '')}
+                  variables={variableOptions}
+                  multiline
+                  placeholder="输入 / 选择变量"
+                  onChange={(value) => updateNodeConfig('take', value)}
+                />
+              </FieldBlock>
+            </>
+          )}
 
-        {selectedNode.type === 'sendEmail' && (
-          <>
-            <FieldBlock label="收件人" required>
-              <ConditionValueInput
-                value={String(config.to ?? '')}
-                variables={variableOptions}
-                placeholder="输入 / 选择变量"
-                onChange={(value) => updateNodeConfig('to', value)}
-              />
-            </FieldBlock>
-            <FieldBlock label="抄送">
-              <ConditionValueInput
-                value={String(config.cc ?? '')}
-                variables={variableOptions}
-                placeholder="输入 / 选择变量"
-                onChange={(value) => updateNodeConfig('cc', value)}
-              />
-            </FieldBlock>
-            <FieldBlock label="密送">
-              <ConditionValueInput
-                value={String(config.bcc ?? '')}
-                variables={variableOptions}
-                placeholder="输入 / 选择变量"
-                onChange={(value) => updateNodeConfig('bcc', value)}
-              />
-            </FieldBlock>
-            <FieldBlock label="发件人名称">
-              <ConditionValueInput
-                value={String(config.senderName ?? '')}
-                variables={variableOptions}
-                placeholder="输入 / 选择变量"
-                onChange={(value) => updateNodeConfig('senderName', value)}
-              />
-            </FieldBlock>
-            <FieldBlock label="回复邮件地址">
-              <ConditionValueInput
-                value={String(config.replyTo ?? '')}
-                variables={variableOptions}
-                placeholder="输入 / 选择变量"
-                onChange={(value) => updateNodeConfig('replyTo', value)}
-              />
-            </FieldBlock>
-            <FieldBlock label="主题" required>
-              <ConditionValueInput
-                value={String(config.subject ?? '')}
-                variables={variableOptions}
-                placeholder="输入 / 选择变量"
-                onChange={(value) => updateNodeConfig('subject', value)}
-              />
-            </FieldBlock>
-            <FieldBlock label="正文" required>
-              <VariableInput
-                value={String(config.body ?? '')}
-                variables={variableOptions}
-                multiline
-                placeholder="输入 / 选择变量"
-                onChange={(value) => updateNodeConfig('body', value)}
-              />
-            </FieldBlock>
-          </>
-        )}
+          {selectedNode.type === 'updateRecord' && (
+            <>
+              {hasLoopConfig && (
+                <LoopConfigBlock
+                  value={String(config.loopSource ?? '')}
+                  variables={variableOptions}
+                  onChange={(value) => updateNodeConfig('loopSource', value)}
+                  onCancel={() => updateNodeConfig('loopSource', undefined)}
+                />
+              )}
+              <FieldBlock
+                label="记录 ID"
+                description="要更新的记录的 ID。要更新前一个步骤中的记录，请使用 + 菜单选择步骤及其记录 ID。"
+                required
+                action={
+                  !hasLoopConfig ? (
+                    <LoopButton onClick={() => updateNodeConfig('loopSource', '')} />
+                  ) : undefined
+                }
+              >
+                <VariableInput
+                  value={String(config.recordId ?? '')}
+                  variables={variableOptions}
+                  multiline
+                  placeholder="输入 / 选择变量"
+                  onChange={(value) => updateNodeConfig('recordId', value)}
+                />
+              </FieldBlock>
+              <FieldBlock
+                label="字段"
+                required
+                action={
+                  !hasLoopConfig ? (
+                    <LoopButton onClick={() => updateNodeConfig('loopSource', '')} />
+                  ) : undefined
+                }
+              >
+                <FieldMappingEditor
+                  value={config.fields}
+                  fields={configFields}
+                  variables={variableOptions}
+                  onChange={(value) => updateNodeConfig('fields', value)}
+                />
+              </FieldBlock>
+            </>
+          )}
 
-        {selectedNode.type === 'httpRequest' && (
-          <>
-            <FieldBlock label="请求方法" required>
-              <MethodSelect
-                value={String(config.method ?? 'GET')}
-                onChange={(method) => updateNodeConfig('method', method)}
-              />
-            </FieldBlock>
-            <FieldBlock label="请求 URL" required>
-              <ConditionValueInput
-                value={String(config.url ?? '')}
-                variables={variableOptions}
-                placeholder="输入 / 选择变量"
-                onChange={(value) => updateNodeConfig('url', value)}
-              />
-            </FieldBlock>
-            <FieldBlock label="请求头">
-              <KeyValueEditor
-                value={config.headers}
-                keyPlaceholder="Header"
-                valuePlaceholder="值"
-                variables={variableOptions}
-                onChange={(value) => updateNodeConfig('headers', value)}
-              />
-            </FieldBlock>
-            <FieldBlock label="Body">
-              <BodyTypeSelect
-                value={String(config.bodyType ?? 'none')}
-                onChange={(bodyType) => updateNodeConfig('bodyType', bodyType)}
-              />
-            </FieldBlock>
-            {String(config.bodyType ?? 'none') !== 'none' && (
-              <FieldBlock label="请求体">
+          {selectedNode.type === 'sendEmail' && (
+            <>
+              <FieldBlock label="自定义邮件服务器">
+                <div className="flex flex-wrap gap-2">
+                  <MailTransportConfigDialog
+                    value={config.mailTransportConfig}
+                    onChange={(value) => updateNodeConfig('mailTransportConfig', value)}
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => updateNodeConfig('mailTransportConfig', undefined)}
+                  >
+                    重置
+                  </Button>
+                </div>
+              </FieldBlock>
+              <FieldBlock
+                label="收件人"
+                required
+                action={
+                  !hasLoopConfig ? (
+                    <LoopButton onClick={() => updateNodeConfig('loopSource', '')} />
+                  ) : undefined
+                }
+              >
+                <VariableInput
+                  value={String(config.to ?? '')}
+                  variables={variableOptions}
+                  multiline
+                  placeholder="输入 / 选择变量"
+                  onChange={(value) => updateNodeConfig('to', value)}
+                />
+              </FieldBlock>
+              <FieldBlock label="抄送">
+                <VariableInput
+                  value={String(config.cc ?? '')}
+                  variables={variableOptions}
+                  multiline
+                  placeholder="输入 / 选择变量"
+                  onChange={(value) => updateNodeConfig('cc', value)}
+                />
+              </FieldBlock>
+              <FieldBlock label="密送">
+                <VariableInput
+                  value={String(config.bcc ?? '')}
+                  variables={variableOptions}
+                  multiline
+                  placeholder="输入 / 选择变量"
+                  onChange={(value) => updateNodeConfig('bcc', value)}
+                />
+              </FieldBlock>
+              <FieldBlock label="发件人名称">
+                <VariableInput
+                  value={String(config.senderName ?? '')}
+                  variables={variableOptions}
+                  multiline
+                  placeholder="输入 / 选择变量"
+                  onChange={(value) => updateNodeConfig('senderName', value)}
+                />
+              </FieldBlock>
+              <FieldBlock label="回复邮件地址">
+                <VariableInput
+                  value={String(config.replyTo ?? '')}
+                  variables={variableOptions}
+                  multiline
+                  placeholder="输入 / 选择变量"
+                  onChange={(value) => updateNodeConfig('replyTo', value)}
+                />
+              </FieldBlock>
+              <FieldBlock label="主题" required>
+                <VariableInput
+                  value={String(config.subject ?? '')}
+                  variables={variableOptions}
+                  multiline
+                  placeholder="输入 / 选择变量"
+                  onChange={(value) => updateNodeConfig('subject', value)}
+                />
+              </FieldBlock>
+              <FieldBlock
+                label="正文"
+                required
+                action={
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button className="h-7 px-2 text-xs font-normal" size="sm" variant="outline">
+                        编辑
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-2xl">
+                      <DialogTitle>编辑正文</DialogTitle>
+                      <VariableInput
+                        value={String(config.body ?? '')}
+                        variables={variableOptions}
+                        multiline
+                        placeholder="输入 / 选择变量"
+                        onChange={(value) => updateNodeConfig('body', value)}
+                      />
+                    </DialogContent>
+                  </Dialog>
+                }
+              >
                 <VariableInput
                   value={String(config.body ?? '')}
                   variables={variableOptions}
@@ -5331,18 +6493,86 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
                   onChange={(value) => updateNodeConfig('body', value)}
                 />
               </FieldBlock>
-            )}
-          </>
-        )}
+            </>
+          )}
 
-        {selectedNode.type === 'condition' && renderConditionEditor()}
+          {selectedNode.type === 'httpRequest' && (
+            <>
+              <FieldBlock
+                label="请求方法"
+                required
+                action={
+                  !hasLoopConfig ? (
+                    <LoopButton onClick={() => updateNodeConfig('loopSource', '')} />
+                  ) : undefined
+                }
+              >
+                <MethodSelect
+                  value={String(config.method ?? '')}
+                  onChange={(method) => updateNodeConfig('method', method)}
+                />
+              </FieldBlock>
+              <FieldBlock label="请求 URL" required>
+                <VariableInput
+                  value={String(config.url ?? '')}
+                  variables={variableOptions}
+                  multiline
+                  placeholder="输入 / 选择变量"
+                  onChange={(value) => updateNodeConfig('url', value)}
+                />
+              </FieldBlock>
+              <FieldBlock label="请求头">
+                <KeyValueEditor
+                  value={config.headers}
+                  keyPlaceholder="Header"
+                  valuePlaceholder="值"
+                  variables={variableOptions}
+                  onChange={(value) => updateNodeConfig('headers', value)}
+                />
+              </FieldBlock>
+              <FieldBlock label="Body">
+                <BodyTypeSelect
+                  value={String(config.bodyType ?? 'none')}
+                  onChange={(bodyType) => updateNodeConfig('bodyType', bodyType)}
+                />
+              </FieldBlock>
+              {String(config.bodyType ?? 'none') !== 'none' && (
+                <FieldBlock label="请求体">
+                  <VariableInput
+                    value={String(config.body ?? '')}
+                    variables={variableOptions}
+                    multiline
+                    placeholder="输入 / 选择变量"
+                    onChange={(value) => updateNodeConfig('body', value)}
+                  />
+                </FieldBlock>
+              )}
+            </>
+          )}
 
-        <div className="space-y-3 border-t pt-4">
-          <div className="text-sm font-medium">测试步骤</div>
+          {selectedNode.type === 'condition' && renderConditionEditor()}
+        </PanelSection>
+
+        <PanelSection title="测试步骤">
           <div className="text-xs leading-relaxed text-muted-foreground">
             测试此步骤以确认其配置正确。测试成功后，此步骤才允许启用自动化。
           </div>
-          <div className="flex justify-end">
+          {selectedNode.type === 'sendEmail' && (
+            <FieldBlock label="取消订阅列表">
+              <Input placeholder="输入 / 选择变量" disabled />
+            </FieldBlock>
+          )}
+          <div className="flex justify-end gap-2">
+            {selectedNode.type === 'sendEmail' && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!isWorkflowNodeComplete(selectedNode)}
+                onClick={handleTestSelectedNode}
+              >
+                生成预览
+              </Button>
+            )}
             <Button
               size="sm"
               variant="outline"
@@ -5350,37 +6580,37 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
               onClick={handleTestSelectedNode}
             >
               <Play className="size-4" />
-              运行测试
+              {selectedNode.type === 'sendEmail' ? '按配置运行' : '运行测试'}
             </Button>
           </div>
-        </div>
+        </PanelSection>
 
         {selectedNodeResult && (
-          <div className="space-y-3 border-t pt-4">
-            <div className="text-sm font-medium">结果</div>
-            <div className="space-y-3 rounded-md border p-3 text-xs">
+          <PanelSection title="结果">
+            <div className="space-y-3 text-xs">
               {!selectedNodeResultIsCurrent && (
                 <div className="rounded-md border border-yellow-300 bg-yellow-50 px-2 py-1 text-center text-sm text-yellow-600">
-                  测试结果可能已经过期，请重新执行测试步骤获取结果
+                  测试结果已过期,请重新执行测试步骤获取结果
                 </div>
               )}
-              <div className="flex items-center gap-2 text-emerald-600">
-                <CheckCircle2 className="size-4" />
-                <span className="font-medium">运行成功</span>
+              <div className="flex flex-row items-start gap-2 rounded-md border bg-muted px-4 py-3 text-sm text-emerald-600">
+                <CheckCircle2 className="mt-1 size-4 shrink-0" />
+                运行成功
               </div>
-              <div className="text-muted-foreground">
-                运行于 {formatRelativeTime(selectedNodeResult.testedAt)}
+              <div className="space-x-1 text-xs text-muted-foreground">
+                <span>运行于</span>
+                <span>{formatRelativeTime(selectedNodeResult.testedAt)}</span>
               </div>
               <ResultSection
                 title="输入"
-                rows={buildTestInputRows(resultNode, tables, configFields)}
+                rows={buildTestInputRows(resultNode, knownTables, configFields)}
               />
               <ResultSection
                 title="输出"
-                rows={buildTestOutputRows(resultNode, tables, configFields, baseId)}
+                rows={buildTestOutputRows(resultNode, knownTables, configFields, baseId)}
               />
             </div>
-          </div>
+          </PanelSection>
         )}
       </div>
     );
@@ -5400,43 +6630,78 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
   const renderWorkflowNode = (node: IWorkflowNode, index: number) => {
     const status = getNodeStatus(node);
     const StatusIcon = status.Icon;
+    const nodeTableName = knownTables.find((table) => table.id === node.config?.tableId)?.name;
+    const nodeDescription = (() => {
+      const customDescription =
+        typeof node.config?.note === 'string' ? node.config.note.trim() : '';
+      if (customDescription) return customDescription;
+      if (!nodeTableName) return getNodeDescription(node);
+      switch (node.type) {
+        case 'recordCreated':
+          return `当在 ${nodeTableName} 表格中新建记录时`;
+        case 'recordUpdated':
+          return `当 ${nodeTableName} 表格中的记录更新时`;
+        case 'recordCreatedOrUpdated':
+          return `当 ${nodeTableName} 表格中的记录创建或更新时`;
+        case 'recordMatchesConditions':
+          return `当 ${nodeTableName} 表格中的记录满足条件时`;
+        case 'buttonClick':
+          return `当点击 ${nodeTableName} 表格中的按钮时`;
+        case 'formSubmitted':
+          return `当 ${nodeTableName} 表格中的表单提交时`;
+        case 'createRecord':
+          return `在 ${nodeTableName} 表格中创建新记录。`;
+        case 'updateRecord':
+          return `更新 ${nodeTableName} 表格中的记录。`;
+        case 'getRecords':
+          return `从 ${nodeTableName} 表格中获取记录。`;
+        default:
+          return getNodeDescription(node);
+      }
+    })();
     const categoryLabel =
-      node.category === 'trigger' ? '触发器' : node.category === 'logic' ? '逻辑' : '操作';
+      node.category === 'trigger' ? '触发器' : node.category === 'logic' ? '逻辑判断' : '执行操作';
+    const categoryClassName =
+      node.category === 'trigger'
+        ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300'
+        : node.category === 'logic'
+          ? 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-300'
+          : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300';
     return (
       <button
         className={cn(
-          'flex w-[340px] max-w-full select-none items-center gap-3 rounded-lg border bg-background p-4 text-left shadow-sm transition hover:border-primary/60 hover:shadow-md',
-          selectedNodeId === node.id && 'border-primary shadow-md'
+          'flex h-[90px] w-[370px] max-w-full select-none items-center gap-3 rounded-lg border bg-background p-4 text-left shadow-sm transition hover:border-primary/60 hover:shadow-md',
+          selectedNodeId === node.id && 'border-blue-500 shadow-md ring-1 ring-blue-500/40'
         )}
         type="button"
         onClick={() => setSelectedNodeId(node.id)}
       >
         <NodeIconBadge className="size-10" iconClassName="size-5" type={node.type} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <div className="truncate text-sm font-medium">
-              {index + 1}. {getNodeLabel(node)}
-            </div>
-            <Badge className="shrink-0" variant="secondary">
-              {categoryLabel}
-            </Badge>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span
-                    className="inline-flex size-5 shrink-0 items-center justify-center"
-                    aria-label={status.label}
-                  >
-                    <StatusIcon className={cn('size-4', status.iconClassName)} />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>{status.label}</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+        <div className="flex min-w-0 flex-1 flex-col gap-1 overflow-hidden">
+          <div className="truncate text-sm font-medium leading-5">
+            {index + 1}. {getNodeLabel(node)}
           </div>
-          <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-            {getNodeDescription(node)}
+          <div className="line-clamp-2 break-all text-xs font-normal leading-4 text-muted-foreground">
+            {nodeDescription}
           </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2 self-center">
+          <Badge className={cn('shrink-0 border font-normal', categoryClassName)} variant="outline">
+            {categoryLabel}
+          </Badge>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  className="inline-flex size-5 shrink-0 items-center justify-center"
+                  aria-label={status.label}
+                >
+                  <StatusIcon className={cn('size-4', status.iconClassName)} />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{status.label}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </button>
     );
@@ -5684,27 +6949,54 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
   };
 
   const isActive = Boolean((workflow as IWorkflowVo | undefined)?.isActive);
-  const canActive = checkCanActive().canActive;
+  const hasUnpublishedChanges = Boolean(isActive && workflowSignature !== activeRuntimeSignature);
+  const activeCheck = checkCanActive();
+  const canActive = activeCheck.canActive;
   const canRunTest = workflowValidation.canRun;
   const activeSwitchDisabled = activeMutation.isPending || (!isActive && !canActive);
-  const selectedPanelNodeResult = selectedNode ? nodeTestResults[selectedNode.id] : undefined;
-  const footerMessage = !workflowValidation.canRun
-    ? workflowValidation.message
-    : !hasPassedAllNodeTests && !isActive
-      ? '启用前需要完成所有节点测试'
+  const activeDisabledReason = activeMutation.isPending
+    ? '正在更新自动化状态'
+    : !isActive && !canActive
+      ? activeCheck.message
       : '';
+  const allRuns = runList?.runs ?? [];
+  const runs = allRuns;
+  const runStats = {
+    success: runSummary?.success ?? 0,
+    failed: runSummary?.failed ?? 0,
+    running: runSummary?.running ?? 0,
+    waiting: runSummary?.waiting ?? 0,
+    skipped: runSummary?.skipped ?? 0,
+  };
+  const averageRunDuration = runSummary?.averageDuration;
+  const hasRunHistory = Boolean(runSummary?.rowCount ?? runList?.rowCount ?? 0);
+  const averageRunDurationText = formatDuration(averageRunDuration);
+  const [averageRunDurationAmount, averageRunDurationUnit] = averageRunDurationText.split(' ');
+  const runStatusFilterLabel =
+    RUN_STATUS_FILTERS.find((item) => item.value === runStatusFilter)?.label ?? '状态';
+  const runDurationFilterLabel =
+    RUN_DURATION_FILTERS.find((item) => item.value === runDurationFilter)?.label ?? '运行耗时';
 
   return (
     <div className="flex size-full min-h-0 flex-col bg-background">
       <div className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
         {headLeft}
-        <Switch
-          checked={isActive}
-          disabled={activeSwitchDisabled}
-          title={activeSwitchDisabled && !isActive ? checkCanActive().message : undefined}
-          onCheckedChange={handleActiveToggle}
-        />
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex">
+                <Switch
+                  checked={isActive}
+                  disabled={activeSwitchDisabled}
+                  onCheckedChange={handleActiveToggle}
+                />
+              </span>
+            </TooltipTrigger>
+            {activeDisabledReason && <TooltipContent>{activeDisabledReason}</TooltipContent>}
+          </Tooltip>
+        </TooltipProvider>
         <Input
+          ref={workflowNameInputRef}
           className="h-8 max-w-72 border-0 px-1 text-base font-medium shadow-none focus-visible:ring-0"
           value={workflowName}
           placeholder={t('noun.automation')}
@@ -5720,11 +7012,385 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
           <Play className="size-4" />
           运行测试
         </Button>
-        <Button size="sm" variant="outline" disabled={isSaving} onClick={saveDraft}>
-          <Save className="size-4" />
-          保存
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            setIsRunHistoryOpen(true);
+            if (isRunHistoryOpen) {
+              void refetchRuns();
+              void refetchRunSummary();
+            }
+          }}
+        >
+          运行历史
         </Button>
+        <BaseNodeMore
+          resourceType={BaseNodeResourceType.Workflow}
+          resourceId={workflowId}
+          contentAlign="end"
+          onRename={() => {
+            workflowNameInputRef.current?.focus();
+            workflowNameInputRef.current?.select();
+          }}
+        >
+          <Button size="icon-sm" variant="ghost" aria-label="更多">
+            <MoreHorizontal className="size-4" />
+          </Button>
+        </BaseNodeMore>
       </div>
+
+      {hasUnpublishedChanges && (
+        <div className="relative z-10 border-b bg-background px-3 py-2">
+          <div className="flex min-h-10 items-center gap-2 rounded-md border border-amber-500 bg-amber-50 px-3 py-2 text-sm text-amber-950 shadow-sm dark:bg-amber-950/40 dark:text-amber-100">
+            <TriangleAlert className="size-4 shrink-0" />
+            <span className="min-w-0 flex-1">
+              您有未发布的更改需要应用到实时自动化。点击更新按钮应用它们。
+            </span>
+            <Button
+              size="sm"
+              type="button"
+              variant="outline"
+              disabled={activeMutation.isPending || isSaving}
+              onClick={handleDiscardDraft}
+            >
+              重置
+            </Button>
+            <Button
+              size="sm"
+              type="button"
+              disabled={activeMutation.isPending || isSaving || !canActive}
+              title={!canActive ? activeCheck.message : undefined}
+              onClick={handlePublish}
+            >
+              更新
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {canActive && !isActive && (
+        <div className="relative z-10 border-b bg-background px-3 py-2">
+          <div className="relative flex min-h-10 items-center gap-2 rounded-md border border-blue-600 bg-blue-50 px-3 py-2 text-sm text-blue-950 shadow-sm dark:bg-blue-950/40 dark:text-blue-100">
+            <span className="absolute -top-[5px] left-5 size-2 rotate-45 border-l border-t border-blue-600 bg-blue-50 dark:bg-blue-950" />
+            <Bell className="size-4 shrink-0" />
+            <span className="min-w-0 flex-1">
+              此自动化流程已配置完成但尚未启用，启用后才会生效。
+            </span>
+            <Button size="sm" disabled={activeMutation.isPending} onClick={handleActivate}>
+              立即启用
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <Sheet open={isRunHistoryOpen} onOpenChange={setIsRunHistoryOpen}>
+        <SheetContent side="right" className="flex w-[400px] max-w-full flex-col gap-0 p-0">
+          <div className="border-b p-4">
+            <SheetTitle>运行历史</SheetTitle>
+            <SheetDescription className="sr-only">最近 100 次自动化运行记录。</SheetDescription>
+          </div>
+          <div className="space-y-3 p-3">
+            {isActive && (
+              <div className="rounded-md border border-blue-700 bg-blue-50 p-3 text-sm text-blue-950 dark:bg-blue-950/40 dark:text-blue-100">
+                有关自动化 {savedWorkflowName} 的通知目前正在发送给 {lastModifiedUserName}
+                ，即最后更新此自动化的人
+              </div>
+            )}
+            <div className="flex items-center gap-2 text-xs">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button size="xs" variant="ghost" className="h-7 gap-1 px-2">
+                    {runStatusFilterLabel}
+                    <ChevronDown className="size-3" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-36 p-1">
+                  {RUN_STATUS_FILTERS.map((item) => (
+                    <button
+                      key={item.value}
+                      className={cn(
+                        'flex h-8 w-full items-center justify-between rounded-md px-2 text-left text-sm hover:bg-accent',
+                        runStatusFilter === item.value && 'bg-accent'
+                      )}
+                      type="button"
+                      onClick={() => setRunStatusFilter(item.value)}
+                    >
+                      {item.label}
+                      {runStatusFilter === item.value && <Check className="size-4" />}
+                    </button>
+                  ))}
+                </PopoverContent>
+              </Popover>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button size="xs" variant="ghost" className="h-7 gap-1 px-2">
+                    {runDurationFilterLabel}
+                    <ChevronDown className="size-3" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-44 p-1">
+                  {RUN_DURATION_FILTERS.map((item) => (
+                    <button
+                      key={item.value}
+                      className={cn(
+                        'flex h-8 w-full items-center justify-between rounded-md px-2 text-left text-sm hover:bg-accent',
+                        runDurationFilter === item.value && 'bg-accent'
+                      )}
+                      type="button"
+                      onClick={() => setRunDurationFilter(item.value)}
+                    >
+                      {item.label}
+                      {runDurationFilter === item.value && <Check className="size-4" />}
+                    </button>
+                  ))}
+                </PopoverContent>
+              </Popover>
+              <div className="relative min-w-0 flex-1">
+                <DateRangePicker
+                  className="h-7 w-full text-xs"
+                  options={{
+                    formatting: {
+                      date: DateFormattingPreset.ISO,
+                      time: TimeFormatting.Hour24,
+                      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone as ITimeZoneString,
+                    },
+                  }}
+                  value={runDateRange}
+                  onChange={setRunDateRange}
+                />
+                {runDateRange && (
+                  <Button
+                    className="absolute right-1 top-1/2 size-5 -translate-y-1/2 p-0"
+                    size="icon-xs"
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setRunDateRange(null)}
+                  >
+                    <X className="size-3" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+          {hasRunHistory ? (
+            <>
+              <ScrollArea className="min-h-0 flex-1 px-3">
+                {runs.length ? (
+                  <div className="divide-y pb-3">
+                    {runs.map((run) => {
+                      const isExpanded = expandedRunId === run.id;
+                      const duration = getRunDuration(run);
+                      const statusMeta = getRunStatusMeta(run.status);
+                      return (
+                        <div key={run.id}>
+                          <button
+                            className="flex w-full items-center gap-2 rounded-none px-3 py-2 text-left text-sm hover:bg-muted"
+                            onClick={() => setExpandedRunId(isExpanded ? undefined : run.id)}
+                          >
+                            <TeableChevronRight
+                              className={cn('size-4 shrink-0 transition-transform', {
+                                'rotate-90': isExpanded,
+                              })}
+                            />
+                            <span className="w-14 text-xs">{formatDuration(duration)}</span>
+                            <span
+                              className={cn(
+                                'flex min-w-0 flex-1 items-center gap-2 text-[13px]',
+                                statusMeta.className
+                              )}
+                            >
+                              <statusMeta.Icon className="size-4 shrink-0" />
+                              {statusMeta.label}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {formatTime(run.startedTime)}
+                            </span>
+                          </button>
+                          {isExpanded && (
+                            <div className="border-t">
+                              {run.steps?.map((step, index) => {
+                                const stepNode = nodeById.get(step.nodeId);
+                                const stepPanelId = `${run.id}-${step.nodeId}-${index}`;
+                                return (
+                                  <WorkflowRunStepDetail
+                                    key={stepPanelId}
+                                    baseId={baseId}
+                                    fields={workflowFields}
+                                    node={stepNode}
+                                    runStartedTime={run.startedTime}
+                                    step={step}
+                                    tables={knownTables}
+                                  />
+                                );
+                              })}
+                              {run.error && (
+                                <div className="rounded border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
+                                  {run.error}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex h-12 items-center justify-center">
+                    <span className="text-xs text-primary/60">
+                      当自动化流程运行后，这里会展示运行历史记录。
+                    </span>
+                  </div>
+                )}
+              </ScrollArea>
+              <Collapsible
+                className="shrink-0 border-t"
+                open={isRunOverviewOpen}
+                onOpenChange={setIsRunOverviewOpen}
+              >
+                <CollapsibleTrigger asChild>
+                  <button
+                    className="flex w-full items-center justify-between px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800/50"
+                    type="button"
+                  >
+                    <span>概览</span>
+                    {isRunOverviewOpen ? (
+                      <ChevronUp className="size-4 text-slate-400 dark:text-slate-500" />
+                    ) : (
+                      <ChevronDown className="size-4 text-slate-400 dark:text-slate-500" />
+                    )}
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="mx-2 mb-2">
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {[
+                        {
+                          label: '执行成功',
+                          filterValue: 'success',
+                          value: runStats.success,
+                          Icon: Check,
+                          className:
+                            'border-green-200/70 bg-green-50/70 hover:border-green-300/80 hover:bg-green-100/80 dark:border-green-800/60 dark:bg-green-950/35 dark:hover:border-green-700/70 dark:hover:bg-green-950/55',
+                          selectedClassName:
+                            'border-green-300 bg-green-100 shadow-sm ring-1 ring-inset ring-green-300/70 dark:border-green-700/80 dark:bg-green-950/70 dark:ring-green-700/60',
+                          iconClassName: 'text-green-600 dark:text-green-300',
+                          valueClassName: 'text-green-600 dark:text-green-300',
+                        },
+                        {
+                          label: '执行失败',
+                          filterValue: 'failed',
+                          value: runStats.failed,
+                          Icon: X,
+                          className:
+                            'border-red-200/70 bg-red-50/70 hover:border-red-300/80 hover:bg-red-100/80 dark:border-red-800/60 dark:bg-red-950/35 dark:hover:border-red-700/70 dark:hover:bg-red-950/55',
+                          selectedClassName:
+                            'border-red-300 bg-red-100 shadow-sm ring-1 ring-inset ring-red-300/70 dark:border-red-700/80 dark:bg-red-950/70 dark:ring-red-700/60',
+                          iconClassName: 'text-red-600 dark:text-red-300',
+                          valueClassName: 'text-red-600 dark:text-red-300',
+                        },
+                        {
+                          label: '运行中',
+                          filterValue: 'running',
+                          value: runStats.running,
+                          Icon: ArrowDownUp,
+                          className:
+                            'border-amber-200/80 bg-amber-50/80 hover:border-amber-300/80 hover:bg-amber-100/80 dark:border-amber-800/60 dark:bg-amber-950/30 dark:hover:border-amber-700/70 dark:hover:bg-amber-950/50',
+                          selectedClassName:
+                            'border-amber-300 bg-amber-100 shadow-sm ring-1 ring-inset ring-amber-300/80 dark:border-amber-700/80 dark:bg-amber-950/65 dark:ring-amber-700/70',
+                          iconClassName: 'text-amber-600 dark:text-amber-300',
+                          valueClassName: 'text-amber-600 dark:text-amber-300',
+                        },
+                        {
+                          label: '等待中',
+                          filterValue: 'waiting',
+                          value: runStats.waiting,
+                          Icon: Clock,
+                          className:
+                            'border-sky-200/80 bg-sky-50/80 hover:border-sky-300/80 hover:bg-sky-100/80 dark:border-sky-800/60 dark:bg-sky-950/30 dark:hover:border-sky-700/70 dark:hover:bg-sky-950/50',
+                          selectedClassName:
+                            'border-sky-300 bg-sky-100 shadow-sm ring-1 ring-inset ring-sky-300/80 dark:border-sky-700/80 dark:bg-sky-950/65 dark:ring-sky-700/70',
+                          iconClassName: 'text-sky-600 dark:text-sky-300',
+                          valueClassName: 'text-sky-600 dark:text-sky-300',
+                        },
+                        {
+                          label: '已取消',
+                          filterValue: 'skipped',
+                          value: runStats.skipped,
+                          Icon: CircleMinus,
+                          className:
+                            'border-zinc-200/80 bg-zinc-50/80 hover:border-zinc-300/80 hover:bg-zinc-100/80 dark:border-zinc-700/70 dark:bg-zinc-900/50 dark:hover:border-zinc-600/70 dark:hover:bg-zinc-900/70',
+                          selectedClassName:
+                            'border-zinc-300 bg-zinc-100 shadow-sm ring-1 ring-inset ring-zinc-300/80 dark:border-zinc-600/80 dark:bg-zinc-900/75 dark:ring-zinc-600/70',
+                          iconClassName: 'text-zinc-600 dark:text-zinc-300',
+                          valueClassName: 'text-zinc-600 dark:text-zinc-300',
+                        },
+                      ].map((item) => (
+                        <button
+                          key={item.label}
+                          className={cn(
+                            'inline-flex whitespace-nowrap text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 gap-2 hover:text-accent-foreground group relative h-[72px] flex-col items-start justify-between rounded-lg border px-2.5 py-2 text-left transition-all duration-200',
+                            runStatusFilter === item.filterValue
+                              ? cn('hover:bg-accent dark:hover:bg-white/10', item.selectedClassName)
+                              : cn('hover:shadow-[0_0_0_1px_rgba(15,23,42,0.03)]', item.className)
+                          )}
+                          onClick={() => setRunStatusFilter(item.filterValue)}
+                          type="button"
+                        >
+                          <item.Icon
+                            className={cn(
+                              'absolute right-2.5 top-2.5 size-3 opacity-60 transition-opacity duration-200 group-hover:opacity-90',
+                              item.iconClassName
+                            )}
+                          />
+                          <span
+                            className={cn(
+                              'text-2xl font-semibold leading-none tabular-nums',
+                              runStatusFilter === item.filterValue
+                                ? item.valueClassName
+                                : 'text-slate-700 dark:text-slate-100'
+                            )}
+                          >
+                            {item.value}
+                          </span>
+                          <span
+                            className="line-clamp-1 text-xs font-medium text-slate-500 dark:text-slate-300"
+                            title={item.label}
+                          >
+                            {item.label}
+                          </span>
+                        </button>
+                      ))}
+                      <div className="relative flex h-[72px] flex-col justify-between rounded-lg border border-slate-200/80 bg-slate-50/70 px-2.5 py-2 dark:border-slate-700/70 dark:bg-slate-900/50">
+                        <Clock className="absolute right-2.5 top-2.5 size-3 text-slate-500 opacity-70 dark:text-slate-300" />
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-2xl font-semibold leading-none tabular-nums text-slate-700 dark:text-slate-100">
+                            {averageRunDurationAmount}
+                          </span>
+                          {averageRunDurationUnit && (
+                            <span className="text-xs font-medium text-slate-400 dark:text-slate-400">
+                              {averageRunDurationUnit}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs font-medium text-slate-500 dark:text-slate-300">
+                          平均运行时间
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            </>
+          ) : (
+            <div className="flex min-h-0 flex-1 items-center justify-center">
+              <span className="text-xs text-primary/60">
+                当自动化流程运行后，这里会展示运行历史记录。
+              </span>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
 
       <div className="flex min-h-0 flex-1">
         <main
@@ -5790,57 +7456,28 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
                   ID: {selectedNode.id}
                 </Button>
               </div>
-              <Button size="icon-xs" variant="ghost" onClick={() => setSelectedNodeId(undefined)}>
-                <X className="size-4" />
-              </Button>
+              <div className="flex shrink-0 items-center gap-1">
+                <Button
+                  size="icon-xs"
+                  title="删除节点"
+                  variant="ghost"
+                  onClick={deleteSelectedNode}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+                <Button size="icon-xs" variant="ghost" onClick={() => setSelectedNodeId(undefined)}>
+                  <X className="size-4" />
+                </Button>
+              </div>
             </div>
             <ScrollArea className="flex-1">
               <div className="box-border w-[419px] max-w-full space-y-4 p-3">
                 {renderNodeConfig()}
               </div>
-              {selectedPanelNodeResult && (
-                <>
-                  <Separator />
-                  <div className="box-border w-[419px] max-w-full space-y-3 p-3">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm font-medium">运行记录</div>
-                      <Button size="icon-xs" variant="ghost" onClick={() => refetchRuns()}>
-                        <RefreshCw className="size-4" />
-                      </Button>
-                    </div>
-                    {runList?.runs?.length ? (
-                      <div className="space-y-2">
-                        {runList.runs.slice(0, 8).map((run) => (
-                          <div key={run.id} className="rounded-md border p-2 text-xs">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-medium">{run.status}</span>
-                              <span className="text-muted-foreground">
-                                {formatTime(run.startedTime)}
-                              </span>
-                            </div>
-                            {run.error && <div className="mt-1 text-destructive">{run.error}</div>}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-                        暂无运行记录
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
             </ScrollArea>
           </aside>
         )}
       </div>
-
-      {footerMessage && (
-        <div className="border-t bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-          <Plus className="mr-1 inline size-3" />
-          {footerMessage}
-        </div>
-      )}
     </div>
   );
 });

@@ -70,7 +70,7 @@ export const workflowRunVoSchema = z.object({
   id: z.string(),
   workflowId: z.string(),
   baseId: z.string(),
-  status: z.enum(['running', 'success', 'failed', 'skipped']),
+  status: z.enum(['running', 'success', 'failed', 'skipped', 'waiting']),
   triggerType: z.string().optional().nullable(),
   input: z.unknown().optional().nullable(),
   output: z.unknown().optional().nullable(),
@@ -157,12 +157,32 @@ export const workflowRunListVoSchema = z.object({
   runs: z.array(workflowRunVoSchema),
 });
 
+export const workflowRunSummaryVoSchema = z.object({
+  rowCount: z.number(),
+  success: z.number(),
+  failed: z.number(),
+  running: z.number(),
+  waiting: z.number(),
+  skipped: z.number(),
+  averageDuration: z.number().optional(),
+});
+
 export type IWorkflowRo = z.infer<typeof workflowRoSchema>;
 export type IUpdateWorkflowRo = z.infer<typeof updateWorkflowRoSchema>;
 export type ICreateWorkflowGraphNodeRo = z.infer<typeof createWorkflowNodeRoSchema>;
 export type IUpdateWorkflowGraphNodeRo = z.infer<typeof updateWorkflowNodeRoSchema>;
 export type IActiveWorkflowRo = z.infer<typeof activeWorkflowRoSchema>;
 export type IWorkflowRunListVo = z.infer<typeof workflowRunListVoSchema>;
+export type IWorkflowRunSummaryVo = z.infer<typeof workflowRunSummaryVoSchema>;
+
+export interface IWorkflowRunListRo {
+  skip?: number;
+  take?: number;
+  status?: IWorkflowRunVo['status'];
+  duration?: string;
+  startedTimeFrom?: string;
+  startedTimeTo?: string;
+}
 
 export const createWorkflow = async (baseId: string, createWorkflowRo?: IWorkflowRo) => {
   return axios.post<IWorkflowVo>(urlBuilder(CREATE_WORKFLOW, { baseId }), createWorkflowRo);
@@ -260,6 +280,18 @@ export const testWorkflowNode = async (baseId: string, workflowId: string, nodeI
   return axios.post<IWorkflowRunVo>(urlBuilder(WORKFLOW_TEST_NODE, { baseId, workflowId, nodeId }));
 };
 
-export const listWorkflowRuns = async (baseId: string, workflowId: string) => {
-  return axios.get<IWorkflowRunListVo>(urlBuilder(WORKFLOW_RUN, { baseId, workflowId }));
+export const listWorkflowRuns = async (
+  baseId: string,
+  workflowId: string,
+  params?: IWorkflowRunListRo
+) => {
+  return axios.get<IWorkflowRunListVo>(urlBuilder(WORKFLOW_RUN, { baseId, workflowId }), {
+    params,
+  });
+};
+
+export const getWorkflowRunSummary = async (baseId: string, workflowId: string) => {
+  return axios.get<IWorkflowRunSummaryVo>(
+    `${urlBuilder(WORKFLOW_RUN, { baseId, workflowId })}/summary`
+  );
 };

@@ -15,143 +15,178 @@ import type {
 } from '@teable/openapi';
 import { EmitControllerEvent } from '../../event-emitter/decorators/emit-controller-event.decorator';
 import { Events } from '../../event-emitter/events';
-import { Permissions } from '../auth/decorators/permissions.decorator';
 import { ZodValidationPipe } from '../../zod.validation.pipe';
+import { Permissions } from '../auth/decorators/permissions.decorator';
 import { AutomationService } from './automation.service';
+
+const baseIdParam = 'baseId';
+const workflowIdParam = 'workflowId';
+const categoryParam = 'category';
+const nodeIdParam = 'nodeId';
+
+const workflowIdRoute = ':workflowId';
+const workflowActiveRoute = `${workflowIdRoute}/active`;
+const workflowActiveSnapshotRoute = `${workflowIdRoute}/active-snapshot`;
+const workflowTriggerRoute = `${workflowIdRoute}/trigger`;
+const workflowActionRoute = `${workflowIdRoute}/action`;
+const workflowLogicRoute = `${workflowIdRoute}/logic`;
+const workflowNodeRoute = `${workflowIdRoute}/:${categoryParam}/:${nodeIdParam}`;
+const workflowTestRoute = `${workflowIdRoute}/test`;
+const workflowTestNodeRoute = `${workflowTestRoute}/:${nodeIdParam}`;
+const workflowRunRoute = `${workflowIdRoute}/run`;
+const workflowRunSummaryRoute = `${workflowRunRoute}/summary`;
+
+const automationReadPermission = 'automation|read';
+const automationCreatePermission = 'automation|create';
+const automationUpdatePermission = 'automation|update';
+const automationDeletePermission = 'automation|delete';
 
 @Controller('api/base/:baseId/workflow')
 export class AutomationController {
   constructor(private readonly automationService: AutomationService) {}
 
-  @Permissions('automation|read')
+  @Permissions(automationReadPermission)
   @Get()
-  async list(@Param('baseId') baseId: string, @Query('onlyFirst') onlyFirst?: string) {
+  async list(@Param(baseIdParam) baseId: string, @Query('onlyFirst') onlyFirst?: string) {
     return this.automationService.list(baseId, onlyFirst === 'true');
   }
 
-  @Permissions('automation|create')
+  @Permissions(automationCreatePermission)
   @Post()
   @EmitControllerEvent(Events.WORKFLOW_CREATE)
   async create(
-    @Param('baseId') baseId: string,
+    @Param(baseIdParam) baseId: string,
     @Body(new ZodValidationPipe(workflowRoSchema)) ro: IWorkflowRo
   ) {
     return this.automationService.create(baseId, ro);
   }
 
-  @Permissions('automation|read')
-  @Get(':workflowId')
-  async get(@Param('baseId') baseId: string, @Param('workflowId') workflowId: string) {
+  @Permissions(automationReadPermission)
+  @Get(workflowIdRoute)
+  async get(@Param(baseIdParam) baseId: string, @Param(workflowIdParam) workflowId: string) {
     return this.automationService.get(baseId, workflowId);
   }
 
-  @Permissions('automation|update')
-  @Put(':workflowId')
+  @Permissions(automationUpdatePermission)
+  @Put(workflowIdRoute)
   @EmitControllerEvent(Events.WORKFLOW_UPDATE)
   async update(
-    @Param('baseId') baseId: string,
-    @Param('workflowId') workflowId: string,
+    @Param(baseIdParam) baseId: string,
+    @Param(workflowIdParam) workflowId: string,
     @Body(new ZodValidationPipe(updateWorkflowRoSchema)) ro: IUpdateWorkflowRo
   ) {
     return this.automationService.update(baseId, workflowId, ro);
   }
 
-  @Permissions('automation|delete')
-  @Delete(':workflowId')
+  @Permissions(automationDeletePermission)
+  @Delete(workflowIdRoute)
   @EmitControllerEvent(Events.WORKFLOW_DELETE)
-  async delete(@Param('baseId') baseId: string, @Param('workflowId') workflowId: string) {
+  async delete(@Param(baseIdParam) baseId: string, @Param(workflowIdParam) workflowId: string) {
     return this.automationService.delete(baseId, workflowId);
   }
 
-  @Permissions('automation|update')
-  @Put(':workflowId/active')
+  @Permissions(automationUpdatePermission)
+  @Put(workflowActiveRoute)
   @EmitControllerEvent(Events.WORKFLOW_UPDATE)
   async active(
-    @Param('baseId') baseId: string,
-    @Param('workflowId') workflowId: string,
+    @Param(baseIdParam) baseId: string,
+    @Param(workflowIdParam) workflowId: string,
     @Body(new ZodValidationPipe(activeWorkflowRoSchema)) ro: IActiveWorkflowRo
   ) {
     return this.automationService.updateActive(baseId, workflowId, ro);
   }
 
-  @Permissions('automation|read')
-  @Get(':workflowId/active-snapshot')
-  async activeSnapshot(@Param('baseId') baseId: string, @Param('workflowId') workflowId: string) {
+  @Permissions(automationReadPermission)
+  @Get(workflowActiveSnapshotRoute)
+  async activeSnapshot(
+    @Param(baseIdParam) baseId: string,
+    @Param(workflowIdParam) workflowId: string
+  ) {
     return this.automationService.getActiveSnapshot(baseId, workflowId);
   }
 
-  @Permissions('automation|create')
-  @Post(':workflowId/trigger')
+  @Permissions(automationCreatePermission)
+  @Post(workflowTriggerRoute)
   async createTrigger(
-    @Param('baseId') baseId: string,
-    @Param('workflowId') workflowId: string,
+    @Param(baseIdParam) baseId: string,
+    @Param(workflowIdParam) workflowId: string,
     @Body(new ZodValidationPipe(createWorkflowNodeRoSchema)) ro: ICreateWorkflowGraphNodeRo
   ) {
     return this.automationService.createNode(baseId, workflowId, 'trigger', ro);
   }
 
-  @Permissions('automation|create')
-  @Post(':workflowId/action')
+  @Permissions(automationCreatePermission)
+  @Post(workflowActionRoute)
   async createAction(
-    @Param('baseId') baseId: string,
-    @Param('workflowId') workflowId: string,
+    @Param(baseIdParam) baseId: string,
+    @Param(workflowIdParam) workflowId: string,
     @Body(new ZodValidationPipe(createWorkflowNodeRoSchema)) ro: ICreateWorkflowGraphNodeRo
   ) {
     return this.automationService.createNode(baseId, workflowId, 'action', ro);
   }
 
-  @Permissions('automation|create')
-  @Post(':workflowId/logic')
+  @Permissions(automationCreatePermission)
+  @Post(workflowLogicRoute)
   async createLogic(
-    @Param('baseId') baseId: string,
-    @Param('workflowId') workflowId: string,
+    @Param(baseIdParam) baseId: string,
+    @Param(workflowIdParam) workflowId: string,
     @Body(new ZodValidationPipe(createWorkflowNodeRoSchema)) ro: ICreateWorkflowGraphNodeRo
   ) {
     return this.automationService.createNode(baseId, workflowId, 'logic', ro);
   }
 
-  @Permissions('automation|update')
-  @Put(':workflowId/:category/:nodeId')
+  @Permissions(automationUpdatePermission)
+  @Put(workflowNodeRoute)
   async updateNode(
-    @Param('baseId') baseId: string,
-    @Param('workflowId') workflowId: string,
-    @Param('category') category: 'trigger' | 'action' | 'logic',
-    @Param('nodeId') nodeId: string,
+    @Param(baseIdParam) baseId: string,
+    @Param(workflowIdParam) workflowId: string,
+    @Param(categoryParam) category: 'trigger' | 'action' | 'logic',
+    @Param(nodeIdParam) nodeId: string,
     @Body(new ZodValidationPipe(updateWorkflowNodeRoSchema)) ro: IUpdateWorkflowGraphNodeRo
   ) {
     return this.automationService.updateNode(baseId, workflowId, category, nodeId, ro);
   }
 
-  @Permissions('automation|delete')
-  @Delete(':workflowId/:category/:nodeId')
+  @Permissions(automationDeletePermission)
+  @Delete(workflowNodeRoute)
   async deleteNode(
-    @Param('baseId') baseId: string,
-    @Param('workflowId') workflowId: string,
-    @Param('category') category: 'trigger' | 'action' | 'logic',
-    @Param('nodeId') nodeId: string
+    @Param(baseIdParam) baseId: string,
+    @Param(workflowIdParam) workflowId: string,
+    @Param(categoryParam) category: 'trigger' | 'action' | 'logic',
+    @Param(nodeIdParam) nodeId: string
   ) {
     return this.automationService.deleteNode(baseId, workflowId, category, nodeId);
   }
 
-  @Permissions('automation|update')
-  @Post(':workflowId/test')
-  async test(@Param('baseId') baseId: string, @Param('workflowId') workflowId: string) {
+  @Permissions(automationUpdatePermission)
+  @Post(workflowTestRoute)
+  async test(@Param(baseIdParam) baseId: string, @Param(workflowIdParam) workflowId: string) {
     return this.automationService.runManualTest(baseId, workflowId);
   }
 
-  @Permissions('automation|update')
-  @Post(':workflowId/test/:nodeId')
+  @Permissions(automationUpdatePermission)
+  @Post(workflowTestNodeRoute)
   async testNode(
-    @Param('baseId') baseId: string,
-    @Param('workflowId') workflowId: string,
-    @Param('nodeId') nodeId: string
+    @Param(baseIdParam) baseId: string,
+    @Param(workflowIdParam) workflowId: string,
+    @Param(nodeIdParam) nodeId: string
   ) {
     return this.automationService.runManualTest(baseId, workflowId, nodeId);
   }
 
-  @Permissions('automation|read')
-  @Get(':workflowId/run')
-  async runs(@Param('baseId') baseId: string, @Param('workflowId') workflowId: string) {
-    return this.automationService.listRuns(baseId, workflowId);
+  @Permissions(automationReadPermission)
+  @Get(workflowRunRoute)
+  async runs(
+    @Param(baseIdParam) baseId: string,
+    @Param(workflowIdParam) workflowId: string,
+    @Query() query: Record<string, string | undefined>
+  ) {
+    return this.automationService.listRuns(baseId, workflowId, query);
+  }
+
+  @Permissions(automationReadPermission)
+  @Get(workflowRunSummaryRoute)
+  async runSummary(@Param(baseIdParam) baseId: string, @Param(workflowIdParam) workflowId: string) {
+    return this.automationService.getRunSummary(baseId, workflowId);
   }
 }

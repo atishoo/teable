@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 /* eslint-disable sonarjs/cognitive-complexity */
-import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus, Optional } from '@nestjs/common';
 import { trace } from '@opentelemetry/api';
 import {
   CellFormat,
@@ -69,10 +69,18 @@ import {
   type RecordFilterOperator,
   type RecordFilterValue,
 } from '@teable/v2-core';
+import { isEqual } from 'lodash';
 import { ClsService } from 'nestjs-cls';
 import { CacheService } from '../../../cache/cache.service';
 import type { ICacheStore } from '../../../cache/types';
 import { CustomHttpException, getDefaultCodeByStatus } from '../../../custom.exception';
+import { EventEmitterService } from '../../../event-emitter/event-emitter.service';
+import {
+  Events,
+  RecordCreateEvent,
+  RecordUpdateEvent,
+  type IChangeRecord,
+} from '../../../event-emitter/events';
 import type { IClsStore } from '../../../types/cls';
 import { AggregationService } from '../../aggregation/aggregation.service';
 import { FieldService } from '../../field/field.service';
@@ -86,6 +94,11 @@ import { RecordService } from '../record.service';
 
 const internalServerError = 'Internal server error';
 const invalidFilterCode = 'validation.invalid_filter';
+interface IV2RecordUpdateEventData {
+  beforeRecordById: Map<string, IRecord>;
+  fieldIdsByRecordId: Map<string, string[]>;
+}
+
 const v1SymbolOperatorMap: Record<string, string> = {
   '=': 'is',
   '!=': 'isNot',
@@ -114,8 +127,167 @@ export class RecordOpenApiV2Service {
     private readonly cacheService: CacheService<ICacheStore>,
     private readonly fieldService: FieldService,
     private readonly recordPermissionService: RecordPermissionService,
-    private readonly aggregationService: AggregationService
+    private readonly aggregationService: AggregationService,
+    @Optional() private readonly eventEmitterService?: EventEmitterService
   ) {}
+
+  private getEventContext(entry?: { type: string; id: string }) {
+    const user = this.cls.get('user');
+    return {
+      ...(user?.id
+        ? {
+            user: {
+              id: user.id,
+              name: user.name ?? '',
+              email: user.email ?? '',
+            },
+          }
+        : {}),
+      ...(entry ? { entry } : {}),
+    };
+  }
+
+  private async getV2RecordSnapshotMap(
+    tableId: string,
+    recordIds: string[],
+    fieldIds?: string[]
+  ): Promise<Map<string, IRecord>> {
+    const projection = fieldIds?.length
+      ? Object.fromEntries(fieldIds.map((fieldId) => [fieldId, true]))
+      : undefined;
+    const snapshots = await this.recordService.getSnapshotBulkWithPermission(
+      tableId,
+      recordIds,
+      projection,
+      FieldKeyType.Id,
+      undefined,
+      true
+    );
+    return new Map(snapshots.map((snapshot) => [snapshot.data.id, snapshot.data as IRecord]));
+  }
+
+  private async getV2FieldIdByRequestKey(
+    tableId: string,
+    fieldKeys: string[],
+    fieldKeyType: FieldKeyType
+  ) {
+    if (fieldKeyType === FieldKeyType.Id) {
+      return new Map(fieldKeys.map((fieldKey) => [fieldKey, fieldKey]));
+    }
+    const fields = await this.fieldService.getFieldsByQuery(tableId);
+    return new Map(
+      fields.flatMap((field) => [
+        [field.name, field.id],
+        [field.id, field.id],
+      ])
+    );
+  }
+
+  private async prepareV2RecordUpdateEvent(
+    tableId: string,
+    requestRecords: { id: string; fields?: Record<string, unknown> }[],
+    fieldKeyType: FieldKeyType
+  ): Promise<IV2RecordUpdateEventData | undefined> {
+    if (!this.eventEmitterService) return undefined;
+    const fieldKeys = Array.from(
+      new Set(requestRecords.flatMap((record) => Object.keys(record.fields ?? {})))
+    );
+    if (!fieldKeys.length) return undefined;
+
+    const fieldIdByRequestKey = await this.getV2FieldIdByRequestKey(
+      tableId,
+      fieldKeys,
+      fieldKeyType
+    );
+    const fieldIdsByRecordId = new Map(
+      requestRecords
+        .map(
+          (record) =>
+            [
+              record.id,
+              Object.keys(record.fields ?? {})
+                .map((fieldKey) => fieldIdByRequestKey.get(fieldKey))
+                .filter((fieldId): fieldId is string => Boolean(fieldId)),
+            ] as const
+        )
+        .filter(([, fieldIds]) => fieldIds.length)
+    );
+    const recordIds = Array.from(fieldIdsByRecordId.keys());
+    const fieldIds = Array.from(new Set(Array.from(fieldIdsByRecordId.values()).flat()));
+    if (!recordIds.length || !fieldIds.length) return undefined;
+
+    return {
+      fieldIdsByRecordId,
+      beforeRecordById: await this.getV2RecordSnapshotMap(tableId, recordIds, fieldIds),
+    };
+  }
+
+  private buildV2ChangeRecord(
+    recordId: string,
+    fieldIds: string[],
+    beforeRecord: IRecord | undefined,
+    afterRecord: IRecord | undefined
+  ): IChangeRecord | undefined {
+    const beforeFields = (beforeRecord?.fields ?? {}) as Record<string, unknown>;
+    const afterFields = (afterRecord?.fields ?? {}) as Record<string, unknown>;
+    const fields = Object.fromEntries(
+      fieldIds
+        .map((fieldId) => {
+          const oldValue = beforeFields[fieldId];
+          const newValue = afterFields[fieldId];
+          return [fieldId, { oldValue, newValue }] as const;
+        })
+        .filter(([, change]) => !isEqual(change.oldValue, change.newValue))
+    );
+    return Object.keys(fields).length ? { id: recordId, fields } : undefined;
+  }
+
+  private async emitV2RecordUpdate(
+    tableId: string,
+    eventData: IV2RecordUpdateEventData | undefined
+  ) {
+    if (!this.eventEmitterService || !eventData) return;
+    const recordIds = Array.from(eventData.fieldIdsByRecordId.keys());
+    const fieldIds = Array.from(new Set(Array.from(eventData.fieldIdsByRecordId.values()).flat()));
+    const afterRecordById = await this.getV2RecordSnapshotMap(tableId, recordIds, fieldIds);
+    const changeRecords = recordIds
+      .map((recordId) => {
+        return this.buildV2ChangeRecord(
+          recordId,
+          eventData.fieldIdsByRecordId.get(recordId) ?? [],
+          eventData.beforeRecordById.get(recordId),
+          afterRecordById.get(recordId)
+        );
+      })
+      .filter((record): record is IChangeRecord => Boolean(record));
+    if (!changeRecords.length) return;
+    await this.eventEmitterService.emitAsync(
+      Events.TABLE_RECORD_UPDATE,
+      new RecordUpdateEvent(
+        tableId,
+        changeRecords.length === 1 ? changeRecords[0] : changeRecords,
+        undefined,
+        this.getEventContext()
+      )
+    );
+  }
+
+  private async emitV2RecordCreate(
+    tableId: string,
+    record: IRecord,
+    entry?: { type: string; id: string }
+  ) {
+    if (!this.eventEmitterService) return;
+    const recordById = await this.getV2RecordSnapshotMap(tableId, [record.id]);
+    await this.eventEmitterService.emitAsync(
+      Events.TABLE_RECORD_CREATE,
+      new RecordCreateEvent(
+        tableId,
+        recordById.get(record.id) ?? record,
+        this.getEventContext(entry)
+      )
+    );
+  }
 
   private throwV2Error(
     error: {
@@ -602,6 +774,11 @@ export class RecordOpenApiV2Service {
             }
           : {}),
       };
+      const updateEventData = await this.prepareV2RecordUpdateEvent(
+        tableId,
+        [{ id: recordId, fields }],
+        updateRecordRo.fieldKeyType ?? FieldKeyType.Name
+      );
 
       const result = await executeUpdateRecordEndpoint(context, v2Input, commandBus);
       if (!(result.status === 200 && result.body.ok)) {
@@ -613,7 +790,9 @@ export class RecordOpenApiV2Service {
 
       await this.clearUndoRedoEnginePreference(tableId);
 
-      return result.body.data.record;
+      const record = result.body.data.record;
+      await this.emitV2RecordUpdate(tableId, updateEventData);
+      return record;
     }
     throw new HttpException(internalServerError, HttpStatus.INTERNAL_SERVER_ERROR);
   }
@@ -648,6 +827,11 @@ export class RecordOpenApiV2Service {
     const container = await this.v2ContainerService.getContainer();
     const commandBus = container.resolve<ICommandBus>(v2CoreTokens.commandBus);
     const context = await this.v2ContextFactory.createContext();
+    const updateEventData = await this.prepareV2RecordUpdateEvent(
+      tableId,
+      records,
+      updateRecordsRo.fieldKeyType ?? FieldKeyType.Name
+    );
     const updateResult = await executeUpdateRecordsEndpoint(
       context,
       {
@@ -671,6 +855,8 @@ export class RecordOpenApiV2Service {
     if (!updateResult.body.data.records) {
       throw new HttpException(internalServerError, HttpStatus.INTERNAL_SERVER_ERROR);
     }
+
+    await this.emitV2RecordUpdate(tableId, updateEventData);
 
     routeSpan?.setAttribute(
       'record.update.response.recordCount',
@@ -735,7 +921,9 @@ export class RecordOpenApiV2Service {
 
     if (result.status === 201 && result.body.ok) {
       await this.clearUndoRedoEnginePreference(tableId);
-      return result.body.data.record as IRecord;
+      const record = result.body.data.record as IRecord;
+      await this.emitV2RecordCreate(tableId, record, { type: 'form', id: formSubmitRo.viewId });
+      return record;
     }
 
     if (!result.body.ok) {

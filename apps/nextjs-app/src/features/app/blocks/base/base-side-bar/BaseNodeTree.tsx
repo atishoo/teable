@@ -664,7 +664,7 @@ export const BaseNodeTree = (props: IBaseNodeTreeProps) => {
                     <div className="flex min-w-0 flex-1 items-center gap-2">
                       <ItemIcon item={item} />
                       <div className="flex min-w-0 grow items-center gap-1" title={name}>
-                        <span className="truncate text-left">{name}</span>
+                        <span className="min-w-0 flex-1 truncate text-left">{name}</span>
 
                         <ItemStatus item={item} />
                         {
@@ -779,7 +779,7 @@ export const BaseNodeTree = (props: IBaseNodeTreeProps) => {
                           <ItemIcon item={item} />
                           <div className="flex min-w-0 grow items-center gap-1" title={name}>
                             <span
-                              className="truncate text-left"
+                              className="min-w-0 flex-1 truncate text-left"
                               onDoubleClick={() => {
                                 setEditingNodeId(nodeId);
                               }}

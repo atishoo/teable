@@ -23,18 +23,26 @@ import { isPlainObject } from 'lodash';
 import get from 'lodash/get';
 import { nanoid } from 'nanoid';
 import { ClsService } from 'nestjs-cls';
-import { Events } from '../../event-emitter/events';
-import type { RecordCreateEvent, RecordUpdateEvent } from '../../event-emitter/events';
-import { ButtonClickEvent } from '../../event-emitter/events/table/button.event';
-import type { IClsStore } from '../../types/cls';
 import { CustomHttpException } from '../../custom.exception';
+import { Events, RecordCreateEvent, RecordUpdateEvent } from '../../event-emitter/events';
+import type { ButtonClickEvent } from '../../event-emitter/events/table/button.event';
+import type { IClsStore } from '../../types/cls';
 import { MailSenderService } from '../mail-sender/mail-sender.service';
 import { RecordOpenApiService } from '../record/open-api/record-open-api.service';
 import { RecordService } from '../record/record.service';
 
-type WorkflowCategory = 'trigger' | 'action' | 'logic';
-type WorkflowRunStatus = 'running' | 'success' | 'failed' | 'skipped';
-type RuntimeStepStatus = 'success' | 'failed' | 'skipped';
+type IWorkflowCategory = 'trigger' | 'action' | 'logic';
+type IWorkflowRunStatus = 'running' | 'success' | 'failed' | 'skipped' | 'waiting';
+type IRuntimeStepStatus = 'success' | 'failed' | 'skipped';
+
+interface IWorkflowRunListQuery {
+  skip?: string;
+  take?: string;
+  status?: string;
+  duration?: string;
+  startedTimeFrom?: string;
+  startedTimeTo?: string;
+}
 
 interface IWorkflowSnapshot {
   nodes: IWorkflowNode[];
@@ -52,11 +60,23 @@ interface IRuntimeStep {
   nodeId: string;
   type: string;
   category: IWorkflowNode['category'];
-  status: RuntimeStepStatus;
+  status: IRuntimeStepStatus;
   input?: unknown;
   output?: unknown;
   error?: string;
   spent?: number;
+}
+
+interface IOperationRecordsCreateEvent {
+  reqParams?: {
+    tableId?: string;
+  };
+  reqUser?: {
+    id?: string;
+    name?: string;
+    email?: string;
+  };
+  resolveData?: unknown;
 }
 
 @Injectable()
@@ -190,7 +210,7 @@ export class AutomationService {
   async createNode(
     baseId: string,
     workflowId: string,
-    category: WorkflowCategory,
+    category: IWorkflowCategory,
     ro: ICreateWorkflowGraphNodeRo
   ) {
     const workflow = await this.findWorkflow(baseId, workflowId);
@@ -218,7 +238,7 @@ export class AutomationService {
   async updateNode(
     baseId: string,
     workflowId: string,
-    category: WorkflowCategory,
+    category: IWorkflowCategory,
     nodeId: string,
     ro: IUpdateWorkflowGraphNodeRo
   ) {
@@ -244,7 +264,12 @@ export class AutomationService {
     return updatedNode;
   }
 
-  async deleteNode(baseId: string, workflowId: string, category: WorkflowCategory, nodeId: string) {
+  async deleteNode(
+    baseId: string,
+    workflowId: string,
+    category: IWorkflowCategory,
+    nodeId: string
+  ) {
     const workflow = await this.findWorkflow(baseId, workflowId);
     const snapshot = this.getDraftSnapshot(workflow);
     const nodes = snapshot.nodes.filter(
@@ -264,13 +289,117 @@ export class AutomationService {
     });
   }
 
-  async listRuns(baseId: string, workflowId: string) {
+  async listRuns(baseId: string, workflowId: string, query: IWorkflowRunListQuery = {}) {
+    const skip = this.positiveInteger(query.skip, 0);
+    const take = Math.min(this.positiveInteger(query.take, 50), 100);
+    const where = this.getRunWhere(baseId, workflowId, query);
+
+    if (!query.duration || query.duration === 'all') {
+      const [rowCount, runs] = await this.prismaService.$transaction([
+        this.prismaService.workflowRun.count({ where }),
+        this.prismaService.workflowRun.findMany({
+          where,
+          orderBy: { startedTime: 'desc' },
+          skip,
+          take,
+        }),
+      ]);
+      return { rowCount, runs: runs.map((run) => this.runToVo(run)) };
+    }
+
     const runs = await this.prismaService.workflowRun.findMany({
-      where: { baseId, workflowId },
+      where,
       orderBy: { startedTime: 'desc' },
-      take: 100,
     });
-    return { rowCount: runs.length, runs: runs.map((run) => this.runToVo(run)) };
+    const filteredRuns = this.filterRunsByDuration(runs, query.duration);
+    return {
+      rowCount: filteredRuns.length,
+      runs: filteredRuns.slice(skip, skip + take).map((run) => this.runToVo(run)),
+    };
+  }
+
+  async getRunSummary(baseId: string, workflowId: string) {
+    const [summary] = await this.prismaService.$queryRaw<
+      Array<{
+        rowCount: number | bigint;
+        success: number | bigint;
+        failed: number | bigint;
+        running: number | bigint;
+        waiting: number | bigint;
+        skipped: number | bigint;
+        averageDuration: number | null;
+      }>
+    >(Prisma.sql`
+      SELECT
+        COUNT(*)::int AS "rowCount",
+        COUNT(*) FILTER (WHERE "status" = 'success')::int AS "success",
+        COUNT(*) FILTER (WHERE "status" = 'failed')::int AS "failed",
+        COUNT(*) FILTER (WHERE "status" = 'running')::int AS "running",
+        COUNT(*) FILTER (WHERE "status" = 'waiting')::int AS "waiting",
+        COUNT(*) FILTER (WHERE "status" = 'skipped')::int AS "skipped",
+        AVG(
+          COALESCE(
+            NULLIF(
+              (
+                SELECT SUM(
+                  CASE
+                    WHEN (step.value ->> 'spent') ~ '^-?[0-9]+(\\.[0-9]+)?$'
+                    THEN (step.value ->> 'spent')::double precision
+                    ELSE 0
+                  END
+                )
+                FROM jsonb_array_elements(
+                  CASE
+                    WHEN jsonb_typeof("steps"::jsonb) = 'array' THEN "steps"::jsonb
+                    ELSE '[]'::jsonb
+                  END
+                ) AS step(value)
+              ),
+              0
+            ),
+            CASE
+              WHEN "finished_time" IS NOT NULL
+              THEN EXTRACT(EPOCH FROM ("finished_time" - "started_time")) * 1000
+              ELSE NULL
+            END
+          )
+        )::double precision AS "averageDuration"
+      FROM "workflow_run"
+      WHERE "base_id" = ${baseId} AND "workflow_id" = ${workflowId}
+    `);
+    const averageDuration = this.numberValue(summary?.averageDuration);
+    return {
+      rowCount: this.numberValue(summary?.rowCount) ?? 0,
+      success: this.numberValue(summary?.success) ?? 0,
+      failed: this.numberValue(summary?.failed) ?? 0,
+      running: this.numberValue(summary?.running) ?? 0,
+      waiting: this.numberValue(summary?.waiting) ?? 0,
+      skipped: this.numberValue(summary?.skipped) ?? 0,
+      averageDuration,
+    };
+  }
+
+  @OnEvent(Events.OPERATION_RECORDS_CREATE, { async: true })
+  async handleOperationRecordsCreate(event: IOperationRecordsCreateEvent) {
+    if (this.cls.get('workflowContext')) return;
+    const tableId = this.optionalString(event.reqParams?.tableId);
+    if (!tableId) return;
+    const records = this.recordsFromCreateOperation(event.resolveData);
+    if (!records.length) return;
+
+    const baseId = await this.getBaseIdByTableId(tableId);
+    for (const record of records) {
+      await this.runMatchedWorkflows(baseId, 'recordCreated', {
+        tableId,
+        record,
+        user: this.operationUser(event.reqUser),
+      });
+      await this.runMatchedWorkflows(baseId, 'recordCreatedOrUpdated', {
+        tableId,
+        record,
+        user: this.operationUser(event.reqUser),
+      });
+    }
   }
 
   @OnEvent(Events.TABLE_BUTTON_CLICK, { async: true })
@@ -635,7 +764,7 @@ export class AutomationService {
 
     return {
       ...trigger,
-      user: this.triggerUser(),
+      user: isPlainObject(trigger.user) ? trigger.user : this.triggerUser(),
       record: {
         ...record,
         ...(recordName ? { name: recordName } : {}),
@@ -643,6 +772,32 @@ export class AutomationService {
           ? { url: `/base/${baseId}/table/${tableId}?recordId=${recordId}` }
           : {}),
       },
+    };
+  }
+
+  private recordsFromCreateOperation(resolveData: unknown): IRecord[] {
+    if (Array.isArray(resolveData)) {
+      return resolveData.filter((item): item is IRecord => this.isRecordLike(item));
+    }
+    if (!isPlainObject(resolveData)) return [];
+    const data = resolveData as { records?: unknown };
+    if (Array.isArray(data.records)) {
+      return data.records.filter((item): item is IRecord => this.isRecordLike(item));
+    }
+    return this.isRecordLike(resolveData) ? [resolveData] : [];
+  }
+
+  private isRecordLike(value: unknown): value is IRecord {
+    return isPlainObject(value) && typeof (value as { id?: unknown }).id === 'string';
+  }
+
+  private operationUser(user?: IOperationRecordsCreateEvent['reqUser']) {
+    if (!user?.id) return undefined;
+    return {
+      id: user.id,
+      name: user.name ?? '',
+      email: user.email ?? '',
+      avatarUrl: '',
     };
   }
 
@@ -668,7 +823,7 @@ export class AutomationService {
     });
   }
 
-  private makeNode(category: WorkflowCategory, ro: ICreateWorkflowGraphNodeRo): IWorkflowNode {
+  private makeNode(category: IWorkflowCategory, ro: ICreateWorkflowGraphNodeRo): IWorkflowNode {
     const id =
       category === 'trigger'
         ? generateWorkflowTriggerId()
@@ -792,6 +947,82 @@ export class AutomationService {
     };
   }
 
+  private positiveInteger(value: string | undefined, fallback: number) {
+    const numberValue = Number(value);
+    if (!Number.isFinite(numberValue) || numberValue < 0) return fallback;
+    return Math.floor(numberValue);
+  }
+
+  private numberValue(value: number | bigint | null | undefined) {
+    if (value === null || value === undefined) return undefined;
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : undefined;
+  }
+
+  private dateFromQuery(value: string | undefined) {
+    if (!value) return undefined;
+    const date = new Date(value);
+    return Number.isFinite(date.getTime()) ? date : undefined;
+  }
+
+  private isWorkflowRunStatus(status: string | undefined): status is IWorkflowRunStatus {
+    return (
+      status === 'running' ||
+      status === 'success' ||
+      status === 'failed' ||
+      status === 'skipped' ||
+      status === 'waiting'
+    );
+  }
+
+  private getRunWhere(baseId: string, workflowId: string, query: IWorkflowRunListQuery) {
+    const where: Prisma.WorkflowRunWhereInput = { baseId, workflowId };
+    if (this.isWorkflowRunStatus(query.status)) {
+      where.status = query.status;
+    }
+    const startedTime: Prisma.DateTimeFilter = {};
+    const startedTimeFrom = this.dateFromQuery(query.startedTimeFrom);
+    const startedTimeTo = this.dateFromQuery(query.startedTimeTo);
+    if (startedTimeFrom) startedTime.gte = startedTimeFrom;
+    if (startedTimeTo) startedTime.lte = startedTimeTo;
+    if (startedTime.gte || startedTime.lte) {
+      where.startedTime = startedTime;
+    }
+    return where;
+  }
+
+  private getRunDuration(run: { steps?: unknown; startedTime: Date; finishedTime?: Date | null }) {
+    const stepDuration = Array.isArray(run.steps)
+      ? run.steps.reduce((sum, step) => {
+          if (!isPlainObject(step)) return sum;
+          const spent = Number((step as { spent?: unknown }).spent);
+          return Number.isFinite(spent) ? sum + spent : sum;
+        }, 0)
+      : 0;
+    if (stepDuration > 0) return stepDuration;
+    if (!run.finishedTime) return undefined;
+    return Math.max(0, run.finishedTime.getTime() - run.startedTime.getTime());
+  }
+
+  private runMatchesDuration(duration: number | undefined, filter: string | undefined) {
+    if (!filter || filter === 'all') return true;
+    if (duration === undefined) return false;
+    if (filter === 'lt_5s') return duration < 5000;
+    if (filter === '5_10s') return duration >= 5000 && duration < 10000;
+    if (filter === '10_30s') return duration >= 10000 && duration < 30000;
+    if (filter === '30s_1m') return duration >= 30000 && duration < 60000;
+    if (filter === '1_5m') return duration >= 60000 && duration <= 300000;
+    if (filter === 'gt_5m') return duration > 300000;
+    return true;
+  }
+
+  private filterRunsByDuration<
+    T extends { steps?: unknown; startedTime: Date; finishedTime?: Date | null },
+  >(runs: T[], durationFilter: string | undefined) {
+    if (!durationFilter || durationFilter === 'all') return runs;
+    return runs.filter((run) => this.runMatchesDuration(this.getRunDuration(run), durationFilter));
+  }
+
   private runToVo(run: {
     id: string;
     workflowId: string;
@@ -810,7 +1041,7 @@ export class AutomationService {
       id: run.id,
       workflowId: run.workflowId,
       baseId: run.baseId,
-      status: run.status as WorkflowRunStatus,
+      status: run.status as IWorkflowRunStatus,
       triggerType: run.triggerType,
       input: run.input,
       output: run.output,
