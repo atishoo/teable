@@ -1068,7 +1068,440 @@
     }
   },
   "automation": {
-    "turnOnTip": "Do you want to turn on the current automation?"
+    "turnOnTip": "Do you want to turn on the current automation?",
+    "workflowPanel": {
+      "nodes": {
+        "buttonClick": {
+          "label": "When button clicked",
+          "description": "Run automation when a button is clicked"
+        },
+        "recordCreated": {
+          "label": "When record created",
+          "description": "Run automation when a record is created"
+        },
+        "recordUpdated": {
+          "label": "When record updated",
+          "description": "Run automation when specific records change"
+        },
+        "recordCreatedOrUpdated": {
+          "label": "When record created or updated",
+          "description": "Run automation when a record is created or updated"
+        },
+        "recordMatchesConditions": {
+          "label": "When record matches conditions",
+          "description": "Run automation when a record starts matching conditions"
+        },
+        "formSubmitted": {
+          "label": "When form submitted",
+          "description": "Run automation when a new record is submitted from a specified form"
+        },
+        "createRecord": {
+          "label": "Create record",
+          "description": "Create a new record in the specified table"
+        },
+        "getRecords": {
+          "label": "Get records",
+          "description": "Find up to 1000 records by specific conditions or a view"
+        },
+        "updateRecord": {
+          "label": "Update record",
+          "description": "Update specified field values in an existing record"
+        },
+        "sendEmail": {
+          "label": "Send email",
+          "description": "Send a custom email"
+        },
+        "httpRequest": {
+          "label": "HTTP request",
+          "description": "Connect to external services through APIs and exchange data"
+        },
+        "condition": {
+          "label": "When conditions match...",
+          "description": "Decide whether to continue by condition"
+        },
+        "unknown": {
+          "label": "Unknown node",
+          "description": "Unknown node"
+        }
+      },
+      "nodeGroups": {
+        "trigger": "Trigger",
+        "triggers": "Triggers",
+        "action": "Action",
+        "actions": "Actions",
+        "logic": "Logic",
+        "logicDecision": "Logic decision",
+        "manualBuild": "Manual build"
+      },
+      "nodeStatus": {
+        "incomplete": "Required fields are incomplete",
+        "testSucceeded": "Test run succeeded",
+        "testExpired": "The test result has expired. Run the test step again.",
+        "untested": "Complete but not tested"
+      },
+      "operators": {
+        "notEmpty": "Is not empty",
+        "empty": "Is empty",
+        "equal": "Equals",
+        "notEqual": "Does not equal",
+        "contains": "Contains",
+        "gt": "Greater than",
+        "gte": "Greater than or equal to",
+        "lt": "Less than",
+        "lte": "Less than or equal to",
+        "is": "Equals",
+        "isNot": "Does not equal",
+        "doesNotContain": "Does not contain",
+        "isEmpty": "Is empty",
+        "isNotEmpty": "Is not empty",
+        "symbolEqual": "=",
+        "symbolNotEqual": "≠",
+        "symbolGreater": ">",
+        "symbolGreaterEqual": "≥",
+        "symbolLess": "<",
+        "symbolLessEqual": "≤",
+        "isAnyOf": "Is any of",
+        "isNoneOf": "Is none of",
+        "hasAnyOf": "Has any of",
+        "hasAllOf": "Has all of",
+        "isExactly": "Equals",
+        "isNotExactly": "Does not equal",
+        "hasNoneOf": "Has none of",
+        "isWithin": "Is within",
+        "isBefore": "Is before",
+        "isAfter": "Is after",
+        "isOnOrBefore": "Is on or before",
+        "isOnOrAfter": "Is on or after"
+      },
+      "modifiers": {
+        "title": "Modifiers",
+        "upper": "Uppercase",
+        "lower": "Lowercase",
+        "capitalize": "Capitalize",
+        "trim": "Trim spaces",
+        "length": "Length",
+        "string": "To string",
+        "json": "To JSON string",
+        "urlEncode": "URL encode"
+      },
+      "runStatus": {
+        "success": "Run succeeded",
+        "failed": "Run failed",
+        "running": "Running",
+        "waiting": "Waiting",
+        "skipped": "Canceled",
+        "runSuccessful": "Run successful"
+      },
+      "runStatusFilter": {
+        "all": "All statuses",
+        "status": "Status"
+      },
+      "runDurationFilter": {
+        "all": "All durations",
+        "lt5s": "< 5 seconds",
+        "5to10s": "5 - 10 seconds",
+        "10to30s": "10 - 30 seconds",
+        "30sTo1m": "30 seconds - 1 minute",
+        "1to5m": "1 - 5 minutes",
+        "gt5m": "> 5 minutes",
+        "duration": "Duration"
+      },
+      "relativeTime": {
+        "justNow": "Just now",
+        "minutesAgo": "{{count}} minutes ago",
+        "hoursAgo": "{{count}} hours ago",
+        "daysAgo": "{{count}} days ago"
+      },
+      "resultLabels": {
+        "fieldValues": "Field values",
+        "table": "Table",
+        "rawData": "Raw data",
+        "name": "Name",
+        "email": "Email",
+        "triggerUser": "Trigger user",
+        "recordId": "Record ID",
+        "recordUrl": "Record URL",
+        "recordName": "Record name",
+        "record": "Record",
+        "returnValue": "Return value",
+        "nodeId": "Node ID",
+        "nodeType": "Node type",
+        "nodeName": "Node name",
+        "executionStatus": "Execution status",
+        "duration": "Duration",
+        "watchFields": "Watch fields",
+        "view": "View",
+        "requestMethod": "Request method",
+        "requestUrl": "Request URL",
+        "recipients": "Recipients",
+        "subject": "Subject",
+        "condition": "Condition",
+        "fields": "Fields",
+        "requestHeaders": "Request headers",
+        "requestBody": "Request body",
+        "source": "Source",
+        "currentUser": "Current user",
+        "step": "Step",
+        "tableUrl": "Table URL",
+        "testRecordContext": "Test record context",
+        "stepStatus": "Step status",
+        "success": "Success",
+        "targetTable": "Target table",
+        "input": "Input",
+        "output": "Output",
+        "callDetails": "Call details",
+        "ranAt": "Ran at"
+      },
+      "validation": {
+        "needTrigger": "At least one trigger is required",
+        "needAction": "At least one action node is required",
+        "completeNodeRequiredConfig": "Complete required configuration for \"{{node}}\" first",
+        "nodeTestExpired": "The test result for \"{{node}}\" has expired. Run the test step again.",
+        "completeAllNodeTests": "Complete tests for all nodes first",
+        "completeCurrentNode": "Complete required configuration for the current node first"
+      },
+      "fieldDisabled": {
+        "noWritePermission": "No write permission",
+        "button": "Button fields are not writable",
+        "lookup": "Lookup fields are not writable",
+        "computed": "Computed fields are not writable",
+        "formula": "Formula fields are not writable",
+        "rollup": "Rollup fields are not writable",
+        "autoNumber": "Auto number fields are not writable",
+        "system": "System fields are not writable"
+      },
+      "conjunction": {
+        "and": "and",
+        "or": "or"
+      },
+      "variables": {
+        "recordId": "Record ID",
+        "recordUrl": "Record URL",
+        "recordName": "Record name",
+        "createdById": "Created by ID",
+        "lastModifiedById": "Last modified by ID",
+        "createdTime": "Created time",
+        "lastModifiedTime": "Last modified time",
+        "autoNumber": "Auto number",
+        "fullOutput": "Full output",
+        "conditionResult": "Condition result",
+        "firstRecordId": "First record ID",
+        "firstRecordFields": "First record fields object",
+        "recordFields": "Record fields object",
+        "httpStatus": "HTTP status code",
+        "httpBody": "HTTP response body",
+        "httpOk": "HTTP success",
+        "emailSentResult": "Email sent result"
+      },
+      "actions": {
+        "loop": "Loop",
+        "cancel": "Cancel",
+        "variable": "Variable",
+        "editVariable": "Edit variable",
+        "delete": "Delete",
+        "editValueType": "Edit value type",
+        "selectVariable": "Select variable",
+        "add": "Add",
+        "addField": "Add field",
+        "addConfig": "Add config",
+        "send": "Send",
+        "confirm": "Confirm",
+        "addCondition": "Add condition",
+        "addConditionGroup": "Add condition group",
+        "copy": "Copy",
+        "expandConditionEditor": "Expand condition editor",
+        "crossDatabaseAccess": "Cross-database access",
+        "reset": "Reset",
+        "edit": "Edit",
+        "generatePreview": "Generate preview",
+        "runWithConfig": "Run with config",
+        "runTest": "Run test",
+        "runHistory": "Run history",
+        "more": "More",
+        "update": "Update",
+        "enableNow": "Enable now",
+        "resetViewport": "Reset",
+        "copyNodeId": "Click to copy node ID",
+        "deleteNode": "Delete node"
+      },
+      "fields": {
+        "database": "Database",
+        "loop": "Loop",
+        "value": "Value",
+        "triggerType": "Trigger type",
+        "actionType": "Action type",
+        "description": "Description",
+        "watchFields": "Watch fields",
+        "form": "Form",
+        "findRecordsBy": "Find records by",
+        "skip": "Skip",
+        "queryLimit": "Query limit",
+        "customMailServer": "Custom mail server",
+        "recipients": "Recipients",
+        "cc": "Cc",
+        "bcc": "Bcc",
+        "senderName": "Sender name",
+        "replyTo": "Reply-to email",
+        "subject": "Subject",
+        "body": "Body",
+        "editBody": "Edit body",
+        "requestMethod": "Request method",
+        "requestUrl": "Request URL",
+        "requestHeaders": "Request headers",
+        "requestBody": "Request body",
+        "unsubscribeList": "Unsubscribe list"
+      },
+      "descriptions": {
+        "crossDatabaseAccess": "The external database will be accessed with the permissions and identity of the automation configurator. If the configurator loses access to the target database, the automation will fail.",
+        "loopSource": "Select an array variable as the loop source. The action will execute for each item in the array. When selecting variables inside the array in action parameters, each loop gets the value of a single item instead of the whole array.",
+        "watchAllFields": "When none are selected, all fields will be watched.",
+        "selectButtonField": "Select a button field",
+        "watchFields": "Updates to selected fields will trigger the automation. When all fields are watched, newly created fields will also be watched.",
+        "queryLimit": "Each query returns up to 1000 records.",
+        "recordId": "The ID of the record to update. To update a record from a previous step, use the + menu to select the step and its record ID.",
+        "testStep": "Test this step to confirm its configuration is correct. After a successful test, this step can enable automation."
+      },
+      "placeholders": {
+        "select": "Select...",
+        "selectField": "Select field",
+        "notSelected": "Not selected",
+        "commandSearch": "Type a command or search...",
+        "selectVariable": "Select variable",
+        "inputContent": "Input content",
+        "input": "Enter",
+        "selectDateRange": "Select date range",
+        "search": "Search...",
+        "inputOrSelectVariable": "Input / select variable",
+        "searchFields": "Search fields...",
+        "inputDescription": "Enter description"
+      },
+      "empty": {
+        "noResults": "No results found",
+        "noRecords": "No records found",
+        "addKeyValueHint": "Click the add button to add key-value pairs",
+        "noFieldsToAdd": "No fields to add",
+        "noFilterConditions": "No filter conditions are applied",
+        "noButtonFields": "The current table has no button fields."
+      },
+      "fieldMapping": {
+        "singleSelectTip": "Enter an option value. If it does not exist, it will be created automatically.",
+        "multipleSelectTip": "Separate multiple option values with commas. If an option value does not exist, it will be created automatically.",
+        "userTip": "You can write by user ID, username, or email. Separate multiple values with commas.",
+        "attachmentTip": "Use URLs to pass new attachments, separated by commas. You can also write the ID from an attachment cell, for example by selecting variable Field values -> Attachment field -> id. When using URLs, attachments are automatically appended and will not overwrite the whole cell.",
+        "linkTip": "Write by the id or title from a linked-record cell, for example by selecting variable Field values -> Link field -> id, or directly write the primary field value of the linked record. Separate multiple values with commas.",
+        "invalidTitle": "Field error",
+        "invalidReason": "Field error: this field may have been deleted. Remove this field and add it again."
+      },
+      "mailConfig": {
+        "title": "Email configuration",
+        "description": "Configure the SMTP service used by the send email node",
+        "host": "Server address",
+        "hostDescription": "Enter the SMTP mail server address, for example smtp.example.com",
+        "hostPlaceholder": "Enter server address",
+        "port": "Port",
+        "portPlaceholder": "Enter port",
+        "username": "Username",
+        "usernamePlaceholder": "Enter username",
+        "password": "Password",
+        "passwordPlaceholder": "Enter password",
+        "senderAddress": "Sender address",
+        "senderAddressPlaceholder": "Enter sender address",
+        "senderName": "Sender name",
+        "senderNamePlaceholder": "Enter sender name",
+        "testEmailPlaceholder": "Enter test email"
+      },
+      "conditions": {
+        "matchAll": "Match all conditions",
+        "matchAny": "Match any condition",
+        "edit": "Edit condition",
+        "trueBranch": "Matches",
+        "falseBranch": "Does not match"
+      },
+      "dateMode": {
+        "today": "Today",
+        "tomorrow": "Tomorrow",
+        "yesterday": "Yesterday",
+        "currentWeek": "This week",
+        "lastWeek": "Last week",
+        "nextWeek": "Next week",
+        "currentMonth": "This month",
+        "lastMonth": "Last month",
+        "nextMonth": "Next month",
+        "daysAgo": "Days ago",
+        "daysFromNow": "Days from now",
+        "exactDate": "Exact date",
+        "dateRange": "Date range",
+        "pastNumberOfDays": "Past number of days",
+        "nextNumberOfDays": "Next number of days"
+      },
+      "valueMode": {
+        "static": "Static value",
+        "staticDescription": "Enter a value matching the condition type directly",
+        "variable": "Dynamic variable",
+        "variableDescription": "Use variables from steps in the current automation flow"
+      },
+      "variablePicker": {
+        "useDataSource": "Use data source...",
+        "selectData": "Select data",
+        "insertFromField": "Insert from field",
+        "searchResults": "Search results",
+        "metadata": "Metadata",
+        "insertMetadata": "Insert metadata"
+      },
+      "toast": {
+        "copySuccess": "Copied successfully",
+        "copyFailed": "Copy failed",
+        "testRunFailed": "Test run failed",
+        "testRunCompleted": "Test run completed",
+        "automationActivated": "Automation enabled",
+        "automationUpdated": "Automation updated",
+        "resetToPublished": "Reset to published version",
+        "automationDeactivated": "Automation disabled",
+        "testStepCompleted": "Test step completed",
+        "copyNodeIdFailed": "Failed to copy node ID"
+      },
+      "sections": {
+        "label": "Label",
+        "config": "Configuration",
+        "testStep": "Test step",
+        "result": "Result",
+        "properties": "Properties"
+      },
+      "canvas": {
+        "selectTrigger": "Select a trigger:",
+        "end": "End",
+        "referencedNode": "Referenced node {{node}}",
+        "nodeDescriptions": {
+          "recordCreatedWithTable": "When a record is created in {{table}}",
+          "recordUpdatedWithTable": "When a record in {{table}} is updated",
+          "recordCreatedOrUpdatedWithTable": "When a record in {{table}} is created or updated",
+          "recordMatchesConditionsWithTable": "When a record in {{table}} matches conditions",
+          "buttonClickWithTable": "When a button in {{table}} is clicked",
+          "formSubmittedWithTable": "When a form in {{table}} is submitted",
+          "createRecordWithTable": "Create a new record in {{table}}.",
+          "updateRecordWithTable": "Update a record in {{table}}.",
+          "getRecordsWithTable": "Get records from {{table}}."
+        }
+      },
+      "states": {
+        "loading": "Loading...",
+        "updatingAutomationStatus": "Updating automation status"
+      },
+      "publish": {
+        "unpublishedChanges": "You have unpublished changes that need to be applied to the live automation. Click Update to apply them.",
+        "readyButInactive": "This automation flow is configured but not enabled. It will take effect after being enabled."
+      },
+      "runHistory": {
+        "title": "Run history",
+        "description": "The latest 100 automation run records.",
+        "notificationOwner": "Notifications for automation {{workflowName}} are currently being sent to {{userName}}, the person who last updated this automation.",
+        "lastModifiedUserFallback": "the person who last updated this automation",
+        "empty": "Run history records will appear here after the automation flow runs.",
+        "dateRangePlaceholder": "Select date range",
+        "overview": "Overview",
+        "averageRunTime": "Average run time"
+      }
+    }
   },
   "email": {
     "title": "Email",

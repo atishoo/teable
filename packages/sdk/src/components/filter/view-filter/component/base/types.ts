@@ -17,6 +17,7 @@ interface IBaseSelect<V, O = IOption<V>> {
   className?: string;
   popoverClassName?: string;
   placeholderClassName?: string;
+  selectPlaceholder?: string;
   disabled?: boolean;
   notFoundText?: string;
   onSelect: (value: V | null) => void;

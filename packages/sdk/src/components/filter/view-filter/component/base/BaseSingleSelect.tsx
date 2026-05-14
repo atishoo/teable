@@ -32,6 +32,7 @@ function BaseSingleSelect<V extends string, O extends IOption<V> = IOption<V>>(
     className,
     popoverClassName,
     placeholderClassName,
+    selectPlaceholder,
     disabled = false,
     optionRender,
     notFoundText = t('common.noRecords'),
@@ -130,7 +131,7 @@ function BaseSingleSelect<V extends string, O extends IOption<V> = IOption<V>>(
             )
           ) : (
             <span className={cn('text-sm font-normal text-muted-foreground', placeholderClassName)}>
-              {t('common.selectPlaceHolder')}
+              {selectPlaceholder ?? t('common.selectPlaceHolder')}
             </span>
           )}
           <ChevronDown

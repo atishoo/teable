@@ -39,7 +39,6 @@ export const LanguagePicker: React.FC<{ className?: string }> = ({ className }) 
     mutationFn: (ro: { lang: string }) => updateUserLang(ro),
     onSuccess: (_data, variables) => {
       setCookie(variables.lang);
-      i18n.changeLanguage(variables.lang);
       toast.message(t('actions.updateSucceed'));
       window.location.reload();
     },

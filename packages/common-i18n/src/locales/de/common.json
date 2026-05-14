@@ -750,7 +750,440 @@
     }
   },
   "automation": {
-    "turnOnTip": "Möchten Sie die aktuelle Automatisierung einschalten?"
+    "turnOnTip": "Möchten Sie die aktuelle Automatisierung einschalten?",
+    "workflowPanel": {
+      "nodes": {
+        "buttonClick": {
+          "label": "Wenn auf die Schaltfläche geklickt wurde",
+          "description": "Führen Sie die Automatisierung aus, wenn auf eine Schaltfläche geklickt wird"
+        },
+        "recordCreated": {
+          "label": "Beim Erstellen des Datensatzes",
+          "description": "Führen Sie die Automatisierung aus, wenn ein Datensatz erstellt wird"
+        },
+        "recordUpdated": {
+          "label": "Wenn der Datensatz aktualisiert wird",
+          "description": "Führen Sie die Automatisierung aus, wenn sich bestimmte Datensätze ändern"
+        },
+        "recordCreatedOrUpdated": {
+          "label": "Wenn der Datensatz erstellt oder aktualisiert wird",
+          "description": "Führen Sie die Automatisierung aus, wenn ein Datensatz erstellt oder aktualisiert wird"
+        },
+        "recordMatchesConditions": {
+          "label": "Wenn der Datensatz mit den Bedingungen übereinstimmt",
+          "description": "Führen Sie die Automatisierung aus, wenn ein Datensatz beginnt, Bedingungen zu erfüllen"
+        },
+        "formSubmitted": {
+          "label": "Beim Absenden des Formulars",
+          "description": "Führen Sie die Automatisierung aus, wenn ein neuer Datensatz über ein bestimmtes Formular übermittelt wird"
+        },
+        "createRecord": {
+          "label": "Datensatz erstellen",
+          "description": "Erstellen Sie einen neuen Datensatz in der angegebenen Tabelle"
+        },
+        "getRecords": {
+          "label": "Holen Sie sich Aufzeichnungen",
+          "description": "Finden Sie bis zu 1000 Datensätze nach bestimmten Bedingungen oder einer Ansicht"
+        },
+        "updateRecord": {
+          "label": "Datensatz aktualisieren",
+          "description": "Angegebene Feldwerte in einem vorhandenen Datensatz aktualisieren"
+        },
+        "sendEmail": {
+          "label": "E-Mail senden",
+          "description": "Senden Sie eine benutzerdefinierte E-Mail"
+        },
+        "httpRequest": {
+          "label": "HTTP request",
+          "description": "Stellen Sie über APIs eine Verbindung zu externen Diensten her und tauschen Sie Daten aus"
+        },
+        "condition": {
+          "label": "Wenn die Bedingungen passen...",
+          "description": "Entscheiden Sie anhand der Bedingung, ob Sie fortfahren möchten"
+        },
+        "unknown": {
+          "label": "Unbekannter Knoten",
+          "description": "Unbekannter Knoten"
+        }
+      },
+      "nodeGroups": {
+        "trigger": "Auslöser",
+        "triggers": "Auslöser",
+        "action": "Aktion",
+        "actions": "Aktionen",
+        "logic": "Logik",
+        "logicDecision": "Logische Entscheidung",
+        "manualBuild": "Manueller Aufbau"
+      },
+      "nodeStatus": {
+        "incomplete": "Erforderliche Felder sind unvollständig",
+        "testSucceeded": "Testlauf erfolgreich",
+        "testExpired": "Das Testergebnis ist abgelaufen. Führen Sie den Testschritt erneut aus.",
+        "untested": "Vollständig, aber nicht getestet"
+      },
+      "operators": {
+        "notEmpty": "Ist nicht leer",
+        "empty": "Ist leer",
+        "equal": "Gleich",
+        "notEqual": "Ist nicht gleich",
+        "contains": "Enthält",
+        "gt": "Größer als",
+        "gte": "Größer oder gleich",
+        "lt": "Weniger als",
+        "lte": "Kleiner oder gleich",
+        "is": "Gleich",
+        "isNot": "Ist nicht gleich",
+        "doesNotContain": "Enthält nicht",
+        "isEmpty": "Ist leer",
+        "isNotEmpty": "Ist nicht leer",
+        "symbolEqual": "=",
+        "symbolNotEqual": "≠",
+        "symbolGreater": ">",
+        "symbolGreaterEqual": "≥",
+        "symbolLess": "<",
+        "symbolLessEqual": "≤",
+        "isAnyOf": "Ist einer von",
+        "isNoneOf": "Ist keiner von",
+        "hasAnyOf": "Hat irgendwas davon",
+        "hasAllOf": "Hat alles",
+        "isExactly": "Gleich",
+        "isNotExactly": "Ist nicht gleich",
+        "hasNoneOf": "Hat nichts davon",
+        "isWithin": "Ist drinnen",
+        "isBefore": "Ist vorher",
+        "isAfter": "Ist danach",
+        "isOnOrBefore": "Ist am oder davor",
+        "isOnOrAfter": "Ist an oder nach"
+      },
+      "modifiers": {
+        "title": "Modifikatoren",
+        "upper": "Großbuchstaben",
+        "lower": "Kleinbuchstaben",
+        "capitalize": "Großschreiben",
+        "trim": "Leerzeichen kürzen",
+        "length": "Länge",
+        "string": "Zum Bespannen",
+        "json": "To JSON string",
+        "urlEncode": "URL encode"
+      },
+      "runStatus": {
+        "success": "Ausführung erfolgreich",
+        "failed": "Ausführung fehlgeschlagen",
+        "running": "Laufen",
+        "waiting": "Warten",
+        "skipped": "Abgesagt",
+        "runSuccessful": "Ausführung erfolgreich"
+      },
+      "runStatusFilter": {
+        "all": "Alle Status",
+        "status": "Status"
+      },
+      "runDurationFilter": {
+        "all": "Alle Laufzeiten",
+        "lt5s": "< 5 Sekunden",
+        "5to10s": "5 - 10 Sekunden",
+        "10to30s": "10 - 30 Sekunden",
+        "30sTo1m": "30 Sekunden – 1 Minute",
+        "1to5m": "1 - 5 Minuten",
+        "gt5m": "> 5 Minuten",
+        "duration": "Dauer"
+      },
+      "relativeTime": {
+        "justNow": "Gerade eben",
+        "minutesAgo": "Vor {{count}} Minuten",
+        "hoursAgo": "Vor {{count}} Stunden",
+        "daysAgo": "Vor {{count}} Tagen"
+      },
+      "resultLabels": {
+        "fieldValues": "Feldwerte",
+        "table": "Tisch",
+        "rawData": "Rohdaten",
+        "name": "Name",
+        "email": "E-Mail",
+        "triggerUser": "Trigger-Benutzer",
+        "recordId": "Datensatz-ID",
+        "recordUrl": "URL aufzeichnen",
+        "recordName": "Namen aufzeichnen",
+        "record": "Aufnahme",
+        "returnValue": "Rückgabewert",
+        "nodeId": "Knoten-ID",
+        "nodeType": "Knotentyp",
+        "nodeName": "Knotenname",
+        "executionStatus": "Ausführungsstatus",
+        "duration": "Dauer",
+        "watchFields": "Beobachtungsfelder",
+        "view": "Ansicht",
+        "requestMethod": "Anfragemethode",
+        "requestUrl": "Anfrage-URL",
+        "recipients": "Empfänger",
+        "subject": "Betreff",
+        "condition": "Zustand",
+        "fields": "Felder",
+        "requestHeaders": "Header anfordern",
+        "requestBody": "Anforderungstext",
+        "source": "Quelle",
+        "currentUser": "Aktueller Benutzer",
+        "step": "Schritt",
+        "tableUrl": "Tabellen-URL",
+        "testRecordContext": "Datensatzkontext testen",
+        "stepStatus": "Schrittstatus",
+        "success": "Erfolg",
+        "targetTable": "Zieltabelle",
+        "input": "Eingabe",
+        "output": "Ausgabe",
+        "callDetails": "Anrufdetails",
+        "ranAt": "Ran rannte"
+      },
+      "validation": {
+        "needTrigger": "Es ist mindestens ein Auslöser erforderlich",
+        "needAction": "Es ist mindestens ein Aktionsknoten erforderlich",
+        "completeNodeRequiredConfig": "Schließen Sie zunächst die erforderliche Konfiguration für „{{node}}“ ab",
+        "nodeTestExpired": "Das Testergebnis für „{{node}}“ ist abgelaufen. Führen Sie den Testschritt erneut aus.",
+        "completeAllNodeTests": "Führen Sie zunächst die Tests für alle Knoten durch",
+        "completeCurrentNode": "Schließen Sie zunächst die erforderliche Konfiguration für den aktuellen Knoten ab"
+      },
+      "fieldDisabled": {
+        "noWritePermission": "Keine Schreibberechtigung",
+        "button": "Schaltflächenfelder sind nicht beschreibbar",
+        "lookup": "Nachschlagefelder sind nicht beschreibbar",
+        "computed": "Berechnete Felder sind nicht beschreibbar",
+        "formula": "Formelfelder sind nicht beschreibbar",
+        "rollup": "Rollup-Felder sind nicht beschreibbar",
+        "autoNumber": "Felder mit automatischer Nummerierung sind nicht beschreibbar",
+        "system": "Systemfelder sind nicht beschreibbar"
+      },
+      "conjunction": {
+        "and": "und",
+        "or": "oder"
+      },
+      "variables": {
+        "recordId": "Datensatz-ID",
+        "recordUrl": "URL aufzeichnen",
+        "recordName": "Namen aufzeichnen",
+        "createdById": "Erstellt von ID",
+        "lastModifiedById": "Zuletzt geändert von ID",
+        "createdTime": "Zeit geschaffen",
+        "lastModifiedTime": "Letzte Änderungszeit",
+        "autoNumber": "Automatische Nummer",
+        "fullOutput": "Volle Leistung",
+        "conditionResult": "Bedingungsergebnis",
+        "firstRecordId": "Erste Datensatz-ID",
+        "firstRecordFields": "Erstes Datensatzfeldobjekt",
+        "recordFields": "Feldobjekt aufzeichnen",
+        "httpStatus": "HTTP-Statuscode",
+        "httpBody": "HTTP-Antworttext",
+        "httpOk": "HTTP-Erfolg",
+        "emailSentResult": "Ergebnis per E-Mail gesendet"
+      },
+      "actions": {
+        "loop": "Schleife",
+        "cancel": "Abbrechen",
+        "variable": "Variabel",
+        "editVariable": "Variable bearbeiten",
+        "delete": "Löschen",
+        "editValueType": "Werttyp bearbeiten",
+        "selectVariable": "Variable auswählen",
+        "add": "Hinzufügen",
+        "addField": "Feld hinzufügen",
+        "addConfig": "Konfiguration hinzufügen",
+        "send": "Senden",
+        "confirm": "Bestätigen",
+        "addCondition": "Bedingung hinzufügen",
+        "addConditionGroup": "Bedingungsgruppe hinzufügen",
+        "copy": "Kopieren",
+        "expandConditionEditor": "Bedingungseditor erweitern",
+        "crossDatabaseAccess": "Datenbankübergreifender Zugriff",
+        "reset": "Zurücksetzen",
+        "edit": "Bearbeiten",
+        "generatePreview": "Vorschau generieren",
+        "runWithConfig": "Mit config ausführen",
+        "runTest": "Test ausführen",
+        "runHistory": "Ausführungsverlauf",
+        "more": "Mehr",
+        "update": "Aktualisieren",
+        "enableNow": "Jetzt aktivieren",
+        "resetViewport": "Zurücksetzen",
+        "copyNodeId": "Klicken Sie, um die Knoten-ID zu kopieren",
+        "deleteNode": "Knoten löschen"
+      },
+      "fields": {
+        "database": "Datenbank",
+        "loop": "Schleife",
+        "value": "Wert",
+        "triggerType": "Triggertyp",
+        "actionType": "Aktionstyp",
+        "description": "Beschreibung",
+        "watchFields": "Beobachtungsfelder",
+        "form": "Formular",
+        "findRecordsBy": "Suchen Sie nach Datensätzen",
+        "skip": "Überspringen",
+        "queryLimit": "Abfragelimit",
+        "customMailServer": "Benutzerdefinierter Mailserver",
+        "recipients": "Empfänger",
+        "cc": "Cc",
+        "bcc": "Bcc",
+        "senderName": "Absendername",
+        "replyTo": "Antwort-E-Mail",
+        "subject": "Betreff",
+        "body": "Körper",
+        "editBody": "Körper bearbeiten",
+        "requestMethod": "Anfragemethode",
+        "requestUrl": "Anfrage-URL",
+        "requestHeaders": "Header anfordern",
+        "requestBody": "Anforderungstext",
+        "unsubscribeList": "Abmeldeliste"
+      },
+      "descriptions": {
+        "crossDatabaseAccess": "Auf die externe Datenbank wird mit den Berechtigungen und der Identität des Automatisierungskonfigurators zugegriffen. Wenn der Konfigurator den Zugriff auf die Zieldatenbank verliert, schlägt die Automatisierung fehl.",
+        "loopSource": "Wählen Sie eine Array-Variable als Schleifenquelle aus. Die Aktion wird für jedes Element im Array ausgeführt. Bei der Auswahl von Variablen innerhalb des Arrays in Aktionsparametern erhält jede Schleife den Wert eines einzelnen Elements statt des gesamten Arrays.",
+        "watchAllFields": "Wenn keine ausgewählt sind, werden alle Felder überwacht.",
+        "selectButtonField": "Wählen Sie ein Schaltflächenfeld aus",
+        "watchFields": "Aktualisierungen ausgewählter Felder lösen die Automatisierung aus. Wenn alle Felder überwacht werden, werden auch neu erstellte Felder überwacht.",
+        "queryLimit": "Jede Abfrage gibt bis zu 1000 Datensätze zurück.",
+        "recordId": "Die ID des zu aktualisierenden Datensatzes. Um einen Datensatz aus einem vorherigen Schritt zu aktualisieren, verwenden Sie das Menü „+“, um den Schritt und seine Datensatz-ID auszuwählen.",
+        "testStep": "Testen Sie diesen Schritt, um sicherzustellen, dass die Konfiguration korrekt ist. Nach einem erfolgreichen Test kann dieser Schritt eine Automatisierung ermöglichen."
+      },
+      "placeholders": {
+        "select": "Wählen Sie...",
+        "selectField": "Feld auswählen",
+        "notSelected": "Nicht ausgewählt",
+        "commandSearch": "Geben Sie einen Befehl ein oder suchen Sie...",
+        "selectVariable": "Variable auswählen",
+        "inputContent": "Inhalt eingeben",
+        "input": "Treten Sie ein",
+        "selectDateRange": "Wählen Sie den Datumsbereich aus",
+        "search": "Suchen...",
+        "inputOrSelectVariable": "Variable eingeben/auswählen",
+        "searchFields": "Suchfelder...",
+        "inputDescription": "Geben Sie eine Beschreibung ein"
+      },
+      "empty": {
+        "noResults": "Keine Ergebnisse gefunden",
+        "noRecords": "Keine Datensätze gefunden",
+        "addKeyValueHint": "Klicken Sie auf die Schaltfläche „Hinzufügen“, um Schlüssel-Wert-Paare hinzuzufügen",
+        "noFieldsToAdd": "Keine Felder zum Hinzufügen",
+        "noFilterConditions": "Es werden keine Filterbedingungen angewendet",
+        "noButtonFields": "Die aktuelle Tabelle hat keine Schaltflächenfelder."
+      },
+      "fieldMapping": {
+        "singleSelectTip": "Geben Sie einen Optionswert ein. Wenn es nicht vorhanden ist, wird es automatisch erstellt.",
+        "multipleSelectTip": "Trennen Sie mehrere Optionswerte durch Kommas. Wenn ein Optionswert nicht vorhanden ist, wird er automatisch erstellt.",
+        "userTip": "Sie können nach Benutzer-ID, Benutzername oder E-Mail schreiben. Trennen Sie mehrere Werte durch Kommas.",
+        "attachmentTip": "Verwenden Sie URLs, um neue Anhänge durch Kommas getrennt zu übergeben. Sie können die ID auch aus einer Anhangszelle schreiben, indem Sie beispielsweise variable Feldwerte -> Anhangsfeld -> ID auswählen. Bei der Verwendung von URLs werden Anhänge automatisch angehängt und überschreiben nicht die gesamte Zelle.",
+        "linkTip": "Schreiben Sie anhand der ID oder des Titels aus einer Zelle mit verknüpftem Datensatz, beispielsweise durch Auswahl der Variablen Feldwerte -> Linkfeld -> ID, oder schreiben Sie direkt den primären Feldwert des verknüpften Datensatzes. Trennen Sie mehrere Werte durch Kommas.",
+        "invalidTitle": "Feldfehler",
+        "invalidReason": "Feldfehler: Dieses Feld wurde möglicherweise gelöscht. Entfernen Sie dieses Feld und fügen Sie es erneut hinzu."
+      },
+      "mailConfig": {
+        "title": "E-Mail-Konfiguration",
+        "description": "Konfigurieren Sie den SMTP-Dienst, der vom E-Mail-Sendeknoten verwendet wird",
+        "host": "Serveradresse",
+        "hostDescription": "Geben Sie die Adresse des SMTP-Mailservers ein, zum Beispiel smtp.example.com",
+        "hostPlaceholder": "Geben Sie die Serveradresse ein",
+        "port": "Hafen",
+        "portPlaceholder": "Geben Sie den Port ein",
+        "username": "Benutzername",
+        "usernamePlaceholder": "Geben Sie den Benutzernamen ein",
+        "password": "Passwort",
+        "passwordPlaceholder": "Passwort eingeben",
+        "senderAddress": "Absenderadresse",
+        "senderAddressPlaceholder": "Geben Sie die Absenderadresse ein",
+        "senderName": "Absendername",
+        "senderNamePlaceholder": "Geben Sie den Absendernamen ein",
+        "testEmailPlaceholder": "Geben Sie die Test-E-Mail-Adresse ein"
+      },
+      "conditions": {
+        "matchAll": "Alle Bedingungen erfüllen",
+        "matchAny": "Erfüllen Sie jede Bedingung",
+        "edit": "Bedingung bearbeiten",
+        "trueBranch": "Streichhölzer",
+        "falseBranch": "Passt nicht"
+      },
+      "dateMode": {
+        "today": "Heute",
+        "tomorrow": "Morgen",
+        "yesterday": "Gestern",
+        "currentWeek": "Diese Woche",
+        "lastWeek": "Letzte Woche",
+        "nextWeek": "Nächste Woche",
+        "currentMonth": "Diesen Monat",
+        "lastMonth": "Letzten Monat",
+        "nextMonth": "Nächsten Monat",
+        "daysAgo": "Vor Tagen",
+        "daysFromNow": "In wenigen Tagen",
+        "exactDate": "Genaues Datum",
+        "dateRange": "Datumsbereich",
+        "pastNumberOfDays": "Vergangene Anzahl Tage",
+        "nextNumberOfDays": "Nächste Anzahl Tage"
+      },
+      "valueMode": {
+        "static": "Statischer Wert",
+        "staticDescription": "Geben Sie direkt einen zur Konditionsart passenden Wert ein",
+        "variable": "Dynamische Variable",
+        "variableDescription": "Verwenden Sie Variablen aus Schritten im aktuellen Automatisierungsablauf"
+      },
+      "variablePicker": {
+        "useDataSource": "Datenquelle verwenden...",
+        "selectData": "Daten auswählen",
+        "insertFromField": "Aus Feld einfügen",
+        "searchResults": "Suchergebnisse",
+        "metadata": "Metadaten",
+        "insertMetadata": "Metadaten einfügen"
+      },
+      "toast": {
+        "copySuccess": "Erfolgreich kopiert",
+        "copyFailed": "Der Kopiervorgang ist fehlgeschlagen",
+        "testRunFailed": "Testlauf fehlgeschlagen",
+        "testRunCompleted": "Testlauf abgeschlossen",
+        "automationActivated": "Automatisierung aktiviert",
+        "automationUpdated": "Automatisierung aktualisiert",
+        "resetToPublished": "Zurücksetzen auf die veröffentlichte Version",
+        "automationDeactivated": "Automatisierung deaktiviert",
+        "testStepCompleted": "Testschritt abgeschlossen",
+        "copyNodeIdFailed": "Knoten-ID konnte nicht kopiert werden"
+      },
+      "sections": {
+        "label": "Etikett",
+        "config": "Konfiguration",
+        "testStep": "Testschritt",
+        "result": "Ergebnis",
+        "properties": "Eigenschaften"
+      },
+      "canvas": {
+        "selectTrigger": "Wählen Sie einen Auslöser:",
+        "end": "Ende",
+        "referencedNode": "Referenzierter Knoten {{node}}",
+        "nodeDescriptions": {
+          "recordCreatedWithTable": "Wenn ein Datensatz in {{table}} erstellt wird",
+          "recordUpdatedWithTable": "Wenn ein Datensatz in {{table}} aktualisiert wird",
+          "recordCreatedOrUpdatedWithTable": "Wenn ein Datensatz in {{table}} erstellt oder aktualisiert wird",
+          "recordMatchesConditionsWithTable": "Wenn ein Datensatz in {{table}} Bedingungen erfüllt",
+          "buttonClickWithTable": "Wenn auf eine Schaltfläche in {{table}} geklickt wird",
+          "formSubmittedWithTable": "Wenn ein Formular in {{table}} gesendet wird",
+          "createRecordWithTable": "Erstellen Sie einen neuen Datensatz in {{table}}.",
+          "updateRecordWithTable": "Aktualisieren Sie einen Datensatz in {{table}}.",
+          "getRecordsWithTable": "Holen Sie sich Datensätze von {{table}}."
+        }
+      },
+      "states": {
+        "loading": "Laden...",
+        "updatingAutomationStatus": "Aktualisierung des Automatisierungsstatus"
+      },
+      "publish": {
+        "unpublishedChanges": "Sie haben unveröffentlichte Änderungen, die auf die Live-Automatisierung angewendet werden müssen. Klicken Sie auf „Aktualisieren“, um sie anzuwenden.",
+        "readyButInactive": "Dieser Automatisierungsfluss ist konfiguriert, aber nicht aktiviert. Es wird nach der Aktivierung wirksam."
+      },
+      "runHistory": {
+        "title": "Ausführungsverlauf",
+        "description": "Die letzten 100 Ausführungsdatensätze der Automatisierung.",
+        "notificationOwner": "Benachrichtigungen für die Automatisierung {{workflowName}} werden derzeit an {{userName}} gesendet, die Person, die diese Automatisierung zuletzt aktualisiert hat.",
+        "lastModifiedUserFallback": "die Person, die diese Automatisierung zuletzt aktualisiert hat",
+        "empty": "Nach der Ausführung des Automatisierungsflusses werden hier Ausführungsverlaufsdatensätze angezeigt.",
+        "dateRangePlaceholder": "Wählen Sie den Datumsbereich aus",
+        "overview": "Übersicht",
+        "averageRunTime": "Durchschnittliche Ausführungszeit"
+      }
+    }
   },
   "email": {
     "send": "Senden",

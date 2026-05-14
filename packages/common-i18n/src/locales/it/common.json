@@ -755,7 +755,440 @@
     }
   },
   "automation": {
-    "turnOnTip": "Vuoi attivare l'automazione corrente?"
+    "turnOnTip": "Vuoi attivare l'automazione corrente?",
+    "workflowPanel": {
+      "nodes": {
+        "buttonClick": {
+          "label": "Quando si fa clic sul pulsante",
+          "description": "Esegui l'automazione quando si fa clic su un pulsante"
+        },
+        "recordCreated": {
+          "label": "Quando viene creato il record",
+          "description": "Esegui l'automazione quando viene creato un record"
+        },
+        "recordUpdated": {
+          "label": "Quando il record viene aggiornato",
+          "description": "Esegui l'automazione quando cambiano record specifici"
+        },
+        "recordCreatedOrUpdated": {
+          "label": "Quando il record viene creato o aggiornato",
+          "description": "Esegui l'automazione quando un record viene creato o aggiornato"
+        },
+        "recordMatchesConditions": {
+          "label": "Quando il record corrisponde alle condizioni",
+          "description": "Esegui l'automazione quando un record inizia a soddisfare le condizioni"
+        },
+        "formSubmitted": {
+          "label": "Quando il modulo è stato inviato",
+          "description": "Esegui l'automazione quando un nuovo record viene inviato da un modulo specificato"
+        },
+        "createRecord": {
+          "label": "Crea registrazione",
+          "description": "Crea un nuovo record nella tabella specificata"
+        },
+        "getRecords": {
+          "label": "Ottieni record",
+          "description": "Trova fino a 1000 record in base a condizioni specifiche o vista"
+        },
+        "updateRecord": {
+          "label": "Aggiorna registro",
+          "description": "Aggiorna i valori dei campi specificati in un record esistente"
+        },
+        "sendEmail": {
+          "label": "Invia e-mail",
+          "description": "Invia un'e-mail personalizzata"
+        },
+        "httpRequest": {
+          "label": "HTTP request",
+          "description": "Connettiti a servizi esterni tramite API e scambia dati"
+        },
+        "condition": {
+          "label": "Quando le condizioni corrispondono...",
+          "description": "Decidere se continuare in base alla condizione"
+        },
+        "unknown": {
+          "label": "Nodo sconosciuto",
+          "description": "Nodo sconosciuto"
+        }
+      },
+      "nodeGroups": {
+        "trigger": "Innesco",
+        "triggers": "Trigger",
+        "action": "Azione",
+        "actions": "Azioni",
+        "logic": "Logica",
+        "logicDecision": "Decisione logica",
+        "manualBuild": "Costruzione manuale"
+      },
+      "nodeStatus": {
+        "incomplete": "I campi obbligatori sono incompleti",
+        "testSucceeded": "L'esecuzione del test è riuscita",
+        "testExpired": "Il risultato del test è scaduto. Eseguire nuovamente la fase di test.",
+        "untested": "Completo ma non testato"
+      },
+      "operators": {
+        "notEmpty": "Non è vuoto",
+        "empty": "È vuoto",
+        "equal": "Uguali",
+        "notEqual": "Non è uguale",
+        "contains": "Contiene",
+        "gt": "Maggiore di",
+        "gte": "Maggiore o uguale a",
+        "lt": "Meno di",
+        "lte": "Minore o uguale a",
+        "is": "Uguali",
+        "isNot": "Non è uguale",
+        "doesNotContain": "Non contiene",
+        "isEmpty": "È vuoto",
+        "isNotEmpty": "Non è vuoto",
+        "symbolEqual": "=",
+        "symbolNotEqual": "≠",
+        "symbolGreater": ">",
+        "symbolGreaterEqual": "≥",
+        "symbolLess": "<",
+        "symbolLessEqual": "≤",
+        "isAnyOf": "È uno di",
+        "isNoneOf": "Non è nessuno di",
+        "hasAnyOf": "Ne ha qualcuno",
+        "hasAllOf": "Ha tutto",
+        "isExactly": "Uguali",
+        "isNotExactly": "Non è uguale",
+        "hasNoneOf": "Non ne ha nessuno",
+        "isWithin": "È dentro",
+        "isBefore": "È prima",
+        "isAfter": "È dopo",
+        "isOnOrBefore": "È acceso o prima",
+        "isOnOrAfter": "È attivo o successivo"
+      },
+      "modifiers": {
+        "title": "Modificatori",
+        "upper": "Maiuscolo",
+        "lower": "Minuscolo",
+        "capitalize": "Capitalizzare",
+        "trim": "Ritaglia gli spazi",
+        "length": "Lunghezza",
+        "string": "Stringere",
+        "json": "To JSON string",
+        "urlEncode": "URL encode"
+      },
+      "runStatus": {
+        "success": "Esecuzione riuscita",
+        "failed": "Esecuzione non riuscita",
+        "running": "Correre",
+        "waiting": "In attesa",
+        "skipped": "Annullato",
+        "runSuccessful": "Esecuzione riuscita"
+      },
+      "runStatusFilter": {
+        "all": "Tutti gli stati",
+        "status": "Stato"
+      },
+      "runDurationFilter": {
+        "all": "Tutte le durate",
+        "lt5s": "< 5 secondi",
+        "5to10s": "5 - 10 secondi",
+        "10to30s": "10 - 30 secondi",
+        "30sTo1m": "30 secondi - 1 minuto",
+        "1to5m": "1 - 5 minuti",
+        "gt5m": "> 5 minuti",
+        "duration": "Durata"
+      },
+      "relativeTime": {
+        "justNow": "Proprio adesso",
+        "minutesAgo": "{{count}} minuti fa",
+        "hoursAgo": "{{count}} ore fa",
+        "daysAgo": "{{count}} giorni fa"
+      },
+      "resultLabels": {
+        "fieldValues": "Valori del campo",
+        "table": "Tabella",
+        "rawData": "Dati grezzi",
+        "name": "Nome",
+        "email": "E-mail",
+        "triggerUser": "Attiva utente",
+        "recordId": "Identificativo della registrazione",
+        "recordUrl": "Registra l'URL",
+        "recordName": "Registra il nome",
+        "record": "Registra",
+        "returnValue": "Valore restituito",
+        "nodeId": "ID del nodo",
+        "nodeType": "Tipo di nodo",
+        "nodeName": "Nome del nodo",
+        "executionStatus": "Stato di esecuzione",
+        "duration": "Durata",
+        "watchFields": "Guarda i campi",
+        "view": "Visualizza",
+        "requestMethod": "Metodo di richiesta",
+        "requestUrl": "Richiedi URL",
+        "recipients": "Destinatari",
+        "subject": "Oggetto",
+        "condition": "Condizione",
+        "fields": "Campi",
+        "requestHeaders": "Richiedi intestazioni",
+        "requestBody": "Richiedi corpo",
+        "source": "Fonte",
+        "currentUser": "Utente attuale",
+        "step": "Passo",
+        "tableUrl": "URL della tabella",
+        "testRecordContext": "Testare il contesto del record",
+        "stepStatus": "Stato del passaggio",
+        "success": "Successo",
+        "targetTable": "Tabella di destinazione",
+        "input": "Ingresso",
+        "output": "Uscita",
+        "callDetails": "Dettagli della chiamata",
+        "ranAt": "Ho corso a"
+      },
+      "validation": {
+        "needTrigger": "È richiesto almeno un trigger",
+        "needAction": "È richiesto almeno un nodo azione",
+        "completeNodeRequiredConfig": "Completa prima la configurazione richiesta per \"{{node}}\".",
+        "nodeTestExpired": "Il risultato del test per \"{{node}}\" è scaduto. Eseguire nuovamente la fase di test.",
+        "completeAllNodeTests": "Completa prima i test per tutti i nodi",
+        "completeCurrentNode": "Completa prima la configurazione richiesta per il nodo corrente"
+      },
+      "fieldDisabled": {
+        "noWritePermission": "Nessun permesso di scrittura",
+        "button": "I campi dei pulsanti non sono scrivibili",
+        "lookup": "I campi di ricerca non sono scrivibili",
+        "computed": "I campi calcolati non sono scrivibili",
+        "formula": "I campi formula non sono scrivibili",
+        "rollup": "I campi di rollup non sono scrivibili",
+        "autoNumber": "I campi di numerazione automatica non sono scrivibili",
+        "system": "I campi di sistema non sono scrivibili"
+      },
+      "conjunction": {
+        "and": "e",
+        "or": "o"
+      },
+      "variables": {
+        "recordId": "Identificativo della registrazione",
+        "recordUrl": "Registra l'URL",
+        "recordName": "Registra il nome",
+        "createdById": "Creato da ID",
+        "lastModifiedById": "Ultima modifica da ID",
+        "createdTime": "Tempo creato",
+        "lastModifiedTime": "Ora dell'ultima modifica",
+        "autoNumber": "Numero automatico",
+        "fullOutput": "Piena resa",
+        "conditionResult": "Risultato della condizione",
+        "firstRecordId": "Primo ID record",
+        "firstRecordFields": "Oggetto campi primo record",
+        "recordFields": "Oggetto campi record",
+        "httpStatus": "Codice di stato HTTP",
+        "httpBody": "Corpo della risposta HTTP",
+        "httpOk": "Successo HTTP",
+        "emailSentResult": "Risultato inviato via e-mail"
+      },
+      "actions": {
+        "loop": "Ciclo",
+        "cancel": "Annulla",
+        "variable": "Variabile",
+        "editVariable": "Modifica variabile",
+        "delete": "Elimina",
+        "editValueType": "Modifica il tipo di valore",
+        "selectVariable": "Seleziona variabile",
+        "add": "Aggiungi",
+        "addField": "Aggiungi campo",
+        "addConfig": "Aggiungi configurazione",
+        "send": "Invia",
+        "confirm": "Conferma",
+        "addCondition": "Aggiungi condizione",
+        "addConditionGroup": "Aggiungi gruppo di condizioni",
+        "copy": "Copia",
+        "expandConditionEditor": "Espandi l'editor delle condizioni",
+        "crossDatabaseAccess": "Accesso tra database",
+        "reset": "Ripristina",
+        "edit": "Modifica",
+        "generatePreview": "Genera anteprima",
+        "runWithConfig": "Esegui con config",
+        "runTest": "Esegui test",
+        "runHistory": "Cronologia esecuzioni",
+        "more": "Di più",
+        "update": "Aggiorna",
+        "enableNow": "Abilita ora",
+        "resetViewport": "Ripristina",
+        "copyNodeId": "Fare clic per copiare l'ID del nodo",
+        "deleteNode": "Elimina nodo"
+      },
+      "fields": {
+        "database": "Banca dati",
+        "loop": "Ciclo",
+        "value": "Valore",
+        "triggerType": "Tipo di trigger",
+        "actionType": "Tipo di azione",
+        "description": "Descrizione",
+        "watchFields": "Guarda i campi",
+        "form": "Modulo",
+        "findRecordsBy": "Trova record per",
+        "skip": "Salta",
+        "queryLimit": "Limite di query",
+        "customMailServer": "Server di posta personalizzato",
+        "recipients": "Destinatari",
+        "cc": "Cc",
+        "bcc": "Bcc",
+        "senderName": "Nome del mittente",
+        "replyTo": "Rispondi all'e-mail",
+        "subject": "Oggetto",
+        "body": "Corpo",
+        "editBody": "Modifica corpo",
+        "requestMethod": "Metodo di richiesta",
+        "requestUrl": "Richiedi URL",
+        "requestHeaders": "Richiedi intestazioni",
+        "requestBody": "Richiedi corpo",
+        "unsubscribeList": "Lista cancellazioni"
+      },
+      "descriptions": {
+        "crossDatabaseAccess": "Si accederà al database esterno con i permessi e l'identità del configuratore di automazione. Se il configuratore perde l'accesso al database di destinazione, l'automazione fallirà.",
+        "loopSource": "Seleziona una variabile di array come origine del loop. L'azione verrà eseguita per ogni elemento dell'array. Quando si selezionano variabili all'interno dell'array nei parametri dell'azione, ogni ciclo ottiene il valore di un singolo elemento anziché dell'intero array.",
+        "watchAllFields": "Quando non ne viene selezionato nessuno, verranno controllati tutti i campi.",
+        "selectButtonField": "Selezionare un campo del pulsante",
+        "watchFields": "Gli aggiornamenti ai campi selezionati attiveranno l'automazione. Una volta controllati tutti i campi, verranno controllati anche i campi appena creati.",
+        "queryLimit": "Ogni query restituisce fino a 1000 record.",
+        "recordId": "L'ID del record da aggiornare. Per aggiornare un record da un passaggio precedente, utilizzare il menu + per selezionare il passaggio e il relativo ID record.",
+        "testStep": "Testare questo passaggio per verificare che la configurazione sia corretta. Dopo un test riuscito, questo passaggio può abilitare l'automazione."
+      },
+      "placeholders": {
+        "select": "Seleziona...",
+        "selectField": "Seleziona campo",
+        "notSelected": "Non selezionato",
+        "commandSearch": "Digita un comando o cerca...",
+        "selectVariable": "Seleziona variabile",
+        "inputContent": "Inserisci il contenuto",
+        "input": "Entra",
+        "selectDateRange": "Seleziona l'intervallo di date",
+        "search": "Cerca...",
+        "inputOrSelectVariable": "Immettere/selezionare variabile",
+        "searchFields": "Cerca campi...",
+        "inputDescription": "Inserisci la descrizione"
+      },
+      "empty": {
+        "noResults": "Nessun risultato trovato",
+        "noRecords": "Nessun record trovato",
+        "addKeyValueHint": "Fare clic sul pulsante Aggiungi per aggiungere coppie chiave-valore",
+        "noFieldsToAdd": "Nessun campo da aggiungere",
+        "noFilterConditions": "Non viene applicata alcuna condizione di filtro",
+        "noButtonFields": "La tabella corrente non ha campi di pulsanti."
+      },
+      "fieldMapping": {
+        "singleSelectTip": "Inserisci un valore per l'opzione. Se non esiste, verrà creato automaticamente.",
+        "multipleSelectTip": "Separa più valori di opzione con virgole. Se un valore di opzione non esiste, verrà creato automaticamente.",
+        "userTip": "Puoi scrivere tramite ID utente, nome utente o e-mail. Separa più valori con virgole.",
+        "attachmentTip": "Utilizza gli URL per trasmettere nuovi allegati, separati da virgole. Puoi anche scrivere l'ID da una cella di allegato, ad esempio selezionando la variabile Valori campo -> Campo allegato -> id. Quando si utilizzano gli URL, gli allegati vengono aggiunti automaticamente e non sovrascriveranno l'intera cella.",
+        "linkTip": "Scrivi tramite l'ID o il titolo da una cella del record collegato, ad esempio selezionando la variabile Valori campo -> Campo collegamento -> id, oppure scrivi direttamente il valore del campo primario del record collegato. Separa più valori con virgole.",
+        "invalidTitle": "Errore sul campo",
+        "invalidReason": "Errore campo: questo campo potrebbe essere stato cancellato. Rimuovi questo campo e aggiungilo di nuovo."
+      },
+      "mailConfig": {
+        "title": "Configurazione della posta elettronica",
+        "description": "Configura il servizio SMTP utilizzato dal nodo di invio email",
+        "host": "Indirizzo del server",
+        "hostDescription": "Inserisci l'indirizzo del server di posta SMTP, ad esempio smtp.example.com",
+        "hostPlaceholder": "Inserisci l'indirizzo del server",
+        "port": "Porto",
+        "portPlaceholder": "Entra nel porto",
+        "username": "Nome utente",
+        "usernamePlaceholder": "Inserisci il nome utente",
+        "password": "Parola d'ordine",
+        "passwordPlaceholder": "Inserisci la password",
+        "senderAddress": "Indirizzo del mittente",
+        "senderAddressPlaceholder": "Inserisci l'indirizzo del mittente",
+        "senderName": "Nome del mittente",
+        "senderNamePlaceholder": "Inserisci il nome del mittente",
+        "testEmailPlaceholder": "Inserisci l'e-mail di prova"
+      },
+      "conditions": {
+        "matchAll": "Soddisfa tutte le condizioni",
+        "matchAny": "Corrisponde a qualsiasi condizione",
+        "edit": "Modifica condizione",
+        "trueBranch": "Partite",
+        "falseBranch": "Non corrisponde"
+      },
+      "dateMode": {
+        "today": "Oggi",
+        "tomorrow": "Domani",
+        "yesterday": "Ieri",
+        "currentWeek": "Questa settimana",
+        "lastWeek": "La settimana scorsa",
+        "nextWeek": "La prossima settimana",
+        "currentMonth": "Questo mese",
+        "lastMonth": "Il mese scorso",
+        "nextMonth": "Il mese prossimo",
+        "daysAgo": "Giorni fa",
+        "daysFromNow": "Giorni da adesso",
+        "exactDate": "Data esatta",
+        "dateRange": "Intervallo di date",
+        "pastNumberOfDays": "Numero di giorni passati",
+        "nextNumberOfDays": "Prossimo numero di giorni"
+      },
+      "valueMode": {
+        "static": "Valore statico",
+        "staticDescription": "Inserisci un valore che corrisponda direttamente al tipo di condizione",
+        "variable": "Variabile dinamica",
+        "variableDescription": "Utilizza le variabili dei passaggi del flusso di automazione corrente"
+      },
+      "variablePicker": {
+        "useDataSource": "Utilizza origine dati...",
+        "selectData": "Seleziona i dati",
+        "insertFromField": "Inserisci dal campo",
+        "searchResults": "Risultati della ricerca",
+        "metadata": "Metadati",
+        "insertMetadata": "Inserisci metadati"
+      },
+      "toast": {
+        "copySuccess": "Copiato con successo",
+        "copyFailed": "Copia non riuscita",
+        "testRunFailed": "L'esecuzione del test non è riuscita",
+        "testRunCompleted": "Esecuzione di prova completata",
+        "automationActivated": "Automazione abilitata",
+        "automationUpdated": "Automazione aggiornata",
+        "resetToPublished": "Ripristina la versione pubblicata",
+        "automationDeactivated": "Automazione disabilitata",
+        "testStepCompleted": "Fase di prova completata",
+        "copyNodeIdFailed": "Impossibile copiare l'ID del nodo"
+      },
+      "sections": {
+        "label": "Etichetta",
+        "config": "Configurazione",
+        "testStep": "Fase di prova",
+        "result": "Risultato",
+        "properties": "Proprietà"
+      },
+      "canvas": {
+        "selectTrigger": "Seleziona un trigger:",
+        "end": "Fine",
+        "referencedNode": "Nodo referenziato {{node}}",
+        "nodeDescriptions": {
+          "recordCreatedWithTable": "Quando viene creato un record in {{table}}",
+          "recordUpdatedWithTable": "Quando un record in {{table}} viene aggiornato",
+          "recordCreatedOrUpdatedWithTable": "Quando un record in {{table}} viene creato o aggiornato",
+          "recordMatchesConditionsWithTable": "Quando un record in {{table}} soddisfa le condizioni",
+          "buttonClickWithTable": "Quando si fa clic su un pulsante in {{table}}",
+          "formSubmittedWithTable": "Quando viene inviato un modulo in {{table}}",
+          "createRecordWithTable": "Crea un nuovo record in {{table}}.",
+          "updateRecordWithTable": "Aggiorna un record in {{table}}.",
+          "getRecordsWithTable": "Ottieni record da {{table}}."
+        }
+      },
+      "states": {
+        "loading": "Caricamento...",
+        "updatingAutomationStatus": "Aggiornamento dello stato dell'automazione"
+      },
+      "publish": {
+        "unpublishedChanges": "Hai modifiche non pubblicate che devono essere applicate all'automazione live. Fare clic su Aggiorna per applicarli.",
+        "readyButInactive": "Questo flusso di automazione è configurato ma non abilitato. Avrà effetto dopo essere stato abilitato."
+      },
+      "runHistory": {
+        "title": "Cronologia esecuzioni",
+        "description": "Gli ultimi 100 record di esecuzione dell’automazione.",
+        "notificationOwner": "Le notifiche per l'automazione {{workflowName}} sono attualmente inviate a {{userName}}, la persona che ha aggiornato per ultima questa automazione.",
+        "lastModifiedUserFallback": "la persona che ha aggiornato per ultima questa automazione",
+        "empty": "I record della cronologia di esecuzione verranno visualizzati qui dopo l'esecuzione del flusso di automazione.",
+        "dateRangePlaceholder": "Seleziona l'intervallo di date",
+        "overview": "Panoramica",
+        "averageRunTime": "Tempo medio di esecuzione"
+      }
+    }
   },
   "email": {
     "send": "Invia",

@@ -757,7 +757,440 @@
     "baseDescription": "過去{{retentionDays}}日以内にこのベースから削除されたリソースを復元"
   },
   "automation": {
-    "turnOnTip": "現在のオートメーションを有効にしますか？"
+    "turnOnTip": "現在のオートメーションを有効にしますか？",
+    "workflowPanel": {
+      "nodes": {
+        "buttonClick": {
+          "label": "ボタンがクリックされたとき",
+          "description": "ボタンがクリックされたときにオートメーションを実行する"
+        },
+        "recordCreated": {
+          "label": "レコードの作成時",
+          "description": "レコードの作成時にオートメーションを実行する"
+        },
+        "recordUpdated": {
+          "label": "記録が更新されたとき",
+          "description": "特定のレコードが変更されたときに自動化を実行する"
+        },
+        "recordCreatedOrUpdated": {
+          "label": "レコードが作成または更新されたとき",
+          "description": "レコードの作成または更新時に自動化を実行する"
+        },
+        "recordMatchesConditions": {
+          "label": "レコードが条件に一致した場合",
+          "description": "レコードが条件に一致し始めたときに自動化を実行する"
+        },
+        "formSubmitted": {
+          "label": "フォーム送信時",
+          "description": "指定したフォームから新しいレコードが送信されたときに自動化を実行します"
+        },
+        "createRecord": {
+          "label": "レコードの作成",
+          "description": "指定されたテーブルに新しいレコードを作成します"
+        },
+        "getRecords": {
+          "label": "レコードの取得",
+          "description": "特定の条件またはビューで最大 1000 件のレコードを検索"
+        },
+        "updateRecord": {
+          "label": "更新記録",
+          "description": "既存のレコード内の指定されたフィールド値を更新します"
+        },
+        "sendEmail": {
+          "label": "電子メールを送信する",
+          "description": "カスタムメールを送信する"
+        },
+        "httpRequest": {
+          "label": "HTTP request",
+          "description": "APIを介して外部サービスに接続し、データを交換する"
+        },
+        "condition": {
+          "label": "条件が合えば…",
+          "description": "条件によって続行するかどうかを決定する"
+        },
+        "unknown": {
+          "label": "不明なノード",
+          "description": "不明なノード"
+        }
+      },
+      "nodeGroups": {
+        "trigger": "トリガー",
+        "triggers": "トリガー",
+        "action": "アクション",
+        "actions": "アクション",
+        "logic": "ロジック",
+        "logicDecision": "論理的な判断",
+        "manualBuild": "手動ビルド"
+      },
+      "nodeStatus": {
+        "incomplete": "必須フィールドが不完全です",
+        "testSucceeded": "テスト実行に成功しました",
+        "testExpired": "テスト結果の有効期限が切れています。テストステップを再度実行します。",
+        "untested": "完成しているがテストされていない"
+      },
+      "operators": {
+        "notEmpty": "空ではありません",
+        "empty": "空です",
+        "equal": "等しい",
+        "notEqual": "等しくありません",
+        "contains": "含まれています",
+        "gt": "より大きい",
+        "gte": "以上",
+        "lt": "以下",
+        "lte": "以下",
+        "is": "等しい",
+        "isNot": "等しくありません",
+        "doesNotContain": "含まれていない",
+        "isEmpty": "空です",
+        "isNotEmpty": "空ではありません",
+        "symbolEqual": "=",
+        "symbolNotEqual": "≠",
+        "symbolGreater": ">",
+        "symbolGreaterEqual": "≥",
+        "symbolLess": "<",
+        "symbolLessEqual": "≤",
+        "isAnyOf": "のいずれかです",
+        "isNoneOf": "どれでもない",
+        "hasAnyOf": "以下のいずれかを持っています",
+        "hasAllOf": "すべてを持っています",
+        "isExactly": "等しい",
+        "isNotExactly": "等しくありません",
+        "hasNoneOf": "どれもありません",
+        "isWithin": "以内です",
+        "isBefore": "前です",
+        "isAfter": "後です",
+        "isOnOrBefore": "オンかそれ以前です",
+        "isOnOrAfter": "以降です"
+      },
+      "modifiers": {
+        "title": "修飾子",
+        "upper": "大文字",
+        "lower": "小文字",
+        "capitalize": "大文字にする",
+        "trim": "スペースをトリムする",
+        "length": "長さ",
+        "string": "文字列に",
+        "json": "To JSON string",
+        "urlEncode": "URL encode"
+      },
+      "runStatus": {
+        "success": "実行成功",
+        "failed": "実行失敗",
+        "running": "ランニング",
+        "waiting": "待っています",
+        "skipped": "キャンセルされました",
+        "runSuccessful": "実行成功"
+      },
+      "runStatusFilter": {
+        "all": "すべてのステータス",
+        "status": "ステータス"
+      },
+      "runDurationFilter": {
+        "all": "すべての期間",
+        "lt5s": "< 5 秒",
+        "5to10s": "5～10秒",
+        "10to30s": "10～30秒",
+        "30sTo1m": "30秒～1分",
+        "1to5m": "1～5分",
+        "gt5m": "> 5分",
+        "duration": "期間"
+      },
+      "relativeTime": {
+        "justNow": "たった今",
+        "minutesAgo": "{{count}}分前",
+        "hoursAgo": "{{count}} 時間前",
+        "daysAgo": "{{count}} 日前"
+      },
+      "resultLabels": {
+        "fieldValues": "フィールド値",
+        "table": "テーブル",
+        "rawData": "生データ",
+        "name": "名前",
+        "email": "電子メール",
+        "triggerUser": "トリガーユーザー",
+        "recordId": "レコードID",
+        "recordUrl": "レコードURL",
+        "recordName": "レコード名",
+        "record": "記録",
+        "returnValue": "戻り値",
+        "nodeId": "ノードID",
+        "nodeType": "ノードの種類",
+        "nodeName": "ノード名",
+        "executionStatus": "実行状況",
+        "duration": "期間",
+        "watchFields": "フィールドを監視する",
+        "view": "見る",
+        "requestMethod": "リクエスト方法",
+        "requestUrl": "リクエストURL",
+        "recipients": "受信者",
+        "subject": "件名",
+        "condition": "状態",
+        "fields": "フィールド",
+        "requestHeaders": "リクエストヘッダー",
+        "requestBody": "リクエストボディ",
+        "source": "ソース",
+        "currentUser": "現在のユーザー",
+        "step": "ステップ",
+        "tableUrl": "テーブルの URL",
+        "testRecordContext": "テストレコードのコンテキスト",
+        "stepStatus": "ステップステータス",
+        "success": "成功",
+        "targetTable": "ターゲットテーブル",
+        "input": "入力",
+        "output": "出力",
+        "callDetails": "通話詳細",
+        "ranAt": "で走った"
+      },
+      "validation": {
+        "needTrigger": "少なくとも 1 つのトリガーが必要です",
+        "needAction": "少なくとも 1 つのアクション ノードが必要です",
+        "completeNodeRequiredConfig": "最初に「{{node}}」に必要な構成を完了します",
+        "nodeTestExpired": "「{{node}}」のテスト結果の有効期限が切れました。テストステップを再度実行します。",
+        "completeAllNodeTests": "最初にすべてのノードのテストを完了します",
+        "completeCurrentNode": "最初に現在のノードに必要な構成を完了します"
+      },
+      "fieldDisabled": {
+        "noWritePermission": "書き込み権限がありません",
+        "button": "ボタンフィールドは書き込み可能ではありません",
+        "lookup": "ルックアップフィールドは書き込み可能ではありません",
+        "computed": "計算フィールドは書き込み可能ではありません",
+        "formula": "数式フィールドは書き込み可能ではありません",
+        "rollup": "ロールアップフィールドは書き込み可能ではありません",
+        "autoNumber": "自動番号フィールドは書き込み可能ではありません",
+        "system": "システムフィールドは書き込み可能ではありません"
+      },
+      "conjunction": {
+        "and": "そして",
+        "or": "または"
+      },
+      "variables": {
+        "recordId": "レコードID",
+        "recordUrl": "レコードURL",
+        "recordName": "レコード名",
+        "createdById": "IDで作成",
+        "lastModifiedById": "最終更新日 (ID)",
+        "createdTime": "作成時間",
+        "lastModifiedTime": "最終変更時刻",
+        "autoNumber": "自動番号",
+        "fullOutput": "フル出力",
+        "conditionResult": "条件結果",
+        "firstRecordId": "最初のレコードID",
+        "firstRecordFields": "最初のレコードフィールドオブジェクト",
+        "recordFields": "レコードフィールドオブジェクト",
+        "httpStatus": "HTTPステータスコード",
+        "httpBody": "HTTPレスポンスボディ",
+        "httpOk": "HTTP 成功",
+        "emailSentResult": "メール送信結果"
+      },
+      "actions": {
+        "loop": "ループ",
+        "cancel": "キャンセル",
+        "variable": "変数",
+        "editVariable": "変数の編集",
+        "delete": "削除",
+        "editValueType": "値のタイプを編集する",
+        "selectVariable": "変数の選択",
+        "add": "追加",
+        "addField": "フィールドの追加",
+        "addConfig": "構成の追加",
+        "send": "送信",
+        "confirm": "確認する",
+        "addCondition": "条件の追加",
+        "addConditionGroup": "条件グループの追加",
+        "copy": "コピー",
+        "expandConditionEditor": "条件エディターを展開する",
+        "crossDatabaseAccess": "クロスデータベースアクセス",
+        "reset": "リセット",
+        "edit": "編集",
+        "generatePreview": "プレビューの生成",
+        "runWithConfig": "設定を使用して実行する",
+        "runTest": "テスト実行",
+        "runHistory": "実行履歴",
+        "more": "もっと見る",
+        "update": "アップデート",
+        "enableNow": "今すぐ有効にする",
+        "resetViewport": "リセット",
+        "copyNodeId": "クリックしてノード ID をコピーします",
+        "deleteNode": "ノードの削除"
+      },
+      "fields": {
+        "database": "データベース",
+        "loop": "ループ",
+        "value": "値",
+        "triggerType": "トリガータイプ",
+        "actionType": "アクションの種類",
+        "description": "説明",
+        "watchFields": "フィールドを監視する",
+        "form": "フォーム",
+        "findRecordsBy": "レコードの検索方法",
+        "skip": "スキップ",
+        "queryLimit": "クエリ制限",
+        "customMailServer": "カスタムメールサーバー",
+        "recipients": "受信者",
+        "cc": "Cc",
+        "bcc": "Bcc",
+        "senderName": "送信者名",
+        "replyTo": "返信メール",
+        "subject": "件名",
+        "body": "本体",
+        "editBody": "本文の編集",
+        "requestMethod": "リクエスト方法",
+        "requestUrl": "リクエストURL",
+        "requestHeaders": "リクエストヘッダー",
+        "requestBody": "リクエストボディ",
+        "unsubscribeList": "購読解除リスト"
+      },
+      "descriptions": {
+        "crossDatabaseAccess": "外部データベースには、自動化コンフィギュレーターの権限と ID を使用してアクセスします。コンフィギュレータがターゲット データベースにアクセスできなくなると、自動化は失敗します。",
+        "loopSource": "ループ元として配列変数を選択します。アクションは配列内の各項目に対して実行されます。アクション パラメーターで配列内の変数を選択すると、各ループは配列全体ではなく 1 つの項目の値を取得します。",
+        "watchAllFields": "何も選択されていない場合は、すべてのフィールドが監視されます。",
+        "selectButtonField": "ボタンフィールドを選択してください",
+        "watchFields": "選択したフィールドを更新すると、自動化がトリガーされます。すべてのフィールドが監視されると、新しく作成されたフィールドも監視されます。",
+        "queryLimit": "各クエリは最大 1000 件のレコードを返します。",
+        "recordId": "更新するレコードの ID。前のステップからレコードを更新するには、+ メニューを使用してステップとそのレコード ID を選択します。",
+        "testStep": "このステップをテストして、構成が正しいことを確認します。テストが成功した後、このステップで自動化を有効にすることができます。"
+      },
+      "placeholders": {
+        "select": "選択してください...",
+        "selectField": "フィールドを選択",
+        "notSelected": "未選択",
+        "commandSearch": "コマンドを入力するか検索...",
+        "selectVariable": "変数の選択",
+        "inputContent": "入力内容",
+        "input": "入力してください",
+        "selectDateRange": "日付範囲を選択してください",
+        "search": "検索...",
+        "inputOrSelectVariable": "変数の入力・選択",
+        "searchFields": "検索フィールド...",
+        "inputDescription": "説明を入力してください"
+      },
+      "empty": {
+        "noResults": "結果が見つかりませんでした",
+        "noRecords": "記録が見つかりませんでした",
+        "addKeyValueHint": "追加ボタンをクリックしてキーと値のペアを追加します",
+        "noFieldsToAdd": "追加するフィールドはありません",
+        "noFilterConditions": "フィルタ条件は適用されません",
+        "noButtonFields": "現在のテーブルにはボタン フィールドがありません。"
+      },
+      "fieldMapping": {
+        "singleSelectTip": "オプションの値を入力します。存在しない場合は、自動的に作成されます。",
+        "multipleSelectTip": "複数のオプション値はカンマで区切ります。オプション値が存在しない場合は、自動的に作成されます。",
+        "userTip": "ユーザーID、ユーザー名、またはメールアドレスで書き込むことができます。複数の値はカンマで区切ります。",
+        "attachmentTip": "新しい添付ファイルを渡すには、カンマで区切られた URL を使用します。たとえば、変数フィールド値 -> 添付ファイル フィールド -> ID を選択することで、添付ファイル セルから ID を書き込むこともできます。 URL を使用する場合、添付ファイルは自動的に追加され、セル全体が上書きされることはありません。",
+        "linkTip": "たとえば、変数フィールド値 -> リンク フィールド -> ID を選択して、リンクされたレコードのセルから ID またはタイトルを書き込みます。または、リンクされたレコードのプライマリ フィールド値を直接書き込みます。複数の値はカンマで区切ります。",
+        "invalidTitle": "フィールドエラー",
+        "invalidReason": "フィールド エラー: このフィールドは削除された可能性があります。このフィールドを削除して、再度追加します。"
+      },
+      "mailConfig": {
+        "title": "電子メール設定",
+        "description": "電子メール送信ノードで使用される SMTP サービスを構成する",
+        "host": "サーバーアドレス",
+        "hostDescription": "SMTP メール サーバー アドレスを入力します (例: smtp.example.com)",
+        "hostPlaceholder": "サーバーアドレスを入力してください",
+        "port": "港",
+        "portPlaceholder": "ポートを入力してください",
+        "username": "ユーザー名",
+        "usernamePlaceholder": "ユーザー名を入力してください",
+        "password": "パスワード",
+        "passwordPlaceholder": "パスワードを入力してください",
+        "senderAddress": "送信者のアドレス",
+        "senderAddressPlaceholder": "送信者のアドレスを入力してください",
+        "senderName": "送信者名",
+        "senderNamePlaceholder": "送信者名を入力してください",
+        "testEmailPlaceholder": "テストメールを入力してください"
+      },
+      "conditions": {
+        "matchAll": "すべての条件に一致する",
+        "matchAny": "あらゆる条件に一致します",
+        "edit": "編集条件",
+        "trueBranch": "一致",
+        "falseBranch": "一致しません"
+      },
+      "dateMode": {
+        "today": "今日",
+        "tomorrow": "明日",
+        "yesterday": "昨日",
+        "currentWeek": "今週",
+        "lastWeek": "先週",
+        "nextWeek": "来週",
+        "currentMonth": "今月",
+        "lastMonth": "先月",
+        "nextMonth": "来月",
+        "daysAgo": "数日前",
+        "daysFromNow": "今から数日後",
+        "exactDate": "正確な日付",
+        "dateRange": "日付範囲",
+        "pastNumberOfDays": "過去の日数",
+        "nextNumberOfDays": "次の日数"
+      },
+      "valueMode": {
+        "static": "静的な値",
+        "staticDescription": "条件タイプに一致する値を直接入力します",
+        "variable": "動的変数",
+        "variableDescription": "現在の自動化フローのステップの変数を使用する"
+      },
+      "variablePicker": {
+        "useDataSource": "データソースを使用...",
+        "selectData": "データの選択",
+        "insertFromField": "フィールドから挿入",
+        "searchResults": "検索結果",
+        "metadata": "メタデータ",
+        "insertMetadata": "メタデータの挿入"
+      },
+      "toast": {
+        "copySuccess": "正常にコピーされました",
+        "copyFailed": "コピーに失敗しました",
+        "testRunFailed": "テスト実行に失敗しました",
+        "testRunCompleted": "試運転完了",
+        "automationActivated": "自動化が有効になっています",
+        "automationUpdated": "自動化が更新されました",
+        "resetToPublished": "公開バージョンにリセット",
+        "automationDeactivated": "自動化が無効になっています",
+        "testStepCompleted": "テストステップが完了しました",
+        "copyNodeIdFailed": "ノードIDのコピーに失敗しました"
+      },
+      "sections": {
+        "label": "ラベル",
+        "config": "構成",
+        "testStep": "テストステップ",
+        "result": "結果",
+        "properties": "プロパティ"
+      },
+      "canvas": {
+        "selectTrigger": "トリガーを選択します。",
+        "end": "終了",
+        "referencedNode": "参照されるノード {{node}}",
+        "nodeDescriptions": {
+          "recordCreatedWithTable": "{{table}} にレコードが作成されたとき",
+          "recordUpdatedWithTable": "{{table}} のレコードが更新されたとき",
+          "recordCreatedOrUpdatedWithTable": "{{table}} 内のレコードが作成または更新されたとき",
+          "recordMatchesConditionsWithTable": "{{table}} のレコードが条件に一致する場合",
+          "buttonClickWithTable": "{{table}}のボタンがクリックされたとき",
+          "formSubmittedWithTable": "{{table}} のフォームが送信されたとき",
+          "createRecordWithTable": "{{table}} に新しいレコードを作成します。",
+          "updateRecordWithTable": "{{table}} のレコードを更新します。",
+          "getRecordsWithTable": "{{table}} からレコードを取得します。"
+        }
+      },
+      "states": {
+        "loading": "読み込み中...",
+        "updatingAutomationStatus": "自動化ステータスの更新"
+      },
+      "publish": {
+        "unpublishedChanges": "ライブ オートメーションに適用する必要がある未公開の変更があります。 「更新」をクリックして適用します。",
+        "readyButInactive": "この自動化フローは構成されていますが、有効になっていません。有効にすると有効になります。"
+      },
+      "runHistory": {
+        "title": "実行履歴",
+        "description": "最新100件の自動化実行履歴です。",
+        "notificationOwner": "自動化 {{workflowName}} の通知は現在、この自動化を最後に更新した人である {{userName}} に送信されています。",
+        "lastModifiedUserFallback": "このオートメーションを最後に更新した人",
+        "empty": "自動化フローの実行後、実行履歴レコードがここに表示されます。",
+        "dateRangePlaceholder": "日付範囲を選択してください",
+        "overview": "概要",
+        "averageRunTime": "平均実行時間"
+      }
+    }
   },
   "email": {
     "send": "送信",

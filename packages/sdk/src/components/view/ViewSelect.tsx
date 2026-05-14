@@ -12,11 +12,20 @@ interface ViewSelectProps {
   className?: string;
   typeFilter?: ViewType;
   cancelable?: boolean;
+  selectPlaceholder?: string;
   onChange: (value: string | null) => void;
 }
 
 export const ViewSelect = (props: ViewSelectProps) => {
-  const { value = null, onChange, tableId, className, typeFilter, cancelable = false } = props;
+  const {
+    value = null,
+    onChange,
+    tableId,
+    className,
+    typeFilter,
+    cancelable = false,
+    selectPlaceholder,
+  } = props;
 
   const { data: viewRawData } = useQuery({
     queryKey: ReactQueryKeys.viewList(tableId),
@@ -54,6 +63,7 @@ export const ViewSelect = (props: ViewSelectProps) => {
       displayRender={displayRender}
       optionRender={displayRender}
       cancelable={cancelable}
+      selectPlaceholder={selectPlaceholder}
       className={cn('my-1 h-9', className)}
       modal
     />

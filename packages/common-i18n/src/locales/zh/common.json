@@ -1065,7 +1065,440 @@
     }
   },
   "automation": {
-    "turnOnTip": "您是否要开启当前自动化？"
+    "turnOnTip": "您是否要开启当前自动化？",
+    "workflowPanel": {
+      "nodes": {
+        "buttonClick": {
+          "label": "当按钮点击时",
+          "description": "当点击按钮时运行自动化"
+        },
+        "recordCreated": {
+          "label": "当记录创建时",
+          "description": "当新建记录时运行自动化"
+        },
+        "recordUpdated": {
+          "label": "当记录更新时",
+          "description": "当特定记录发生更改时运行自动化"
+        },
+        "recordCreatedOrUpdated": {
+          "label": "当记录创建或更新时",
+          "description": "当记录创建或更新时运行自动化"
+        },
+        "recordMatchesConditions": {
+          "label": "当记录满足条件时",
+          "description": "当记录进入满足条件的状态时运行自动化"
+        },
+        "formSubmitted": {
+          "label": "当表单提交时",
+          "description": "当指定表单提交新记录时运行自动化"
+        },
+        "createRecord": {
+          "label": "创建记录",
+          "description": "在指定表中创建新记录"
+        },
+        "getRecords": {
+          "label": "获取记录",
+          "description": "根据特定条件或视图查找最多 1000 条记录"
+        },
+        "updateRecord": {
+          "label": "更新记录",
+          "description": "修改现有记录中的指定字段值"
+        },
+        "sendEmail": {
+          "label": "发送邮件",
+          "description": "发送自定义电子邮件"
+        },
+        "httpRequest": {
+          "label": "HTTP 请求",
+          "description": "通过 API 连接外部服务并交换数据"
+        },
+        "condition": {
+          "label": "当条件满足...",
+          "description": "按条件决定是否继续"
+        },
+        "unknown": {
+          "label": "未知节点",
+          "description": "未知节点"
+        }
+      },
+      "nodeGroups": {
+        "trigger": "触发器",
+        "triggers": "触发器",
+        "action": "执行操作",
+        "actions": "操作",
+        "logic": "逻辑",
+        "logicDecision": "逻辑判断",
+        "manualBuild": "手动构建"
+      },
+      "nodeStatus": {
+        "incomplete": "必填字段未完成填写",
+        "testSucceeded": "运行测试成功",
+        "testExpired": "测试结果已过期，请重新执行测试步骤获取结果",
+        "untested": "填写完成但未测试"
+      },
+      "operators": {
+        "notEmpty": "不为空",
+        "empty": "为空",
+        "equal": "等于",
+        "notEqual": "不等于",
+        "contains": "包含",
+        "gt": "大于",
+        "gte": "大于等于",
+        "lt": "小于",
+        "lte": "小于等于",
+        "is": "等于",
+        "isNot": "不等于",
+        "doesNotContain": "不包含",
+        "isEmpty": "为空",
+        "isNotEmpty": "不为空",
+        "symbolEqual": "=",
+        "symbolNotEqual": "≠",
+        "symbolGreater": ">",
+        "symbolGreaterEqual": "≥",
+        "symbolLess": "<",
+        "symbolLessEqual": "≤",
+        "isAnyOf": "属于",
+        "isNoneOf": "不属于",
+        "hasAnyOf": "包含任意一个",
+        "hasAllOf": "包含所有",
+        "isExactly": "等于",
+        "isNotExactly": "不等于",
+        "hasNoneOf": "不包含任何",
+        "isWithin": "在...之内",
+        "isBefore": "早于",
+        "isAfter": "晚于",
+        "isOnOrBefore": "早于或等于",
+        "isOnOrAfter": "晚于或等于"
+      },
+      "modifiers": {
+        "title": "修饰符",
+        "upper": "大写",
+        "lower": "小写",
+        "capitalize": "首字母大写",
+        "trim": "去除前后空格",
+        "length": "长度",
+        "string": "转字符串",
+        "json": "转 JSON 字符串",
+        "urlEncode": "URL 编码"
+      },
+      "runStatus": {
+        "success": "执行成功",
+        "failed": "执行失败",
+        "running": "运行中",
+        "waiting": "等待中",
+        "skipped": "已取消",
+        "runSuccessful": "运行成功"
+      },
+      "runStatusFilter": {
+        "all": "全部状态",
+        "status": "状态"
+      },
+      "runDurationFilter": {
+        "all": "全部耗时",
+        "lt5s": "< 5 秒",
+        "5to10s": "5 - 10 秒",
+        "10to30s": "10 - 30 秒",
+        "30sTo1m": "30 秒 - 1 分钟",
+        "1to5m": "1 - 5 分钟",
+        "gt5m": "> 5 分钟",
+        "duration": "运行耗时"
+      },
+      "relativeTime": {
+        "justNow": "刚刚",
+        "minutesAgo": "{{count}} 分钟前",
+        "hoursAgo": "{{count}} 小时前",
+        "daysAgo": "{{count}} 天前"
+      },
+      "resultLabels": {
+        "fieldValues": "字段值",
+        "table": "表格",
+        "rawData": "原始数据",
+        "name": "名称",
+        "email": "邮箱",
+        "triggerUser": "触发人",
+        "recordId": "记录 ID",
+        "recordUrl": "记录 URL",
+        "recordName": "记录名",
+        "record": "记录",
+        "returnValue": "返回值",
+        "nodeId": "节点 ID",
+        "nodeType": "节点类型",
+        "nodeName": "节点名称",
+        "executionStatus": "执行状态",
+        "duration": "花费时长",
+        "watchFields": "监听字段",
+        "view": "视图",
+        "requestMethod": "请求方法",
+        "requestUrl": "请求 URL",
+        "recipients": "收件人",
+        "subject": "主题",
+        "condition": "条件",
+        "fields": "字段",
+        "requestHeaders": "请求头",
+        "requestBody": "请求体",
+        "source": "来源",
+        "currentUser": "当前用户",
+        "step": "步骤",
+        "tableUrl": "表格 URL",
+        "testRecordContext": "测试记录上下文",
+        "stepStatus": "步骤状态",
+        "success": "成功",
+        "targetTable": "目标表格",
+        "input": "输入",
+        "output": "输出",
+        "callDetails": "调用细节",
+        "ranAt": "运行于"
+      },
+      "validation": {
+        "needTrigger": "至少需要一个触发器",
+        "needAction": "至少需要一个操作节点",
+        "completeNodeRequiredConfig": "请先补全「{{node}}」的必填配置",
+        "nodeTestExpired": "「{{node}}」测试结果已过期，请重新执行测试步骤获取结果",
+        "completeAllNodeTests": "请先完成所有节点的测试",
+        "completeCurrentNode": "请先补全当前节点的必填配置"
+      },
+      "fieldDisabled": {
+        "noWritePermission": "无写入权限",
+        "button": "按钮字段不可写入",
+        "lookup": "查找字段不可写入",
+        "computed": "计算字段不可写入",
+        "formula": "公式字段不可写入",
+        "rollup": "汇总字段不可写入",
+        "autoNumber": "自动编号字段不可写入",
+        "system": "系统字段不可写入"
+      },
+      "conjunction": {
+        "and": "且",
+        "or": "或"
+      },
+      "variables": {
+        "recordId": "记录 ID",
+        "recordUrl": "记录 URL",
+        "recordName": "记录名",
+        "createdById": "创建人 ID",
+        "lastModifiedById": "最后修改人 ID",
+        "createdTime": "创建时间",
+        "lastModifiedTime": "最后修改时间",
+        "autoNumber": "自动序号",
+        "fullOutput": "完整输出",
+        "conditionResult": "条件结果",
+        "firstRecordId": "第一条记录 ID",
+        "firstRecordFields": "第一条记录字段对象",
+        "recordFields": "记录字段对象",
+        "httpStatus": "HTTP 状态码",
+        "httpBody": "HTTP 响应体",
+        "httpOk": "HTTP 是否成功",
+        "emailSentResult": "邮件发送结果"
+      },
+      "actions": {
+        "loop": "循环执行",
+        "cancel": "取消",
+        "variable": "变量",
+        "editVariable": "编辑变量",
+        "delete": "删除",
+        "editValueType": "编辑值类型",
+        "selectVariable": "选择变量",
+        "add": "添加",
+        "addField": "添加字段",
+        "addConfig": "添加配置",
+        "send": "发送",
+        "confirm": "确认",
+        "addCondition": "添加条件",
+        "addConditionGroup": "添加条件组",
+        "copy": "复制",
+        "expandConditionEditor": "展开编辑条件",
+        "crossDatabaseAccess": "跨数据库访问",
+        "reset": "重置",
+        "edit": "编辑",
+        "generatePreview": "生成预览",
+        "runWithConfig": "按配置运行",
+        "runTest": "运行测试",
+        "runHistory": "运行历史",
+        "more": "更多",
+        "update": "更新",
+        "enableNow": "立即启用",
+        "resetViewport": "复位",
+        "copyNodeId": "点击复制节点 ID",
+        "deleteNode": "删除节点"
+      },
+      "fields": {
+        "database": "数据库",
+        "loop": "循环执行",
+        "value": "值",
+        "triggerType": "触发器类型",
+        "actionType": "动作类型",
+        "description": "描述",
+        "watchFields": "监听字段",
+        "form": "表单",
+        "findRecordsBy": "基于以下条件查找记录",
+        "skip": "跳过",
+        "queryLimit": "查询数量",
+        "customMailServer": "自定义邮件服务器",
+        "recipients": "收件人",
+        "cc": "抄送",
+        "bcc": "密送",
+        "senderName": "发件人名称",
+        "replyTo": "回复邮件地址",
+        "subject": "主题",
+        "body": "正文",
+        "editBody": "编辑正文",
+        "requestMethod": "请求方法",
+        "requestUrl": "请求 URL",
+        "requestHeaders": "请求头",
+        "requestBody": "请求体",
+        "unsubscribeList": "取消订阅列表"
+      },
+      "descriptions": {
+        "crossDatabaseAccess": "外部数据库将通过自动化配置人员的权限和身份进行访问。若配置人员失去目标数据库的访问权限，则自动化将执行失败。",
+        "loopSource": "选择一个数组变量作为循环源。动作将对数组中的每个元素依次执行。动作参数中选择数组内部的变量时，将每次循环将获取单个元素的值，而不是整个数组。",
+        "watchAllFields": "未选择时，将监听所有字段。",
+        "selectButtonField": "选择一个按钮字段",
+        "watchFields": "对选定字段的更新将触发触发器。监听所有字段时，新创建的字段也会被监听。",
+        "queryLimit": "每次查询最多返回1000条记录。",
+        "recordId": "要更新的记录的 ID。要更新前一个步骤中的记录，请使用 + 菜单选择步骤及其记录 ID。",
+        "testStep": "测试此步骤以确认其配置正确。测试成功后，此步骤才允许启用自动化。"
+      },
+      "placeholders": {
+        "select": "请选择...",
+        "selectField": "选择字段",
+        "notSelected": "未选择",
+        "commandSearch": "输入命令或进行搜索...",
+        "selectVariable": "请选择变量",
+        "inputContent": "输入内容",
+        "input": "请输入",
+        "selectDateRange": "选择日期范围",
+        "search": "搜索...",
+        "inputOrSelectVariable": "输入 / 选择变量",
+        "searchFields": "搜索字段...",
+        "inputDescription": "输入描述"
+      },
+      "empty": {
+        "noResults": "未找到结果",
+        "noRecords": "未找到记录",
+        "addKeyValueHint": "点击添加按钮添加键值对",
+        "noFieldsToAdd": "没有可添加字段",
+        "noFilterConditions": "当前没有应用任何筛选条件",
+        "noButtonFields": "当前表格没有按钮字段。"
+      },
+      "fieldMapping": {
+        "singleSelectTip": "输入选项值，如项值不存在，会自动创建",
+        "multipleSelectTip": "使用英文逗号来分隔多条选项值，如果选项值不存在，会自动创建",
+        "userTip": "可使用用户id、用户名、邮箱来写入，多条值英文逗号分隔",
+        "attachmentTip": "可使用 URL 来传入新附件，多条值英文逗号分隔，也可以使用附件单元格中的 id 来写入，例如选择变量 字段值->附件字段->id，当使用 URL 时附件会自动上传到尾部，不会覆盖整个单元格",
+        "linkTip": "使用关联字段单元格中的 id 或者 title 来写入，例如选择变量 字段值->关联字段->id，或者直接写入关联字段首列的值，多条值英文逗号分隔",
+        "invalidTitle": "字段异常",
+        "invalidReason": "字段异常: 该字段可能已被删除，请删除此字段并重新添加。"
+      },
+      "mailConfig": {
+        "title": "邮件配置",
+        "description": "配置发送邮件节点使用的 SMTP 服务",
+        "host": "服务器地址",
+        "hostDescription": "请输入 SMTP 邮件服务器地址，例如：smtp.example.com",
+        "hostPlaceholder": "请输入服务器地址",
+        "port": "端口",
+        "portPlaceholder": "请输入端口",
+        "username": "用户名",
+        "usernamePlaceholder": "请输入用户名",
+        "password": "密码",
+        "passwordPlaceholder": "请输入密码",
+        "senderAddress": "发件人地址",
+        "senderAddressPlaceholder": "请输入发件人地址",
+        "senderName": "发件人名称",
+        "senderNamePlaceholder": "请输入发件人名称",
+        "testEmailPlaceholder": "请输入测试邮箱"
+      },
+      "conditions": {
+        "matchAll": "满足所有条件",
+        "matchAny": "满足任一条件",
+        "edit": "编辑条件",
+        "trueBranch": "满足",
+        "falseBranch": "不满足"
+      },
+      "dateMode": {
+        "today": "今天",
+        "tomorrow": "明天",
+        "yesterday": "昨天",
+        "currentWeek": "本周",
+        "lastWeek": "上周",
+        "nextWeek": "下周",
+        "currentMonth": "本月",
+        "lastMonth": "上个月",
+        "nextMonth": "下个月",
+        "daysAgo": "几天前",
+        "daysFromNow": "几天后",
+        "exactDate": "具体日期",
+        "dateRange": "日期范围",
+        "pastNumberOfDays": "过去几天",
+        "nextNumberOfDays": "接下来几天"
+      },
+      "valueMode": {
+        "static": "静态值",
+        "staticDescription": "直接输入与条件匹配类型的值",
+        "variable": "动态变量",
+        "variableDescription": "使用当前自动化流程步骤中的变量"
+      },
+      "variablePicker": {
+        "useDataSource": "使用数据来源...",
+        "selectData": "选择数据",
+        "insertFromField": "从字段插入值",
+        "searchResults": "搜索结果",
+        "metadata": "元数据",
+        "insertMetadata": "插入元数据"
+      },
+      "toast": {
+        "copySuccess": "复制成功",
+        "copyFailed": "复制失败",
+        "testRunFailed": "测试运行失败",
+        "testRunCompleted": "测试运行已完成",
+        "automationActivated": "自动化已启用",
+        "automationUpdated": "自动化已更新",
+        "resetToPublished": "已重置为已发布版本",
+        "automationDeactivated": "自动化已停用",
+        "testStepCompleted": "测试步骤已完成",
+        "copyNodeIdFailed": "复制节点 ID 失败"
+      },
+      "sections": {
+        "label": "标签",
+        "config": "配置",
+        "testStep": "测试步骤",
+        "result": "结果",
+        "properties": "属性"
+      },
+      "canvas": {
+        "selectTrigger": "选择一个触发器：",
+        "end": "结束",
+        "referencedNode": "已引用节点 {{node}}",
+        "nodeDescriptions": {
+          "recordCreatedWithTable": "当在 {{table}} 表格中新建记录时",
+          "recordUpdatedWithTable": "当 {{table}} 表格中的记录更新时",
+          "recordCreatedOrUpdatedWithTable": "当 {{table}} 表格中的记录创建或更新时",
+          "recordMatchesConditionsWithTable": "当 {{table}} 表格中的记录满足条件时",
+          "buttonClickWithTable": "当点击 {{table}} 表格中的按钮时",
+          "formSubmittedWithTable": "当 {{table}} 表格中的表单提交时",
+          "createRecordWithTable": "在 {{table}} 表格中创建新记录。",
+          "updateRecordWithTable": "更新 {{table}} 表格中的记录。",
+          "getRecordsWithTable": "从 {{table}} 表格中获取记录。"
+        }
+      },
+      "states": {
+        "loading": "加载中...",
+        "updatingAutomationStatus": "正在更新自动化状态"
+      },
+      "publish": {
+        "unpublishedChanges": "您有未发布的更改需要应用到实时自动化。点击更新按钮应用它们。",
+        "readyButInactive": "此自动化流程已配置完成但尚未启用，启用后才会生效。"
+      },
+      "runHistory": {
+        "title": "运行历史",
+        "description": "最近 100 次自动化运行记录。",
+        "notificationOwner": "有关自动化 {{workflowName}} 的通知目前正在发送给 {{userName}}，即最后更新此自动化的人",
+        "lastModifiedUserFallback": "最后更新此自动化的人",
+        "empty": "当自动化流程运行后，这里会展示运行历史记录。",
+        "dateRangePlaceholder": "选择日期范围",
+        "overview": "概览",
+        "averageRunTime": "平均运行时间"
+      }
+    }
   },
   "email": {
     "title": "邮箱",

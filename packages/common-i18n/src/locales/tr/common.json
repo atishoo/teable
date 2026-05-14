@@ -714,7 +714,440 @@
     }
   },
   "automation": {
-    "turnOnTip": "Mevcut otomasyonu açmak istediğinizden emin misiniz?"
+    "turnOnTip": "Mevcut otomasyonu açmak istediğinizden emin misiniz?",
+    "workflowPanel": {
+      "nodes": {
+        "buttonClick": {
+          "label": "Düğmeye tıklandığında",
+          "description": "Bir düğmeye tıklandığında otomasyonu çalıştır"
+        },
+        "recordCreated": {
+          "label": "Kayıt oluşturulduğunda",
+          "description": "Bir kayıt oluşturulduğunda otomasyonu çalıştır"
+        },
+        "recordUpdated": {
+          "label": "Kayıt güncellendiğinde",
+          "description": "Belirli kayıtlar değiştiğinde otomasyonu çalıştır"
+        },
+        "recordCreatedOrUpdated": {
+          "label": "Kayıt oluşturulduğunda veya güncellendiğinde",
+          "description": "Bir kayıt oluşturulduğunda veya güncellendiğinde otomasyonu çalıştır"
+        },
+        "recordMatchesConditions": {
+          "label": "Kayıt koşullarla eşleştiğinde",
+          "description": "Bir kayıt koşullarla eşleşmeye başladığında otomasyonu çalıştırın"
+        },
+        "formSubmitted": {
+          "label": "Form gönderildiğinde",
+          "description": "Belirli bir formdan yeni bir kayıt gönderildiğinde otomasyonu çalıştır"
+        },
+        "createRecord": {
+          "label": "Kayıt oluştur",
+          "description": "Belirtilen tabloda yeni bir kayıt oluşturun"
+        },
+        "getRecords": {
+          "label": "Kayıtları al",
+          "description": "Belirli koşullara veya görünüme göre 1000'e kadar kayıt bulun"
+        },
+        "updateRecord": {
+          "label": "Kaydı güncelle",
+          "description": "Mevcut bir kayıtta belirtilen alan değerlerini güncelleme"
+        },
+        "sendEmail": {
+          "label": "E-posta gönder",
+          "description": "Özel bir e-posta gönder"
+        },
+        "httpRequest": {
+          "label": "HTTP request",
+          "description": "API'ler aracılığıyla harici hizmetlere bağlanın ve veri alışverişinde bulunun"
+        },
+        "condition": {
+          "label": "Koşullar eşleştiğinde...",
+          "description": "Koşula göre devam edip etmeyeceğinize karar verin"
+        },
+        "unknown": {
+          "label": "Bilinmeyen düğüm",
+          "description": "Bilinmeyen düğüm"
+        }
+      },
+      "nodeGroups": {
+        "trigger": "Tetikleyici",
+        "triggers": "Tetikleyiciler",
+        "action": "Eylem",
+        "actions": "Eylemler",
+        "logic": "Mantık",
+        "logicDecision": "Mantıksal karar",
+        "manualBuild": "Manuel oluşturma"
+      },
+      "nodeStatus": {
+        "incomplete": "Gerekli alanlar eksik",
+        "testSucceeded": "Test çalıştırması başarılı oldu",
+        "testExpired": "Test sonucunun süresi doldu. Test adımını yeniden çalıştırın.",
+        "untested": "Tamamlandı ancak test edilmedi"
+      },
+      "operators": {
+        "notEmpty": "Boş değil",
+        "empty": "Boş",
+        "equal": "Eşittir",
+        "notEqual": "Eşit değil",
+        "contains": "İçerir",
+        "gt": "Şundan büyük:",
+        "gte": "Büyük veya eşittir",
+        "lt": "Şundan az:",
+        "lte": "Küçük veya eşit",
+        "is": "Eşittir",
+        "isNot": "Eşit değil",
+        "doesNotContain": "içermez",
+        "isEmpty": "Boş",
+        "isNotEmpty": "Boş değil",
+        "symbolEqual": "=",
+        "symbolNotEqual": "≠",
+        "symbolGreater": ">",
+        "symbolGreaterEqual": "≥",
+        "symbolLess": "<",
+        "symbolLessEqual": "≤",
+        "isAnyOf": "herhangi biri",
+        "isNoneOf": "Hiçbiri",
+        "hasAnyOf": "Herhangi biri var",
+        "hasAllOf": "Hepsi var",
+        "isExactly": "Eşittir",
+        "isNotExactly": "Eşit değil",
+        "hasNoneOf": "Hiçbiri yok",
+        "isWithin": "İçeride",
+        "isBefore": "önce",
+        "isAfter": "sonra",
+        "isOnOrBefore": "Tarihinde veya öncesinde",
+        "isOnOrAfter": "Tarihinde veya sonrasında"
+      },
+      "modifiers": {
+        "title": "Değiştiriciler",
+        "upper": "Büyük harf",
+        "lower": "Küçük harf",
+        "capitalize": "Büyük harfle yaz",
+        "trim": "Alanları kırpın",
+        "length": "Uzunluk",
+        "string": "Dize için",
+        "json": "To JSON string",
+        "urlEncode": "URL encode"
+      },
+      "runStatus": {
+        "success": "Çalıştırma başarılı",
+        "failed": "Çalıştırma başarısız",
+        "running": "Koşu",
+        "waiting": "Bekliyor",
+        "skipped": "İptal edildi",
+        "runSuccessful": "Çalıştırma başarılı"
+      },
+      "runStatusFilter": {
+        "all": "Tüm durumlar",
+        "status": "Durum"
+      },
+      "runDurationFilter": {
+        "all": "Tüm süreler",
+        "lt5s": "< 5 saniye",
+        "5to10s": "5 - 10 saniye",
+        "10to30s": "10 - 30 saniye",
+        "30sTo1m": "30 saniye - 1 dakika",
+        "1to5m": "1 - 5 dakika",
+        "gt5m": "> 5 dakika",
+        "duration": "Süre"
+      },
+      "relativeTime": {
+        "justNow": "Az önce",
+        "minutesAgo": "{{count}} dakika önce",
+        "hoursAgo": "{{count}} saat önce",
+        "daysAgo": "{{count}} gün önce"
+      },
+      "resultLabels": {
+        "fieldValues": "Alan değerleri",
+        "table": "Tablo",
+        "rawData": "Ham veriler",
+        "name": "İsim",
+        "email": "E-posta",
+        "triggerUser": "Kullanıcıyı tetikle",
+        "recordId": "Kayıt Kimliği",
+        "recordUrl": "URL'yi kaydet",
+        "recordName": "Kayıt adı",
+        "record": "Kayıt",
+        "returnValue": "Dönüş değeri",
+        "nodeId": "Düğüm kimliği",
+        "nodeType": "Düğüm türü",
+        "nodeName": "Düğüm adı",
+        "executionStatus": "Yürütme durumu",
+        "duration": "Süre",
+        "watchFields": "Alanları izle",
+        "view": "Görüntüle",
+        "requestMethod": "Talep yöntemi",
+        "requestUrl": "URL'yi talep et",
+        "recipients": "Alıcılar",
+        "subject": "Konu",
+        "condition": "Durum",
+        "fields": "Alanlar",
+        "requestHeaders": "Başlıkları iste",
+        "requestBody": "Talep gövdesi",
+        "source": "Kaynak",
+        "currentUser": "Geçerli kullanıcı",
+        "step": "Adım",
+        "tableUrl": "Tablo URL'si",
+        "testRecordContext": "Kayıt bağlamını test edin",
+        "stepStatus": "Adım durumu",
+        "success": "Başarı",
+        "targetTable": "Hedef tablosu",
+        "input": "Giriş",
+        "output": "Çıkış",
+        "callDetails": "Arama ayrıntıları",
+        "ranAt": "koştu"
+      },
+      "validation": {
+        "needTrigger": "En az bir tetikleyici gerekli",
+        "needAction": "En az bir eylem düğümü gerekli",
+        "completeNodeRequiredConfig": "Önce \"{{node}}\" için gerekli yapılandırmayı tamamlayın",
+        "nodeTestExpired": "\"{{node}}\" için test sonucunun süresi doldu. Test adımını yeniden çalıştırın.",
+        "completeAllNodeTests": "Önce tüm düğümler için testleri tamamlayın",
+        "completeCurrentNode": "Önce mevcut düğüm için gerekli yapılandırmayı tamamlayın"
+      },
+      "fieldDisabled": {
+        "noWritePermission": "Yazma izni yok",
+        "button": "Düğme alanları yazılamaz",
+        "lookup": "Arama alanları yazılabilir değil",
+        "computed": "Hesaplanan alanlar yazılamaz",
+        "formula": "Formül alanları yazılamaz",
+        "rollup": "Toplama alanları yazılamaz",
+        "autoNumber": "Otomatik numara alanları yazılamaz",
+        "system": "Sistem alanları yazılamaz"
+      },
+      "conjunction": {
+        "and": "ve",
+        "or": "veya"
+      },
+      "variables": {
+        "recordId": "Kayıt Kimliği",
+        "recordUrl": "URL'yi kaydet",
+        "recordName": "Kayıt adı",
+        "createdById": "Kimlik tarafından oluşturuldu",
+        "lastModifiedById": "Son değiştirilen kimliğe göre",
+        "createdTime": "Oluşturulma zamanı",
+        "lastModifiedTime": "Son değiştirilme zamanı",
+        "autoNumber": "Otomatik numara",
+        "fullOutput": "Tam çıktı",
+        "conditionResult": "Koşul sonucu",
+        "firstRecordId": "İlk kayıt kimliği",
+        "firstRecordFields": "İlk kayıt alanları nesnesi",
+        "recordFields": "Alan nesnesini kaydet",
+        "httpStatus": "HTTP durum kodu",
+        "httpBody": "HTTP yanıt gövdesi",
+        "httpOk": "HTTP başarısı",
+        "emailSentResult": "E-posta gönderildi sonucu"
+      },
+      "actions": {
+        "loop": "Döngü",
+        "cancel": "İptal",
+        "variable": "Değişken",
+        "editVariable": "Değişkeni düzenle",
+        "delete": "Sil",
+        "editValueType": "Değer türünü düzenle",
+        "selectVariable": "Değişken seç",
+        "add": "Ekle",
+        "addField": "Alan ekle",
+        "addConfig": "Yapılandırma ekle",
+        "send": "Gönder",
+        "confirm": "Onayla",
+        "addCondition": "Koşul ekle",
+        "addConditionGroup": "Koşul grubu ekle",
+        "copy": "Kopyala",
+        "expandConditionEditor": "Koşul düzenleyiciyi genişlet",
+        "crossDatabaseAccess": "Veritabanları arası erişim",
+        "reset": "Sıfırla",
+        "edit": "Düzenle",
+        "generatePreview": "Önizleme oluştur",
+        "runWithConfig": "Yapılandırmayla çalıştır",
+        "runTest": "Testi çalıştır",
+        "runHistory": "Çalıştırma geçmişi",
+        "more": "Daha Fazla",
+        "update": "Güncelleme",
+        "enableNow": "Şimdi etkinleştir",
+        "resetViewport": "Sıfırla",
+        "copyNodeId": "Düğüm kimliğini kopyalamak için tıklayın",
+        "deleteNode": "Düğümü sil"
+      },
+      "fields": {
+        "database": "Veritabanı",
+        "loop": "Döngü",
+        "value": "Değer",
+        "triggerType": "Tetikleyici türü",
+        "actionType": "Eylem türü",
+        "description": "Açıklama",
+        "watchFields": "Alanları izle",
+        "form": "formu",
+        "findRecordsBy": "Kayıtları şuna göre bul:",
+        "skip": "Atla",
+        "queryLimit": "Sorgu sınırı",
+        "customMailServer": "Özel posta sunucusu",
+        "recipients": "Alıcılar",
+        "cc": "Cc",
+        "bcc": "Bcc",
+        "senderName": "Gönderenin adı",
+        "replyTo": "E-postayı yanıtla",
+        "subject": "Konu",
+        "body": "Vücut",
+        "editBody": "Gövdeyi düzenle",
+        "requestMethod": "Talep yöntemi",
+        "requestUrl": "URL'yi talep et",
+        "requestHeaders": "Başlıkları iste",
+        "requestBody": "Talep gövdesi",
+        "unsubscribeList": "Abonelikten çıkma listesi"
+      },
+      "descriptions": {
+        "crossDatabaseAccess": "Harici veritabanına otomasyon yapılandırıcısının izinleri ve kimliğiyle erişilecektir. Yapılandırıcı hedef veritabanına erişimi kaybederse otomasyon başarısız olur.",
+        "loopSource": "Döngü kaynağı olarak bir dizi değişkeni seçin. Eylem dizideki her öğe için yürütülür. Eylem parametrelerinde dizi içindeki değişkenleri seçerken, her döngü tüm dizi yerine tek bir öğenin değerini alır.",
+        "watchAllFields": "Hiçbiri seçilmediğinde tüm alanlar izlenecektir.",
+        "selectButtonField": "Bir düğme alanı seçin",
+        "watchFields": "Seçilen alanlardaki güncellemeler otomasyonu tetikleyecektir. Tüm alanlar izlendiğinde yeni oluşturulan alanlar da izlenecektir.",
+        "queryLimit": "Her sorgu en fazla 1000 kayıt döndürür.",
+        "recordId": "Güncellenecek kaydın kimliği. Önceki adımdaki bir kaydı güncellemek için adımı ve kayıt kimliğini seçmek üzere + menüsünü kullanın.",
+        "testStep": "Yapılandırmasının doğru olduğunu doğrulamak için bu adımı test edin. Başarılı bir testin ardından bu adım otomasyonu etkinleştirebilir."
+      },
+      "placeholders": {
+        "select": "Seç...",
+        "selectField": "Alan seç",
+        "notSelected": "Seçilmedi",
+        "commandSearch": "Bir komut yazın veya arayın...",
+        "selectVariable": "Değişken seç",
+        "inputContent": "Giriş içeriği",
+        "input": "Girin",
+        "selectDateRange": "Tarih aralığını seçin",
+        "search": "Ara...",
+        "inputOrSelectVariable": "Giriş / değişken seç",
+        "searchFields": "Arama alanları...",
+        "inputDescription": "Açıklamayı girin"
+      },
+      "empty": {
+        "noResults": "Sonuç bulunamadı",
+        "noRecords": "Hiçbir kayıt bulunamadı",
+        "addKeyValueHint": "Anahtar/değer çiftleri eklemek için ekle düğmesini tıklayın",
+        "noFieldsToAdd": "Eklenecek alan yok",
+        "noFilterConditions": "Hiçbir filtre koşulu uygulanmadı",
+        "noButtonFields": "Geçerli tabloda düğme alanı yok."
+      },
+      "fieldMapping": {
+        "singleSelectTip": "Bir seçenek değeri girin. Eğer mevcut değilse otomatik olarak oluşturulacaktır.",
+        "multipleSelectTip": "Birden fazla seçenek değerini virgülle ayırın. Bir seçenek değeri mevcut değilse otomatik olarak oluşturulacaktır.",
+        "userTip": "Kullanıcı kimliği, kullanıcı adı veya e-posta ile yazabilirsiniz. Birden fazla değeri virgülle ayırın.",
+        "attachmentTip": "Yeni ekleri virgülle ayırarak iletmek için URL'leri kullanın. Kimliği bir ek hücresinden de yazabilirsiniz; örneğin Alan değerleri -> Ek alanı -> kimlik değişkenini seçerek. URL'leri kullanırken ekler otomatik olarak eklenir ve tüm hücrenin üzerine yazılmaz.",
+        "linkTip": "Bağlantılı bir kayıt hücresinden kimliğe veya başlığa göre yazın; örneğin Alan değerleri -> Bağlantı alanı -> kimlik değişkenini seçerek veya doğrudan bağlantılı kaydın birincil alan değerini yazın. Birden fazla değeri virgülle ayırın.",
+        "invalidTitle": "Alan hatası",
+        "invalidReason": "Alan hatası: Bu alan silinmiş olabilir. Bu alanı kaldırıp tekrar ekleyin."
+      },
+      "mailConfig": {
+        "title": "E-posta yapılandırması",
+        "description": "E-posta gönderme düğümü tarafından kullanılan SMTP hizmetini yapılandırma",
+        "host": "Sunucu adresi",
+        "hostDescription": "SMTP posta sunucusu adresini girin; örneğin smtp.example.com",
+        "hostPlaceholder": "Sunucu adresini girin",
+        "port": "Liman",
+        "portPlaceholder": "Bağlantı noktasını girin",
+        "username": "Kullanıcı adı",
+        "usernamePlaceholder": "Kullanıcı adını girin",
+        "password": "Şifre",
+        "passwordPlaceholder": "Şifreyi girin",
+        "senderAddress": "Gönderen adresi",
+        "senderAddressPlaceholder": "Gönderenin adresini girin",
+        "senderName": "Gönderenin adı",
+        "senderNamePlaceholder": "Gönderenin adını girin",
+        "testEmailPlaceholder": "Test e-postasını girin"
+      },
+      "conditions": {
+        "matchAll": "Tüm koşulları eşleştir",
+        "matchAny": "Herhangi bir koşulu eşleştirin",
+        "edit": "Koşulu düzenle",
+        "trueBranch": "Maçlar",
+        "falseBranch": "eşleşmiyor"
+      },
+      "dateMode": {
+        "today": "Bugün",
+        "tomorrow": "Yarın",
+        "yesterday": "Dün",
+        "currentWeek": "Bu hafta",
+        "lastWeek": "Geçen hafta",
+        "nextWeek": "Gelecek hafta",
+        "currentMonth": "Bu ay",
+        "lastMonth": "Geçen ay",
+        "nextMonth": "Gelecek ay",
+        "daysAgo": "Günler önce",
+        "daysFromNow": "Şu andan itibaren günler",
+        "exactDate": "Kesin tarih",
+        "dateRange": "Tarih aralığı",
+        "pastNumberOfDays": "Geçmiş gün sayısı",
+        "nextNumberOfDays": "Sonraki gün sayısı"
+      },
+      "valueMode": {
+        "static": "Statik değer",
+        "staticDescription": "Koşul türüyle doğrudan eşleşen bir değer girin",
+        "variable": "Dinamik değişken",
+        "variableDescription": "Mevcut otomasyon akışındaki adımlardaki değişkenleri kullanın"
+      },
+      "variablePicker": {
+        "useDataSource": "Veri kaynağını kullan...",
+        "selectData": "Veri seç",
+        "insertFromField": "Alandan ekle",
+        "searchResults": "Arama sonuçları",
+        "metadata": "Meta veriler",
+        "insertMetadata": "Meta veri ekle"
+      },
+      "toast": {
+        "copySuccess": "Başarıyla kopyalandı",
+        "copyFailed": "Kopyalama başarısız oldu",
+        "testRunFailed": "Test çalıştırması başarısız oldu",
+        "testRunCompleted": "Test çalıştırması tamamlandı",
+        "automationActivated": "Otomasyon etkinleştirildi",
+        "automationUpdated": "Otomasyon güncellendi",
+        "resetToPublished": "Yayınlanan sürüme sıfırla",
+        "automationDeactivated": "Otomasyon devre dışı",
+        "testStepCompleted": "Test adımı tamamlandı",
+        "copyNodeIdFailed": "Düğüm kimliği kopyalanamadı"
+      },
+      "sections": {
+        "label": "Etiket",
+        "config": "Yapılandırma",
+        "testStep": "Test adımı",
+        "result": "Sonuç",
+        "properties": "Özellikler"
+      },
+      "canvas": {
+        "selectTrigger": "Bir tetikleyici seçin:",
+        "end": "Bitiş",
+        "referencedNode": "Referenced node {{node}}",
+        "nodeDescriptions": {
+          "recordCreatedWithTable": "{{table}}'da bir kayıt oluşturulduğunda",
+          "recordUpdatedWithTable": "{{table}}'daki bir kayıt güncellendiğinde",
+          "recordCreatedOrUpdatedWithTable": "{{table}}'da bir kayıt oluşturulduğunda veya güncellendiğinde",
+          "recordMatchesConditionsWithTable": "{{table}} içindeki bir kayıt koşullarla eşleştiğinde",
+          "buttonClickWithTable": "{{table}}'daki bir düğmeye tıklandığında",
+          "formSubmittedWithTable": "{{table}}'da bir form gönderildiğinde",
+          "createRecordWithTable": "{{table}}'da yeni bir kayıt oluşturun.",
+          "updateRecordWithTable": "{{table}}'daki bir kaydı güncelleyin.",
+          "getRecordsWithTable": "{{table}}'dan kayıtları alın."
+        }
+      },
+      "states": {
+        "loading": "Yükleniyor...",
+        "updatingAutomationStatus": "Otomasyon durumu güncelleniyor"
+      },
+      "publish": {
+        "unpublishedChanges": "Canlı otomasyona uygulanması gereken yayınlanmamış değişiklikleriniz var. Bunları uygulamak için Güncelle'yi tıklayın.",
+        "readyButInactive": "Bu otomasyon akışı yapılandırıldı ancak etkinleştirilmedi. Etkinleştirildikten sonra yürürlüğe girecektir."
+      },
+      "runHistory": {
+        "title": "Çalıştırma geçmişi",
+        "description": "Son 100 otomasyon çalıştırma kaydı.",
+        "notificationOwner": "{{workflowName}} otomasyonuna ilişkin bildirimler şu anda bu otomasyonu en son güncelleyen kişi olan {{userName}} adresine gönderiliyor.",
+        "lastModifiedUserFallback": "bu otomasyonu en son güncelleyen kişi",
+        "empty": "Otomasyon akışı çalıştırıldıktan sonra çalıştırma geçmişi kayıtları burada görünecektir.",
+        "dateRangePlaceholder": "Tarih aralığını seçin",
+        "overview": "Genel Bakış",
+        "averageRunTime": "Ortalama çalışma süresi"
+      }
+    }
   },
   "email": {
     "send": "Gönder",

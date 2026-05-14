@@ -1279,6 +1279,439 @@ export type I18nTranslations = {
         };
         "automation": {
             "turnOnTip": string;
+            "workflowPanel": {
+                "nodes": {
+                    "buttonClick": {
+                        "label": string;
+                        "description": string;
+                    };
+                    "recordCreated": {
+                        "label": string;
+                        "description": string;
+                    };
+                    "recordUpdated": {
+                        "label": string;
+                        "description": string;
+                    };
+                    "recordCreatedOrUpdated": {
+                        "label": string;
+                        "description": string;
+                    };
+                    "recordMatchesConditions": {
+                        "label": string;
+                        "description": string;
+                    };
+                    "formSubmitted": {
+                        "label": string;
+                        "description": string;
+                    };
+                    "createRecord": {
+                        "label": string;
+                        "description": string;
+                    };
+                    "getRecords": {
+                        "label": string;
+                        "description": string;
+                    };
+                    "updateRecord": {
+                        "label": string;
+                        "description": string;
+                    };
+                    "sendEmail": {
+                        "label": string;
+                        "description": string;
+                    };
+                    "httpRequest": {
+                        "label": string;
+                        "description": string;
+                    };
+                    "condition": {
+                        "label": string;
+                        "description": string;
+                    };
+                    "unknown": {
+                        "label": string;
+                        "description": string;
+                    };
+                };
+                "nodeGroups": {
+                    "trigger": string;
+                    "triggers": string;
+                    "action": string;
+                    "actions": string;
+                    "logic": string;
+                    "logicDecision": string;
+                    "manualBuild": string;
+                };
+                "nodeStatus": {
+                    "incomplete": string;
+                    "testSucceeded": string;
+                    "testExpired": string;
+                    "untested": string;
+                };
+                "operators": {
+                    "notEmpty": string;
+                    "empty": string;
+                    "equal": string;
+                    "notEqual": string;
+                    "contains": string;
+                    "gt": string;
+                    "gte": string;
+                    "lt": string;
+                    "lte": string;
+                    "is": string;
+                    "isNot": string;
+                    "doesNotContain": string;
+                    "isEmpty": string;
+                    "isNotEmpty": string;
+                    "symbolEqual": string;
+                    "symbolNotEqual": string;
+                    "symbolGreater": string;
+                    "symbolGreaterEqual": string;
+                    "symbolLess": string;
+                    "symbolLessEqual": string;
+                    "isAnyOf": string;
+                    "isNoneOf": string;
+                    "hasAnyOf": string;
+                    "hasAllOf": string;
+                    "isExactly": string;
+                    "isNotExactly": string;
+                    "hasNoneOf": string;
+                    "isWithin": string;
+                    "isBefore": string;
+                    "isAfter": string;
+                    "isOnOrBefore": string;
+                    "isOnOrAfter": string;
+                };
+                "modifiers": {
+                    "title": string;
+                    "upper": string;
+                    "lower": string;
+                    "capitalize": string;
+                    "trim": string;
+                    "length": string;
+                    "string": string;
+                    "json": string;
+                    "urlEncode": string;
+                };
+                "runStatus": {
+                    "success": string;
+                    "failed": string;
+                    "running": string;
+                    "waiting": string;
+                    "skipped": string;
+                    "runSuccessful": string;
+                };
+                "runStatusFilter": {
+                    "all": string;
+                    "status": string;
+                };
+                "runDurationFilter": {
+                    "all": string;
+                    "lt5s": string;
+                    "5to10s": string;
+                    "10to30s": string;
+                    "30sTo1m": string;
+                    "1to5m": string;
+                    "gt5m": string;
+                    "duration": string;
+                };
+                "relativeTime": {
+                    "justNow": string;
+                    "minutesAgo": string;
+                    "hoursAgo": string;
+                    "daysAgo": string;
+                };
+                "resultLabels": {
+                    "fieldValues": string;
+                    "table": string;
+                    "rawData": string;
+                    "name": string;
+                    "email": string;
+                    "triggerUser": string;
+                    "recordId": string;
+                    "recordUrl": string;
+                    "recordName": string;
+                    "record": string;
+                    "returnValue": string;
+                    "nodeId": string;
+                    "nodeType": string;
+                    "nodeName": string;
+                    "executionStatus": string;
+                    "duration": string;
+                    "watchFields": string;
+                    "view": string;
+                    "requestMethod": string;
+                    "requestUrl": string;
+                    "recipients": string;
+                    "subject": string;
+                    "condition": string;
+                    "fields": string;
+                    "requestHeaders": string;
+                    "requestBody": string;
+                    "source": string;
+                    "currentUser": string;
+                    "step": string;
+                    "tableUrl": string;
+                    "testRecordContext": string;
+                    "stepStatus": string;
+                    "success": string;
+                    "targetTable": string;
+                    "input": string;
+                    "output": string;
+                    "callDetails": string;
+                    "ranAt": string;
+                };
+                "validation": {
+                    "needTrigger": string;
+                    "needAction": string;
+                    "completeNodeRequiredConfig": string;
+                    "nodeTestExpired": string;
+                    "completeAllNodeTests": string;
+                    "completeCurrentNode": string;
+                };
+                "fieldDisabled": {
+                    "noWritePermission": string;
+                    "button": string;
+                    "lookup": string;
+                    "computed": string;
+                    "formula": string;
+                    "rollup": string;
+                    "autoNumber": string;
+                    "system": string;
+                };
+                "conjunction": {
+                    "and": string;
+                    "or": string;
+                };
+                "variables": {
+                    "recordId": string;
+                    "recordUrl": string;
+                    "recordName": string;
+                    "createdById": string;
+                    "lastModifiedById": string;
+                    "createdTime": string;
+                    "lastModifiedTime": string;
+                    "autoNumber": string;
+                    "fullOutput": string;
+                    "conditionResult": string;
+                    "firstRecordId": string;
+                    "firstRecordFields": string;
+                    "recordFields": string;
+                    "httpStatus": string;
+                    "httpBody": string;
+                    "httpOk": string;
+                    "emailSentResult": string;
+                };
+                "actions": {
+                    "loop": string;
+                    "cancel": string;
+                    "variable": string;
+                    "editVariable": string;
+                    "delete": string;
+                    "editValueType": string;
+                    "selectVariable": string;
+                    "add": string;
+                    "addField": string;
+                    "addConfig": string;
+                    "send": string;
+                    "confirm": string;
+                    "addCondition": string;
+                    "addConditionGroup": string;
+                    "copy": string;
+                    "expandConditionEditor": string;
+                    "crossDatabaseAccess": string;
+                    "reset": string;
+                    "edit": string;
+                    "generatePreview": string;
+                    "runWithConfig": string;
+                    "runTest": string;
+                    "runHistory": string;
+                    "more": string;
+                    "update": string;
+                    "enableNow": string;
+                    "resetViewport": string;
+                    "copyNodeId": string;
+                    "deleteNode": string;
+                };
+                "fields": {
+                    "database": string;
+                    "loop": string;
+                    "value": string;
+                    "triggerType": string;
+                    "actionType": string;
+                    "description": string;
+                    "watchFields": string;
+                    "form": string;
+                    "findRecordsBy": string;
+                    "skip": string;
+                    "queryLimit": string;
+                    "customMailServer": string;
+                    "recipients": string;
+                    "cc": string;
+                    "bcc": string;
+                    "senderName": string;
+                    "replyTo": string;
+                    "subject": string;
+                    "body": string;
+                    "editBody": string;
+                    "requestMethod": string;
+                    "requestUrl": string;
+                    "requestHeaders": string;
+                    "requestBody": string;
+                    "unsubscribeList": string;
+                };
+                "descriptions": {
+                    "crossDatabaseAccess": string;
+                    "loopSource": string;
+                    "watchAllFields": string;
+                    "selectButtonField": string;
+                    "watchFields": string;
+                    "queryLimit": string;
+                    "recordId": string;
+                    "testStep": string;
+                };
+                "placeholders": {
+                    "select": string;
+                    "selectField": string;
+                    "notSelected": string;
+                    "commandSearch": string;
+                    "selectVariable": string;
+                    "inputContent": string;
+                    "input": string;
+                    "selectDateRange": string;
+                    "search": string;
+                    "inputOrSelectVariable": string;
+                    "searchFields": string;
+                    "inputDescription": string;
+                };
+                "empty": {
+                    "noResults": string;
+                    "noRecords": string;
+                    "addKeyValueHint": string;
+                    "noFieldsToAdd": string;
+                    "noFilterConditions": string;
+                    "noButtonFields": string;
+                };
+                "fieldMapping": {
+                    "singleSelectTip": string;
+                    "multipleSelectTip": string;
+                    "userTip": string;
+                    "attachmentTip": string;
+                    "linkTip": string;
+                    "invalidTitle": string;
+                    "invalidReason": string;
+                };
+                "mailConfig": {
+                    "title": string;
+                    "description": string;
+                    "host": string;
+                    "hostDescription": string;
+                    "hostPlaceholder": string;
+                    "port": string;
+                    "portPlaceholder": string;
+                    "username": string;
+                    "usernamePlaceholder": string;
+                    "password": string;
+                    "passwordPlaceholder": string;
+                    "senderAddress": string;
+                    "senderAddressPlaceholder": string;
+                    "senderName": string;
+                    "senderNamePlaceholder": string;
+                    "testEmailPlaceholder": string;
+                };
+                "conditions": {
+                    "matchAll": string;
+                    "matchAny": string;
+                    "edit": string;
+                    "trueBranch": string;
+                    "falseBranch": string;
+                };
+                "dateMode": {
+                    "today": string;
+                    "tomorrow": string;
+                    "yesterday": string;
+                    "currentWeek": string;
+                    "lastWeek": string;
+                    "nextWeek": string;
+                    "currentMonth": string;
+                    "lastMonth": string;
+                    "nextMonth": string;
+                    "daysAgo": string;
+                    "daysFromNow": string;
+                    "exactDate": string;
+                    "dateRange": string;
+                    "pastNumberOfDays": string;
+                    "nextNumberOfDays": string;
+                };
+                "valueMode": {
+                    "static": string;
+                    "staticDescription": string;
+                    "variable": string;
+                    "variableDescription": string;
+                };
+                "variablePicker": {
+                    "useDataSource": string;
+                    "selectData": string;
+                    "insertFromField": string;
+                    "searchResults": string;
+                    "metadata": string;
+                    "insertMetadata": string;
+                };
+                "toast": {
+                    "copySuccess": string;
+                    "copyFailed": string;
+                    "testRunFailed": string;
+                    "testRunCompleted": string;
+                    "automationActivated": string;
+                    "automationUpdated": string;
+                    "resetToPublished": string;
+                    "automationDeactivated": string;
+                    "testStepCompleted": string;
+                    "copyNodeIdFailed": string;
+                };
+                "sections": {
+                    "label": string;
+                    "config": string;
+                    "testStep": string;
+                    "result": string;
+                    "properties": string;
+                };
+                "canvas": {
+                    "selectTrigger": string;
+                    "end": string;
+                    "referencedNode": string;
+                    "nodeDescriptions": {
+                        "recordCreatedWithTable": string;
+                        "recordUpdatedWithTable": string;
+                        "recordCreatedOrUpdatedWithTable": string;
+                        "recordMatchesConditionsWithTable": string;
+                        "buttonClickWithTable": string;
+                        "formSubmittedWithTable": string;
+                        "createRecordWithTable": string;
+                        "updateRecordWithTable": string;
+                        "getRecordsWithTable": string;
+                    };
+                };
+                "states": {
+                    "loading": string;
+                    "updatingAutomationStatus": string;
+                };
+                "publish": {
+                    "unpublishedChanges": string;
+                    "readyButInactive": string;
+                };
+                "runHistory": {
+                    "title": string;
+                    "description": string;
+                    "notificationOwner": string;
+                    "lastModifiedUserFallback": string;
+                    "empty": string;
+                    "dateRangePlaceholder": string;
+                    "overview": string;
+                    "averageRunTime": string;
+                };
+            };
         };
         "email": {
             "send": string;
