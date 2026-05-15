@@ -7,7 +7,6 @@ export const workflowNodeCategorySchema = z.enum(['trigger', 'action', 'logic', 
 export const workflowTriggerTypeSchema = z.enum([
   'recordCreated',
   'recordUpdated',
-  'recordCreatedOrUpdated',
   'recordMatchesConditions',
   'buttonClick',
   'formSubmitted',
@@ -81,6 +80,11 @@ export const workflowRunVoSchema = z.object({
   createdBy: z.string().optional().nullable(),
 });
 
+export const workflowWebhookTokenVoSchema = z.object({
+  token: z.string(),
+  secret: z.string(),
+});
+
 export const workflowVoSchema = z.object({
   id: z.string(),
   baseId: z.string(),
@@ -104,6 +108,7 @@ export type IWorkflowNode = z.infer<typeof workflowNodeSchema>;
 export type IWorkflowEdge = z.infer<typeof workflowEdgeSchema>;
 export type IWorkflowVo = z.infer<typeof workflowVoSchema>;
 export type IWorkflowRunVo = z.infer<typeof workflowRunVoSchema>;
+export type IWorkflowWebhookTokenVo = z.infer<typeof workflowWebhookTokenVoSchema>;
 
 const WORKFLOW_BASE = '/base/{baseId}/workflow';
 const WORKFLOW_DETAIL = `${WORKFLOW_BASE}/{workflowId}`;
@@ -118,6 +123,7 @@ const WORKFLOW_TRIGGER = `${WORKFLOW_DETAIL}/trigger`;
 const WORKFLOW_ACTION = `${WORKFLOW_DETAIL}/action`;
 const WORKFLOW_LOGIC = `${WORKFLOW_DETAIL}/logic`;
 const WORKFLOW_NODE = `${WORKFLOW_DETAIL}/{category}/{nodeId}`;
+const WORKFLOW_WEBHOOK_TOKEN = `${WORKFLOW_DETAIL}/trigger/{nodeId}/generate-webhook-token`;
 const WORKFLOW_TEST = `${WORKFLOW_DETAIL}/test`;
 const WORKFLOW_TEST_NODE = `${WORKFLOW_TEST}/{nodeId}`;
 const WORKFLOW_RUN = `${WORKFLOW_DETAIL}/run`;
@@ -260,6 +266,16 @@ export const updateWorkflowNode = async (
   return axios.put<IWorkflowNode>(
     urlBuilder(WORKFLOW_NODE, { baseId, workflowId, category, nodeId }),
     ro
+  );
+};
+
+export const generateWorkflowWebhookToken = async (
+  baseId: string,
+  workflowId: string,
+  nodeId: string
+) => {
+  return axios.post<IWorkflowWebhookTokenVo>(
+    urlBuilder(WORKFLOW_WEBHOOK_TOKEN, { baseId, workflowId, nodeId })
   );
 };
 

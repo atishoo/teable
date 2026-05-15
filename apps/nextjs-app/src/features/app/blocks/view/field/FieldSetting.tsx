@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import {
   FieldType,
   fieldVoSchema,
@@ -9,10 +10,12 @@ import {
   BaseNodeResourceType,
   convertField,
   createBaseNode,
+  getWorkflow,
   type IBaseNodeWorkflowResourceMeta,
 } from '@teable/openapi';
 import type { IFieldInstance } from '@teable/sdk';
 import { useBaseId, useField, useTableId } from '@teable/sdk';
+import { ReactQueryKeys } from '@teable/sdk/config';
 import { isEmpty } from 'lodash';
 import { useWorkFlowPanelStore } from '@/features/app/automation/workflow-panel/useWorkFlowPaneStore';
 import {
@@ -27,6 +30,7 @@ export const FieldSetting = () => {
   const order = setting?.order;
   const baseId = useBaseId() as string;
   const tableId = useTableId() as string;
+  const queryClient = useQueryClient();
 
   const handleOpenWorkflowPanel = async (field?: IFieldVo | IFieldInstance) => {
     const { from = '', openModal } = useWorkFlowPanelStore.getState();
@@ -53,9 +57,17 @@ export const FieldSetting = () => {
         workflowId = result.data.resourceId;
         workflowName = resourceMeta.name;
         isActive = resourceMeta.isActive ?? false;
+      } else {
+        const workflowVo = await getWorkflow(baseId, workflowId).then((res) => res.data);
+        workflowName = workflowVo.name ?? workflowName;
+        isActive = workflowVo.isActive ?? isActive;
       }
 
-      if (workflow.id !== workflowId || workflow.name !== workflowName || !workflow.isActive) {
+      if (
+        workflow.id !== workflowId ||
+        workflow.name !== workflowName ||
+        workflow.isActive !== isActive
+      ) {
         const fieldVo = field as IFieldVo;
         const fieldRo: IConvertFieldRo = {
           type: FieldType.Button,
@@ -78,6 +90,11 @@ export const FieldSetting = () => {
           },
         };
         await convertField(tableId, field.id, fieldRo);
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ReactQueryKeys.baseNodeTree(baseId) }),
+          queryClient.invalidateQueries({ queryKey: ReactQueryKeys.field(tableId) }),
+          queryClient.invalidateQueries({ queryKey: ReactQueryKeys.fieldList(tableId) }),
+        ]);
       }
       openModal(baseId, workflowId);
     }
@@ -98,7 +115,13 @@ export const FieldSetting = () => {
     return <></>;
   }
 
-  const fieldVo = field ? fieldVoSchema.safeParse(field) : undefined;
+  const normalizedField = field
+    ? {
+        ...field,
+        description: field.description ?? undefined,
+      }
+    : undefined;
+  const fieldVo = normalizedField ? fieldVoSchema.safeParse(normalizedField) : undefined;
 
   return (
     <FieldSettingInner

@@ -718,10 +718,6 @@
           "label": "Коли запис оновлено",
           "description": "Запустіть автоматизацію, коли певні записи змінюються"
         },
-        "recordCreatedOrUpdated": {
-          "label": "Коли запис створюється або оновлюється",
-          "description": "Запуск автоматизації під час створення або оновлення запису"
-        },
         "recordMatchesConditions": {
           "label": "Коли запис відповідає умовам",
           "description": "Запустіть автоматизацію, коли запис починає відповідати умовам"
@@ -747,16 +743,20 @@
           "description": "Надіслати спеціальний електронний лист"
         },
         "httpRequest": {
-          "label": "HTTP request",
+          "label": "HTTP-запит",
           "description": "Підключайтеся до зовнішніх служб через API та обмінюйтеся даними"
         },
         "condition": {
           "label": "Коли збігаються умови...",
-          "description": "Вирішіть, чи продовжувати за умовою"
+          "description": "Виконувати різні дії на основі заданих умов"
         },
         "unknown": {
           "label": "Невідомий вузол",
           "description": "Невідомий вузол"
+        },
+        "webhook": {
+          "label": "Коли отримано Webhook",
+          "description": "Запускати автоматизацію зовнішнім HTTP-запитом"
         }
       },
       "nodeGroups": {
@@ -885,7 +885,8 @@
         "input": "Введення",
         "output": "Вихід",
         "callDetails": "Деталі виклику",
-        "ranAt": "Побіг на"
+        "ranAt": "Побіг на",
+        "authorization": "авторизація"
       },
       "validation": {
         "needTrigger": "Потрібен принаймні один тригер",
@@ -926,7 +927,8 @@
         "httpStatus": "Код статусу HTTP",
         "httpBody": "Тіло відповіді HTTP",
         "httpOk": "HTTP успіх",
-        "emailSentResult": "Результат надіслано електронною поштою"
+        "emailSentResult": "Результат надіслано електронною поштою",
+        "webhookBody": "Тіло"
       },
       "actions": {
         "loop": "Петля",
@@ -938,6 +940,8 @@
         "selectVariable": "Виберіть змінну",
         "add": "додати",
         "addField": "Додати поле",
+        "watchAllFields": "Відстежувати всі",
+        "unwatchAllFields": "Не відстежувати всі",
         "addConfig": "Додайте конфігурацію",
         "send": "Надіслати",
         "confirm": "Підтвердити",
@@ -957,7 +961,13 @@
         "enableNow": "Увімкнути зараз",
         "resetViewport": "Скинути",
         "copyNodeId": "Натисніть, щоб скопіювати ідентифікатор вузла",
-        "deleteNode": "Видалити вузол"
+        "deleteNode": "Видалити вузол",
+        "select": "Вибрати",
+        "nextStep": "Далі",
+        "return": "Назад",
+        "enableAuthorization": "Увімкнути авторизацію",
+        "regenerate": "Створити заново",
+        "regenerateToken": "Створити token заново?"
       },
       "fields": {
         "database": "База даних",
@@ -984,7 +994,10 @@
         "requestUrl": "URL запиту",
         "requestHeaders": "Заголовки запитів",
         "requestBody": "Тіло запиту",
-        "unsubscribeList": "Список відписок"
+        "unsubscribeList": "Список відписок",
+        "webhookUrl": "URL Webhook",
+        "authorizationBearerToken": "Авторизація (Bearer token)",
+        "callExample": "Приклад виклику"
       },
       "descriptions": {
         "crossDatabaseAccess": "Доступ до зовнішньої бази даних буде здійснюватися з дозволами та ідентифікацією конфігуратора автоматизації. Якщо конфігуратор втратить доступ до цільової бази даних, автоматизація не вдасться.",
@@ -994,7 +1007,10 @@
         "watchFields": "Оновлення вибраних полів запустить автоматизацію. Коли перевіряються всі поля, також переглядатимуться новостворені поля.",
         "queryLimit": "Кожен запит повертає до 1000 записів.",
         "recordId": "Ідентифікатор запису для оновлення. Щоб оновити запис із попереднього кроку, скористайтеся меню «+», щоб вибрати крок і його ідентифікатор запису.",
-        "testStep": "Перевірте цей крок, щоб підтвердити правильну конфігурацію. Після успішного тестування цей крок може ввімкнути автоматизацію."
+        "testStep": "Перевірте цей крок, щоб підтвердити правильну конфігурацію. Після успішного тестування цей крок може ввімкнути автоматизацію.",
+        "webhookUrlPublic": "Будь-хто з цим URL може запустити вашу автоматизацію. Обережно діліться цим URL.",
+        "webhookAuthorizationEnabled": "Авторизацію увімкнено. Лише запити з правильним Bearer token можуть запустити цю автоматизацію.",
+        "regenerateToken": "Повторне створення одразу зробить старий token недійсним і може порушити роботу наявних інтеграцій."
       },
       "placeholders": {
         "select": "Виберіть...",
@@ -1008,7 +1024,9 @@
         "search": "пошук...",
         "inputOrSelectVariable": "Введення / вибір змінної",
         "searchFields": "Поля пошуку...",
-        "inputDescription": "Введіть опис"
+        "inputDescription": "Введіть опис",
+        "inputKey": "Введіть ключ",
+        "inputValue": "Введіть значення"
       },
       "empty": {
         "noResults": "Результатів не знайдено",
@@ -1081,7 +1099,8 @@
         "insertFromField": "Вставити з поля",
         "searchResults": "Результати пошуку",
         "metadata": "Метадані",
-        "insertMetadata": "Вставте метадані"
+        "insertMetadata": "Вставте метадані",
+        "typeMismatch": "Тип змінної не збігається"
       },
       "toast": {
         "copySuccess": "Успішно скопійовано",
@@ -1109,13 +1128,17 @@
         "nodeDescriptions": {
           "recordCreatedWithTable": "Коли запис створюється в {{table}}",
           "recordUpdatedWithTable": "Коли запис у {{table}} оновлюється",
-          "recordCreatedOrUpdatedWithTable": "Коли створюється або оновлюється запис у {{table}}",
           "recordMatchesConditionsWithTable": "Коли запис у {{table}} відповідає умовам",
           "buttonClickWithTable": "Коли натиснуто кнопку в {{table}}",
           "formSubmittedWithTable": "Коли надсилається форма в {{table}}",
           "createRecordWithTable": "Створіть новий запис у {{table}}.",
+          "getRecordsFromView": "Отримати записи з подання {{view}}",
+          "updateRecordFields": "Оновити {{fields}}",
+          "sendEmailTo": "Надіслати листа на {{recipient}}",
+          "fieldListSeparator": ", ",
           "updateRecordWithTable": "Оновіть запис у {{table}}.",
-          "getRecordsWithTable": "Отримати записи з {{table}}."
+          "getRecordsWithTable": "Отримати записи з {{table}}.",
+          "webhook": "Запускати автоматизацію при отриманні Webhook"
         }
       },
       "states": {
@@ -1135,6 +1158,12 @@
         "dateRangePlaceholder": "Виберіть діапазон дат",
         "overview": "Огляд",
         "averageRunTime": "Середній час виконання"
+      },
+      "httpBody": {
+        "mixedMode": "Змішаний режим",
+        "mixedModeDescription": "Використовувати змінні та статичні значення з поточного потоку автоматизації",
+        "attachmentMode": "Вкладення",
+        "attachmentModeDescription": "Можна вибрати лише змінні типу вкладення"
       }
     }
   },

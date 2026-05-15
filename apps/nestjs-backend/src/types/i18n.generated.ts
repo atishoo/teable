@@ -1293,10 +1293,6 @@ export type I18nTranslations = {
                         "label": string;
                         "description": string;
                     };
-                    "recordCreatedOrUpdated": {
-                        "label": string;
-                        "description": string;
-                    };
                     "recordMatchesConditions": {
                         "label": string;
                         "description": string;
@@ -1330,6 +1326,10 @@ export type I18nTranslations = {
                         "description": string;
                     };
                     "unknown": {
+                        "label": string;
+                        "description": string;
+                    };
+                    "webhook": {
                         "label": string;
                         "description": string;
                     };
@@ -1461,6 +1461,7 @@ export type I18nTranslations = {
                     "output": string;
                     "callDetails": string;
                     "ranAt": string;
+                    "authorization": string;
                 };
                 "validation": {
                     "needTrigger": string;
@@ -1502,6 +1503,7 @@ export type I18nTranslations = {
                     "httpBody": string;
                     "httpOk": string;
                     "emailSentResult": string;
+                    "webhookBody": string;
                 };
                 "actions": {
                     "loop": string;
@@ -1513,6 +1515,8 @@ export type I18nTranslations = {
                     "selectVariable": string;
                     "add": string;
                     "addField": string;
+                    "watchAllFields": string;
+                    "unwatchAllFields": string;
                     "addConfig": string;
                     "send": string;
                     "confirm": string;
@@ -1533,6 +1537,12 @@ export type I18nTranslations = {
                     "resetViewport": string;
                     "copyNodeId": string;
                     "deleteNode": string;
+                    "select": string;
+                    "nextStep": string;
+                    "return": string;
+                    "enableAuthorization": string;
+                    "regenerate": string;
+                    "regenerateToken": string;
                 };
                 "fields": {
                     "database": string;
@@ -1560,6 +1570,9 @@ export type I18nTranslations = {
                     "requestHeaders": string;
                     "requestBody": string;
                     "unsubscribeList": string;
+                    "webhookUrl": string;
+                    "authorizationBearerToken": string;
+                    "callExample": string;
                 };
                 "descriptions": {
                     "crossDatabaseAccess": string;
@@ -1570,6 +1583,9 @@ export type I18nTranslations = {
                     "queryLimit": string;
                     "recordId": string;
                     "testStep": string;
+                    "webhookUrlPublic": string;
+                    "webhookAuthorizationEnabled": string;
+                    "regenerateToken": string;
                 };
                 "placeholders": {
                     "select": string;
@@ -1584,6 +1600,8 @@ export type I18nTranslations = {
                     "inputOrSelectVariable": string;
                     "searchFields": string;
                     "inputDescription": string;
+                    "inputKey": string;
+                    "inputValue": string;
                 };
                 "empty": {
                     "noResults": string;
@@ -1657,6 +1675,7 @@ export type I18nTranslations = {
                     "searchResults": string;
                     "metadata": string;
                     "insertMetadata": string;
+                    "typeMismatch": string;
                 };
                 "toast": {
                     "copySuccess": string;
@@ -1684,13 +1703,17 @@ export type I18nTranslations = {
                     "nodeDescriptions": {
                         "recordCreatedWithTable": string;
                         "recordUpdatedWithTable": string;
-                        "recordCreatedOrUpdatedWithTable": string;
                         "recordMatchesConditionsWithTable": string;
                         "buttonClickWithTable": string;
                         "formSubmittedWithTable": string;
                         "createRecordWithTable": string;
+                        "getRecordsFromView": string;
+                        "updateRecordFields": string;
+                        "sendEmailTo": string;
+                        "fieldListSeparator": string;
                         "updateRecordWithTable": string;
                         "getRecordsWithTable": string;
+                        "webhook": string;
                     };
                 };
                 "states": {
@@ -1710,6 +1733,12 @@ export type I18nTranslations = {
                     "dateRangePlaceholder": string;
                     "overview": string;
                     "averageRunTime": string;
+                };
+                "httpBody": {
+                    "mixedMode": string;
+                    "mixedModeDescription": string;
+                    "attachmentMode": string;
+                    "attachmentModeDescription": string;
                 };
             };
         };

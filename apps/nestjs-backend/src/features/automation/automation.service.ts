@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import { Injectable } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import {
@@ -78,6 +79,14 @@ interface IOperationRecordsCreateEvent {
   };
   resolveData?: unknown;
 }
+
+interface IReceiveWebhookPayload {
+  body: unknown;
+  authorization?: string;
+}
+
+const webhookTriggerNotFound = 'Webhook trigger not found';
+const webhookTriggerNotFoundI18nKey = 'httpErrors.automation.webhookTriggerNotFound';
 
 @Injectable()
 export class AutomationService {
@@ -264,6 +273,22 @@ export class AutomationService {
     return updatedNode;
   }
 
+  async generateWebhookToken(baseId: string, workflowId: string, nodeId: string) {
+    const workflow = await this.findWorkflow(baseId, workflowId);
+    const triggerNode = this.getDraftSnapshot(workflow).nodes.find(
+      (node) => node.id === nodeId && node.category === 'trigger'
+    );
+    if (!triggerNode || triggerNode.type !== 'webhook') {
+      throw new CustomHttpException(webhookTriggerNotFound, HttpErrorCode.NOT_FOUND, {
+        localization: { i18nKey: webhookTriggerNotFoundI18nKey },
+      });
+    }
+    return {
+      token: `whk-${randomBytes(32).toString('hex')}`,
+      secret: randomBytes(24).toString('base64url'),
+    };
+  }
+
   async deleteNode(
     baseId: string,
     workflowId: string,
@@ -282,10 +307,43 @@ export class AutomationService {
 
   async runManualTest(baseId: string, workflowId: string, nodeId?: string) {
     const workflow = await this.findWorkflow(baseId, workflowId);
-    return this.runSnapshot(workflow, this.getDraftSnapshot(workflow), {
-      triggerType: 'manual',
-      trigger: { baseId, workflowId, manual: true },
+    const snapshot = this.getDraftSnapshot(workflow);
+    const triggerNode = nodeId
+      ? snapshot.nodes.find((node) => node.id === nodeId)
+      : snapshot.nodes.find((node) => node.category === 'trigger');
+    const isWebhookTest = triggerNode?.category === 'trigger' && triggerNode.type === 'webhook';
+    return this.runSnapshot(workflow, snapshot, {
+      triggerType: isWebhookTest ? 'webhook' : 'manual',
+      trigger: isWebhookTest ? { body: {} } : { baseId, workflowId, manual: true },
       startNodeId: nodeId,
+    });
+  }
+
+  async receiveWebhook(baseId: string, workflowId: string, payload: IReceiveWebhookPayload) {
+    const workflow = await this.prismaService.workflow.findFirst({
+      where: { id: workflowId, baseId, isActive: true, deletedTime: null },
+    });
+    if (!workflow) {
+      throw new CustomHttpException(webhookTriggerNotFound, HttpErrorCode.NOT_FOUND, {
+        localization: { i18nKey: webhookTriggerNotFoundI18nKey },
+      });
+    }
+
+    const snapshot = this.getActiveSnapshotGraph(workflow);
+    const triggerNode = snapshot.nodes.find(
+      (node) => node.category === 'trigger' && node.type === 'webhook'
+    );
+    if (!triggerNode) {
+      throw new CustomHttpException(webhookTriggerNotFound, HttpErrorCode.NOT_FOUND, {
+        localization: { i18nKey: webhookTriggerNotFoundI18nKey },
+      });
+    }
+
+    this.assertWebhookAuthorization(triggerNode.config ?? {}, payload.authorization);
+    return this.runSnapshot(workflow, snapshot, {
+      triggerType: 'webhook',
+      trigger: { body: payload.body ?? {} },
+      startNodeId: triggerNode.id,
     });
   }
 
@@ -394,11 +452,6 @@ export class AutomationService {
         record,
         user: this.operationUser(event.reqUser),
       });
-      await this.runMatchedWorkflows(baseId, 'recordCreatedOrUpdated', {
-        tableId,
-        record,
-        user: this.operationUser(event.reqUser),
-      });
     }
   }
 
@@ -428,10 +481,6 @@ export class AutomationService {
         viewId: event.context?.entry?.type === 'form' ? event.context.entry.id : undefined,
         record,
       });
-      await this.runMatchedWorkflows(baseId, 'recordCreatedOrUpdated', {
-        tableId: event.payload.tableId,
-        record,
-      });
     }
   }
 
@@ -448,10 +497,6 @@ export class AutomationService {
       await this.runMatchedWorkflows(baseId, 'recordUpdated', {
         tableId: event.payload.tableId,
         fieldIds,
-        record,
-      });
-      await this.runMatchedWorkflows(baseId, 'recordCreatedOrUpdated', {
-        tableId: event.payload.tableId,
         record,
       });
       await this.runMatchedWorkflows(baseId, 'recordMatchesConditions', {
@@ -1079,6 +1124,20 @@ export class AutomationService {
       });
     }
     return true;
+  }
+
+  private assertWebhookAuthorization(config: Record<string, unknown>, authorization?: string) {
+    const authorizationConfig = isPlainObject(config.authorization)
+      ? (config.authorization as Record<string, unknown>)
+      : undefined;
+    if (authorizationConfig?.type !== 'bearer') return;
+    const token = this.optionalString(authorizationConfig.token);
+    if (!token) {
+      throw new CustomHttpException('Unauthorized webhook request', HttpErrorCode.UNAUTHORIZED);
+    }
+    if (authorization !== `Bearer ${token}`) {
+      throw new CustomHttpException('Unauthorized webhook request', HttpErrorCode.UNAUTHORIZED);
+    }
   }
 
   private buttonTriggerMatches(config: Record<string, unknown>, trigger: Record<string, unknown>) {

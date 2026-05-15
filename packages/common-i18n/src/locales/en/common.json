@@ -1083,10 +1083,6 @@
           "label": "When record updated",
           "description": "Run automation when specific records change"
         },
-        "recordCreatedOrUpdated": {
-          "label": "When record created or updated",
-          "description": "Run automation when a record is created or updated"
-        },
         "recordMatchesConditions": {
           "label": "When record matches conditions",
           "description": "Run automation when a record starts matching conditions"
@@ -1117,11 +1113,15 @@
         },
         "condition": {
           "label": "When conditions match...",
-          "description": "Decide whether to continue by condition"
+          "description": "Run different actions based on specific conditions"
         },
         "unknown": {
           "label": "Unknown node",
           "description": "Unknown node"
+        },
+        "webhook": {
+          "label": "When webhook received",
+          "description": "Trigger automation through an external HTTP request"
         }
       },
       "nodeGroups": {
@@ -1250,7 +1250,8 @@
         "input": "Input",
         "output": "Output",
         "callDetails": "Call details",
-        "ranAt": "Ran at"
+        "ranAt": "Ran at",
+        "authorization": "authorization"
       },
       "validation": {
         "needTrigger": "At least one trigger is required",
@@ -1291,7 +1292,8 @@
         "httpStatus": "HTTP status code",
         "httpBody": "HTTP response body",
         "httpOk": "HTTP success",
-        "emailSentResult": "Email sent result"
+        "emailSentResult": "Email sent result",
+        "webhookBody": "Body"
       },
       "actions": {
         "loop": "Loop",
@@ -1303,6 +1305,8 @@
         "selectVariable": "Select variable",
         "add": "Add",
         "addField": "Add field",
+        "watchAllFields": "Watch all",
+        "unwatchAllFields": "Unwatch all",
         "addConfig": "Add config",
         "send": "Send",
         "confirm": "Confirm",
@@ -1322,7 +1326,13 @@
         "enableNow": "Enable now",
         "resetViewport": "Reset",
         "copyNodeId": "Click to copy node ID",
-        "deleteNode": "Delete node"
+        "deleteNode": "Delete node",
+        "select": "Select",
+        "nextStep": "Next",
+        "return": "Return",
+        "enableAuthorization": "Enable authorization",
+        "regenerate": "Regenerate",
+        "regenerateToken": "Regenerate token?"
       },
       "fields": {
         "database": "Database",
@@ -1349,7 +1359,10 @@
         "requestUrl": "Request URL",
         "requestHeaders": "Request headers",
         "requestBody": "Request body",
-        "unsubscribeList": "Unsubscribe list"
+        "unsubscribeList": "Unsubscribe list",
+        "webhookUrl": "Webhook URL",
+        "authorizationBearerToken": "Authorization (Bearer token)",
+        "callExample": "Call example"
       },
       "descriptions": {
         "crossDatabaseAccess": "The external database will be accessed with the permissions and identity of the automation configurator. If the configurator loses access to the target database, the automation will fail.",
@@ -1359,7 +1372,10 @@
         "watchFields": "Updates to selected fields will trigger the automation. When all fields are watched, newly created fields will also be watched.",
         "queryLimit": "Each query returns up to 1000 records.",
         "recordId": "The ID of the record to update. To update a record from a previous step, use the + menu to select the step and its record ID.",
-        "testStep": "Test this step to confirm its configuration is correct. After a successful test, this step can enable automation."
+        "testStep": "Test this step to confirm its configuration is correct. After a successful test, this step can enable automation.",
+        "webhookUrlPublic": "Anyone with this URL can trigger your automation. Be careful where you share it.",
+        "webhookAuthorizationEnabled": "Authorization is enabled. Only requests with the correct Bearer token can trigger this automation.",
+        "regenerateToken": "Regenerating will immediately invalidate the old token and may break existing integrations."
       },
       "placeholders": {
         "select": "Select...",
@@ -1373,7 +1389,9 @@
         "search": "Search...",
         "inputOrSelectVariable": "Input / select variable",
         "searchFields": "Search fields...",
-        "inputDescription": "Enter description"
+        "inputDescription": "Enter description",
+        "inputKey": "Enter key",
+        "inputValue": "Enter value"
       },
       "empty": {
         "noResults": "No results found",
@@ -1446,7 +1464,8 @@
         "insertFromField": "Insert from field",
         "searchResults": "Search results",
         "metadata": "Metadata",
-        "insertMetadata": "Insert metadata"
+        "insertMetadata": "Insert metadata",
+        "typeMismatch": "Variable type does not match"
       },
       "toast": {
         "copySuccess": "Copied successfully",
@@ -1474,13 +1493,17 @@
         "nodeDescriptions": {
           "recordCreatedWithTable": "When a record is created in {{table}}",
           "recordUpdatedWithTable": "When a record in {{table}} is updated",
-          "recordCreatedOrUpdatedWithTable": "When a record in {{table}} is created or updated",
           "recordMatchesConditionsWithTable": "When a record in {{table}} matches conditions",
           "buttonClickWithTable": "When a button in {{table}} is clicked",
           "formSubmittedWithTable": "When a form in {{table}} is submitted",
           "createRecordWithTable": "Create a new record in {{table}}.",
+          "getRecordsFromView": "Get records from {{view}} view",
+          "updateRecordFields": "Update {{fields}}",
+          "sendEmailTo": "Send email to {{recipient}}",
+          "fieldListSeparator": ", ",
           "updateRecordWithTable": "Update a record in {{table}}.",
-          "getRecordsWithTable": "Get records from {{table}}."
+          "getRecordsWithTable": "Get records from {{table}}.",
+          "webhook": "Run automation when receiving a Webhook"
         }
       },
       "states": {
@@ -1500,6 +1523,12 @@
         "dateRangePlaceholder": "Select date range",
         "overview": "Overview",
         "averageRunTime": "Average run time"
+      },
+      "httpBody": {
+        "mixedMode": "Mixed mode",
+        "mixedModeDescription": "Use variables and static values from the current automation flow",
+        "attachmentMode": "Attachment",
+        "attachmentModeDescription": "Only attachment variables can be selected"
       }
     }
   },

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CellValueType,
   ColorUtils,
@@ -10,6 +10,13 @@ import {
   ViewType,
 } from '@teable/core';
 import {
+  ActionAI,
+  ActionCreateRecord,
+  ActionGetRecord,
+  ActionHttpRequest,
+  ActionSendEmail,
+  ActionScript,
+  ActionUpdateRecord,
   A as FieldTextIcon,
   Calendar as FieldCalendarIcon,
   CheckCircle2 as FieldSingleSelectIcon,
@@ -19,6 +26,8 @@ import {
   Code as FieldFormulaIcon,
   ConditionalLookup as FieldConditionalLookupIcon,
   ConditionalRollup as FieldConditionalRollupIcon,
+  Database as DatabaseIcon,
+  Edit as FieldEditIcon,
   File as FieldAttachmentIcon,
   Hash as FieldNumberIcon,
   History as FieldLastModifiedTimeIcon,
@@ -31,9 +40,17 @@ import {
   Object as VariableObjectIcon,
   Search as FieldLookupIcon,
   Star as FieldRatingIcon,
+  Table2 as TableIcon,
+  TriggerButton,
+  TriggerCreateRecord,
+  TriggerForm,
+  TriggerRecordMatchesConditions,
+  TriggerUpdateRecord,
+  TriggerWebhook as TriggerWebhookIcon,
   User as FieldUserIcon,
   UserEdit as FieldLastModifiedByIcon,
   UserPlus as FieldCreatedByIcon,
+  WorkflowLogic,
 } from '@teable/icons';
 import {
   getBaseAll,
@@ -43,10 +60,13 @@ import {
   getUserCollaborators,
   getWorkflow,
   getWorkflowRunSummary,
+  generateWorkflowWebhookToken,
+  getViewList,
   listWorkflowRuns,
   testWorkflow,
   updateWorkflow,
   updateWorkflowActive,
+  updateWorkflowNode,
   BaseNodeResourceType,
   type IBaseNodeTreeVo,
   type IWorkflowEdge,
@@ -54,6 +74,7 @@ import {
   type IWorkflowRunListRo,
   type IWorkflowRunVo,
   type IWorkflowVo,
+  type IWorkflowWebhookTokenVo,
 } from '@teable/openapi';
 import { DateEditor, RatingEditor, UserAvatar, ViewSelect } from '@teable/sdk/components';
 import {
@@ -103,6 +124,15 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  ScrollBar,
 } from '@teable/ui-lib/shadcn';
 import {
   ArrowDownUp,
@@ -111,26 +141,26 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  CircleHelp,
   CircleMinus,
   Clock,
   Copy,
   Bell,
-  GitBranch,
-  Globe2,
+  Eye,
+  EyeOff,
   Hash,
   Link2,
   Maximize2,
-  Mail,
   Minus,
   MoreHorizontal,
-  MousePointerClick,
   Play,
   Plus,
-  PlusCircle,
   Pencil,
+  RefreshCcw,
   RefreshCw,
   Search,
   Send,
+  ShieldCheck,
   SquareMousePointer,
   TriangleAlert,
   Trash2,
@@ -204,6 +234,9 @@ interface IVariableOption {
   groupNodeDescription?: string;
   field?: TableField;
   parentFieldId?: string;
+  parentObjectKey?: string;
+  objectKey?: string;
+  objectValue?: boolean;
   sourceOnly?: boolean;
   valueKind?: FieldValueKind;
   icon?: IconComponent;
@@ -301,7 +334,7 @@ const TRIGGER_NODES: INodeCatalogItem[] = [
     labelDefault: 'When button clicked',
     descriptionKey: 'nodes.buttonClick.description',
     descriptionDefault: 'Run automation when a button is clicked',
-    icon: MousePointerClick,
+    icon: TriggerButton,
   },
   {
     type: 'recordCreated',
@@ -310,7 +343,7 @@ const TRIGGER_NODES: INodeCatalogItem[] = [
     labelDefault: 'When record created',
     descriptionKey: 'nodes.recordCreated.description',
     descriptionDefault: 'Run automation when a record is created',
-    icon: PlusCircle,
+    icon: TriggerCreateRecord,
   },
   {
     type: 'recordUpdated',
@@ -319,16 +352,7 @@ const TRIGGER_NODES: INodeCatalogItem[] = [
     labelDefault: 'When record updated',
     descriptionKey: 'nodes.recordUpdated.description',
     descriptionDefault: 'Run automation when specific records change',
-    icon: RefreshCw,
-  },
-  {
-    type: 'recordCreatedOrUpdated',
-    category: 'trigger',
-    labelKey: 'nodes.recordCreatedOrUpdated.label',
-    labelDefault: 'When record created or updated',
-    descriptionKey: 'nodes.recordCreatedOrUpdated.description',
-    descriptionDefault: 'Run automation when a record is created or updated',
-    icon: SquareMousePointer,
+    icon: TriggerUpdateRecord,
   },
   {
     type: 'recordMatchesConditions',
@@ -337,7 +361,7 @@ const TRIGGER_NODES: INodeCatalogItem[] = [
     labelDefault: 'When record matches conditions',
     descriptionKey: 'nodes.recordMatchesConditions.description',
     descriptionDefault: 'Run automation when a record starts matching conditions',
-    icon: CheckCircle2,
+    icon: TriggerRecordMatchesConditions,
   },
   {
     type: 'formSubmitted',
@@ -346,7 +370,16 @@ const TRIGGER_NODES: INodeCatalogItem[] = [
     labelDefault: 'When form submitted',
     descriptionKey: 'nodes.formSubmitted.description',
     descriptionDefault: 'Run automation when a new record is submitted from a specified form',
-    icon: Send,
+    icon: TriggerForm,
+  },
+  {
+    type: 'webhook',
+    category: 'trigger',
+    labelKey: 'nodes.webhook.label',
+    labelDefault: 'When webhook received',
+    descriptionKey: 'nodes.webhook.description',
+    descriptionDefault: 'Trigger automation through an external HTTP request',
+    icon: TriggerWebhookIcon,
   },
 ];
 
@@ -358,7 +391,7 @@ const ACTION_NODES: INodeCatalogItem[] = [
     labelDefault: 'Create record',
     descriptionKey: 'nodes.createRecord.description',
     descriptionDefault: 'Create a new record in the specified table',
-    icon: PlusCircle,
+    icon: ActionCreateRecord,
   },
   {
     type: 'getRecords',
@@ -367,7 +400,7 @@ const ACTION_NODES: INodeCatalogItem[] = [
     labelDefault: 'Get records',
     descriptionKey: 'nodes.getRecords.description',
     descriptionDefault: 'Find up to 1000 records by specific conditions or a view',
-    icon: Search,
+    icon: ActionGetRecord,
   },
   {
     type: 'updateRecord',
@@ -376,7 +409,7 @@ const ACTION_NODES: INodeCatalogItem[] = [
     labelDefault: 'Update record',
     descriptionKey: 'nodes.updateRecord.description',
     descriptionDefault: 'Update specified field values in an existing record',
-    icon: RefreshCw,
+    icon: ActionUpdateRecord,
   },
   {
     type: 'sendEmail',
@@ -385,7 +418,7 @@ const ACTION_NODES: INodeCatalogItem[] = [
     labelDefault: 'Send email',
     descriptionKey: 'nodes.sendEmail.description',
     descriptionDefault: 'Send a custom email',
-    icon: Mail,
+    icon: ActionSendEmail,
   },
   {
     type: 'httpRequest',
@@ -394,7 +427,7 @@ const ACTION_NODES: INodeCatalogItem[] = [
     labelDefault: 'HTTP request',
     descriptionKey: 'nodes.httpRequest.description',
     descriptionDefault: 'Connect to external services through APIs and exchange data',
-    icon: Globe2,
+    icon: ActionHttpRequest,
   },
 ];
 
@@ -405,20 +438,32 @@ const LOGIC_NODES: INodeCatalogItem[] = [
     labelKey: 'nodes.condition.label',
     labelDefault: 'When conditions match...',
     descriptionKey: 'nodes.condition.description',
-    descriptionDefault: 'Decide whether to continue by condition',
-    icon: GitBranch,
+    descriptionDefault: 'Run different actions based on specific conditions',
+    icon: WorkflowLogic,
   },
 ];
 
 const NODE_CATALOG = [...TRIGGER_NODES, ...ACTION_NODES, ...LOGIC_NODES];
-const NODE_LABELS = Object.fromEntries(NODE_CATALOG.map((item) => [item.type, item.labelDefault]));
-const NODE_ICONS = Object.fromEntries(NODE_CATALOG.map((item) => [item.type, item.icon]));
-const NODE_CATALOG_MAP = Object.fromEntries(NODE_CATALOG.map((item) => [item.type, item]));
-const NODE_DESCRIPTIONS = Object.fromEntries(
+const NODE_LABELS: Record<string, string> = Object.fromEntries(
+  NODE_CATALOG.map((item) => [item.type, item.labelDefault])
+);
+const NODE_ICONS: Record<string, IconComponent> = {
+  ...Object.fromEntries(NODE_CATALOG.map((item) => [item.type, item.icon])),
+  aiGenerate: ActionAI,
+  script: ActionScript,
+};
+const NODE_CATALOG_MAP: Record<string, INodeCatalogItem> = Object.fromEntries(
+  NODE_CATALOG.map((item) => [item.type, item])
+);
+const NODE_DESCRIPTIONS: Record<string, string> = Object.fromEntries(
   NODE_CATALOG.map((item) => [item.type, item.descriptionDefault])
 );
-const TRIGGER_NODE_MAP = Object.fromEntries(TRIGGER_NODES.map((item) => [item.type, item]));
-const ACTION_NODE_MAP = Object.fromEntries(ACTION_NODES.map((item) => [item.type, item]));
+const TRIGGER_NODE_MAP: Record<string, INodeCatalogItem> = Object.fromEntries(
+  TRIGGER_NODES.map((item) => [item.type, item])
+);
+const ACTION_NODE_MAP: Record<string, INodeCatalogItem> = Object.fromEntries(
+  ACTION_NODES.map((item) => [item.type, item])
+);
 
 const DEFAULT_NODE_ICON_STYLE = {
   iconClassName: 'text-muted-foreground',
@@ -431,17 +476,13 @@ const NODE_ICON_STYLES: Record<string, typeof DEFAULT_NODE_ICON_STYLE> = {
     wrapperClassName: 'border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/40',
   },
   recordCreated: {
-    iconClassName: 'text-pink-600',
-    wrapperClassName: 'border-pink-200 bg-pink-50 dark:border-pink-900 dark:bg-pink-950/40',
+    iconClassName: 'text-purple-500',
+    wrapperClassName: 'border-purple-200 bg-purple-50 dark:border-purple-900 dark:bg-purple-950/40',
   },
   recordUpdated: {
     iconClassName: 'text-emerald-600',
     wrapperClassName:
       'border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/40',
-  },
-  recordCreatedOrUpdated: {
-    iconClassName: 'text-violet-600',
-    wrapperClassName: 'border-violet-200 bg-violet-50 dark:border-violet-900 dark:bg-violet-950/40',
   },
   recordMatchesConditions: {
     iconClassName: 'text-teal-600',
@@ -450,6 +491,10 @@ const NODE_ICON_STYLES: Record<string, typeof DEFAULT_NODE_ICON_STYLE> = {
   formSubmitted: {
     iconClassName: 'text-orange-600',
     wrapperClassName: 'border-orange-200 bg-orange-50 dark:border-orange-900 dark:bg-orange-950/40',
+  },
+  webhook: {
+    iconClassName: 'text-red-500',
+    wrapperClassName: 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40',
   },
   createRecord: {
     iconClassName: 'text-fuchsia-600',
@@ -568,12 +613,14 @@ const NodeTypeSelectItem = (props: { item: INodeCatalogItem; selected: boolean }
 };
 
 const NodeTypeSelectGroup = (props: {
-  title: string;
+  title?: string;
   items: INodeCatalogItem[];
   value: string;
 }) => (
   <div className="space-y-1 p-1">
-    <div className="px-2 pb-1 pt-1 text-xs font-medium text-muted-foreground">{props.title}</div>
+    {props.title && (
+      <div className="px-2 pb-1 pt-1 text-xs font-medium text-muted-foreground">{props.title}</div>
+    )}
     {props.items.map((item) => (
       <NodeTypeSelectItem key={item.type} item={item} selected={props.value === item.type} />
     ))}
@@ -1249,6 +1296,118 @@ const getAnyNodeTestResult = (
   nodeTestResults: Record<string, NodeTestResult>
 ) => nodeTestResults[node.id] ?? (isNodeTestResult(node.testResult) ? node.testResult : undefined);
 
+const getRecordsCanvasDescription = (
+  node: IWorkflowNode,
+  nodeTableId: string | undefined,
+  viewsByTableId: Record<string, { id: string; name: string }[]>,
+  tr: PanelTranslate
+) => {
+  const viewId = typeof node.config?.viewId === 'string' ? node.config.viewId : '';
+  const viewName =
+    nodeTableId && viewId
+      ? viewsByTableId[nodeTableId]?.find((view) => view.id === viewId)?.name
+      : undefined;
+  return viewName
+    ? tr('canvas.nodeDescriptions.getRecordsFromView', 'Get records from {{view}} view', {
+        view: viewName,
+      })
+    : getNodeDescription(node, tr);
+};
+
+const getUpdateRecordCanvasDescription = (
+  node: IWorkflowNode,
+  nodeTableId: string | undefined,
+  fieldsByTableId: Record<string, TableField[]>,
+  tr: PanelTranslate
+) => {
+  const fields = node.config?.fields;
+  if (!hasRecordKeys(fields)) return getNodeDescription(node, tr);
+
+  const fieldIds = Object.keys(fields);
+  const fieldNames = nodeTableId
+    ? fieldIds
+        .map((fieldId) => fieldsByTableId[nodeTableId]?.find((field) => field.id === fieldId)?.name)
+        .filter((fieldName): fieldName is string => Boolean(fieldName))
+    : [];
+  return fieldNames.length === fieldIds.length
+    ? tr('canvas.nodeDescriptions.updateRecordFields', 'Update {{fields}}', {
+        fields: fieldNames.join(tr('canvas.nodeDescriptions.fieldListSeparator', ', ')),
+      })
+    : getNodeDescription(node, tr);
+};
+
+const getSendEmailCanvasDescription = (node: IWorkflowNode, tr: PanelTranslate) => {
+  const recipient = typeof node.config?.to === 'string' ? node.config.to.trim() : '';
+  return recipient
+    ? tr('canvas.nodeDescriptions.sendEmailTo', 'Send email to {{recipient}}', { recipient })
+    : getNodeDescription(node, tr);
+};
+
+const getTableCanvasDescription = (node: IWorkflowNode, tableName: string, tr: PanelTranslate) => {
+  const tableDescriptionKeys: Record<string, { key: string; fallback: string }> = {
+    recordCreated: {
+      key: 'canvas.nodeDescriptions.recordCreatedWithTable',
+      fallback: 'When a record is created in {{table}}',
+    },
+    recordUpdated: {
+      key: 'canvas.nodeDescriptions.recordUpdatedWithTable',
+      fallback: 'When a record in {{table}} is updated',
+    },
+    recordMatchesConditions: {
+      key: 'canvas.nodeDescriptions.recordMatchesConditionsWithTable',
+      fallback: 'When a record in {{table}} matches conditions',
+    },
+    buttonClick: {
+      key: 'canvas.nodeDescriptions.buttonClickWithTable',
+      fallback: 'When a button in {{table}} is clicked',
+    },
+    formSubmitted: {
+      key: 'canvas.nodeDescriptions.formSubmittedWithTable',
+      fallback: 'When a form in {{table}} is submitted',
+    },
+    createRecord: {
+      key: 'canvas.nodeDescriptions.createRecordWithTable',
+      fallback: 'Create a new record in {{table}}.',
+    },
+  };
+  const description = tableDescriptionKeys[node.type];
+  return description
+    ? tr(description.key, description.fallback, { table: tableName })
+    : getNodeDescription(node, tr);
+};
+
+const getWorkflowCanvasNodeDescription = (
+  node: IWorkflowNode,
+  knownTables: { id: string; name: string }[],
+  fieldsByTableId: Record<string, TableField[]>,
+  viewsByTableId: Record<string, { id: string; name: string }[]>,
+  tr: PanelTranslate
+) => {
+  const nodeConfig = node.config ?? {};
+  const nodeTableId = typeof nodeConfig.tableId === 'string' ? nodeConfig.tableId : undefined;
+  const nodeTableName = knownTables.find((table) => table.id === nodeTableId)?.name;
+  if (node.type === 'condition') return getNodeDescription(node, tr);
+
+  const customDescription = typeof node.config?.note === 'string' ? node.config.note.trim() : '';
+  if (customDescription) return customDescription;
+
+  if (node.type === 'getRecords') {
+    return getRecordsCanvasDescription(node, nodeTableId, viewsByTableId, tr);
+  }
+  if (node.type === 'updateRecord') {
+    return getUpdateRecordCanvasDescription(node, nodeTableId, fieldsByTableId, tr);
+  }
+  if (node.type === 'sendEmail') {
+    return getSendEmailCanvasDescription(node, tr);
+  }
+  if (node.type === 'webhook') {
+    return tr('canvas.nodeDescriptions.webhook', 'Run automation when receiving a Webhook');
+  }
+  return nodeTableName
+    ? getTableCanvasDescription(node, nodeTableName, tr)
+    : getNodeDescription(node, tr);
+};
+
 const getNodeTestResultState = (
   node: IWorkflowNode,
   nodeTestResults: Record<string, NodeTestResult>
@@ -1289,7 +1448,7 @@ const hasFilterValue = (value: unknown) => {
 
 const operatorNeedsValue = (operator?: string) => !EMPTY_FILTER_OPERATORS.has(operator ?? '');
 
-const hasRecordKeys = (value: unknown) => {
+const hasRecordKeys = (value: unknown): value is Record<string, unknown> => {
   return isPlainRecord(value) && Object.keys(value).length > 0;
 };
 
@@ -1338,9 +1497,8 @@ const NODE_COMPLETION_CHECKS: Record<string, (config: Record<string, unknown>) =
     Array.isArray(config.watchFieldIds) &&
     config.watchFieldIds.length > 0,
   formSubmitted: (config) => hasText(config.tableId) && hasText(config.viewId),
+  webhook: () => true,
   recordCreated: (config) => hasText(config.tableId) && isOptionalConditionComplete(config.filter),
-  recordCreatedOrUpdated: (config) =>
-    hasText(config.tableId) && isOptionalConditionComplete(config.filter),
   recordUpdated: (config) => hasText(config.tableId),
   recordMatchesConditions: (config) =>
     hasText(config.tableId) && isConditionComplete(config.filter),
@@ -1453,12 +1611,13 @@ const getDefaultConfig = (type: string, tableId?: string): Record<string, unknow
     case 'buttonClick':
       return { tableId, filter: { conjunction: 'and', filterSet: [] }, watchFieldIds: [] };
     case 'recordCreated':
-    case 'recordCreatedOrUpdated':
       return { tableId, filter: { conjunction: 'and', filterSet: [] } };
     case 'recordUpdated':
       return { tableId, watchFieldIds: [] };
     case 'formSubmitted':
       return { tableId, viewId: '' };
+    case 'webhook':
+      return { authorization: { type: 'none' } };
     case 'recordMatchesConditions':
       return { tableId, filter: { conjunction: 'and', filterSet: [] } };
     case 'createRecord':
@@ -1882,6 +2041,117 @@ const getConditionSummary = (
     .join(' ');
 };
 
+const buildWebhookTestInputRows = (
+  config: Record<string, unknown>,
+  tr?: PanelTranslate
+): TestResultRow[] => [
+  {
+    label: panelText(tr, 'resultLabels.authorization', 'authorization'),
+    raw: config.authorization ?? { type: 'none' },
+  },
+  {
+    label: panelText(tr, 'resultLabels.rawData', 'Raw data'),
+    raw: {
+      authorization: config.authorization ?? { type: 'none' },
+    },
+  },
+];
+
+const buildWebhookTestOutputRows = (tr?: PanelTranslate): TestResultRow[] => [
+  {
+    label: panelText(tr, 'fields.body', 'Body'),
+    raw: {},
+  },
+  {
+    label: panelText(tr, 'resultLabels.rawData', 'Raw data'),
+    raw: { body: {} },
+  },
+];
+
+const buildDefaultTestOutputRows = (
+  node: IWorkflowNode,
+  tables: { id: string; name: string }[],
+  fields: TableField[],
+  baseId: string,
+  tr?: PanelTranslate
+): TestResultRow[] => {
+  const config = node.config ?? {};
+  const tableId = typeof config.tableId === 'string' ? config.tableId : '';
+  const tableName = getTableLabel(tables, tableId);
+  const rows: TestResultRow[] = [];
+
+  if (node.category === 'trigger') {
+    rows.push({
+      label: panelText(tr, 'resultLabels.triggerUser', 'Trigger user'),
+      children: [
+        {
+          label: panelText(tr, 'resultLabels.source', 'Source'),
+          value: panelText(tr, 'resultLabels.currentUser', 'Current user'),
+        },
+        { label: panelText(tr, 'resultLabels.step', 'Step'), value: getNodeLabel(node, tr) },
+      ],
+    });
+    rows.push({
+      label: panelText(tr, 'resultLabels.record', 'Record'),
+      children: [
+        ...(tableName
+          ? [{ label: panelText(tr, 'resultLabels.table', 'Table'), value: tableName }]
+          : []),
+        {
+          label: panelText(tr, 'resultLabels.source', 'Source'),
+          value: tr
+            ? tr('resultLabels.testRecordContext', 'Test record context')
+            : 'Test record context',
+        },
+        ...(tableId
+          ? [
+              {
+                label: panelText(tr, 'resultLabels.tableUrl', 'Table URL'),
+                value: `/base/${baseId}/table/${tableId}`,
+              },
+            ]
+          : []),
+      ],
+    });
+  } else {
+    rows.push({
+      label: panelText(tr, 'resultLabels.stepStatus', 'Step status'),
+      value: panelText(tr, 'resultLabels.success', 'Success'),
+    });
+    if (tableName) {
+      rows.push({
+        label: panelText(tr, 'resultLabels.targetTable', 'Target table'),
+        value: tableName,
+      });
+    }
+    if (hasRecordKeys(config.fields)) {
+      rows.push({
+        label: panelText(tr, 'resultLabels.fields', 'Fields'),
+        children: Object.entries(config.fields as Record<string, unknown>).map(
+          ([fieldId, value]) => ({
+            label: getFieldLabel(fields, fieldId),
+            value: value === undefined || value === null ? '' : String(value),
+          })
+        ),
+      });
+    }
+  }
+
+  rows.push({
+    label: panelText(tr, 'resultLabels.rawData', 'Raw data'),
+    raw: {
+      status: 'success',
+      nodeId: node.id,
+      nodeType: node.type,
+      nodeName: getNodeLabel(node, tr),
+      tableId: tableId || undefined,
+      tableName: tableName || undefined,
+    },
+  });
+
+  return rows;
+};
+
 const buildTestInputRows = (
   node: IWorkflowNode,
   tables: { id: string; name: string }[],
@@ -1891,6 +2161,10 @@ const buildTestInputRows = (
   const config = node.config ?? {};
   const tableId = typeof config.tableId === 'string' ? config.tableId : '';
   const rows: TestResultRow[] = [];
+
+  if (node.type === 'webhook') {
+    return buildWebhookTestInputRows(config, tr);
+  }
 
   if (tableId) {
     rows.push({
@@ -1982,81 +2256,11 @@ const buildTestOutputRows = (
   baseId: string,
   tr?: PanelTranslate
 ): TestResultRow[] => {
-  const config = node.config ?? {};
-  const tableId = typeof config.tableId === 'string' ? config.tableId : '';
-  const tableName = getTableLabel(tables, tableId);
-  const rows: TestResultRow[] = [];
-
-  if (node.category === 'trigger') {
-    rows.push({
-      label: panelText(tr, 'resultLabels.triggerUser', 'Trigger user'),
-      children: [
-        {
-          label: panelText(tr, 'resultLabels.source', 'Source'),
-          value: panelText(tr, 'resultLabels.currentUser', 'Current user'),
-        },
-        { label: panelText(tr, 'resultLabels.step', 'Step'), value: getNodeLabel(node, tr) },
-      ],
-    });
-    rows.push({
-      label: panelText(tr, 'resultLabels.record', 'Record'),
-      children: [
-        ...(tableName
-          ? [{ label: panelText(tr, 'resultLabels.table', 'Table'), value: tableName }]
-          : []),
-        {
-          label: panelText(tr, 'resultLabels.source', 'Source'),
-          value: tr
-            ? tr('resultLabels.testRecordContext', 'Test record context')
-            : 'Test record context',
-        },
-        ...(tableId
-          ? [
-              {
-                label: panelText(tr, 'resultLabels.tableUrl', 'Table URL'),
-                value: `/base/${baseId}/table/${tableId}`,
-              },
-            ]
-          : []),
-      ],
-    });
-  } else {
-    rows.push({
-      label: panelText(tr, 'resultLabels.stepStatus', 'Step status'),
-      value: panelText(tr, 'resultLabels.success', 'Success'),
-    });
-    if (tableName) {
-      rows.push({
-        label: panelText(tr, 'resultLabels.targetTable', 'Target table'),
-        value: tableName,
-      });
-    }
-    if (hasRecordKeys(config.fields)) {
-      rows.push({
-        label: panelText(tr, 'resultLabels.fields', 'Fields'),
-        children: Object.entries(config.fields as Record<string, unknown>).map(
-          ([fieldId, value]) => ({
-            label: getFieldLabel(fields, fieldId),
-            value: value === undefined || value === null ? '' : String(value),
-          })
-        ),
-      });
-    }
+  if (node.type === 'webhook') {
+    return buildWebhookTestOutputRows(tr);
   }
 
-  rows.push({
-    label: panelText(tr, 'resultLabels.rawData', 'Raw data'),
-    raw: {
-      status: 'success',
-      nodeId: node.id,
-      nodeType: node.type,
-      nodeName: getNodeLabel(node, tr),
-      tableId: tableId || undefined,
-      tableName: tableName || undefined,
-    },
-  });
-
-  return rows;
+  return buildDefaultTestOutputRows(node, tables, fields, baseId, tr);
 };
 
 const buildGraphNodeOrder = (nodes: IWorkflowNode[], edges: IWorkflowEdge[]) => {
@@ -2125,6 +2329,7 @@ const getObjectFieldVariableChildren = (
     label,
     value: `{{${path}.${key}}}`,
     parentFieldId: field.id,
+    parentObjectKey: meta.objectKey ?? path,
     valueKind,
     icon,
     iconClassName: 'text-muted-foreground',
@@ -2171,6 +2376,7 @@ const buildVariableOptions = (
   upstreamNodes: IWorkflowNode[],
   triggerFields: TableField[],
   nodeTestResults: Record<string, NodeTestResult>,
+  fieldsByTableId: Record<string, TableField[]>,
   tr?: PanelTranslate
 ) => {
   const options: IVariableOption[] = [];
@@ -2218,13 +2424,52 @@ const buildVariableOptions = (
     iconClassName: 'text-muted-foreground',
     iconWrapperClassName: 'border-0 bg-transparent',
   });
+  const objectMeta = (node: IWorkflowNode, objectKey: string): Partial<IVariableOption> => ({
+    ...leafMeta(node, 'text', VariableObjectIcon),
+    objectKey,
+    objectValue: true,
+  });
+  const getNodeTableFields = (node: IWorkflowNode) => {
+    const tableId = typeof node.config?.tableId === 'string' ? node.config.tableId : undefined;
+    return tableId ? fieldsByTableId[tableId] ?? [] : [];
+  };
+  const addFieldVariables = (node: IWorkflowNode, group: string, parentPath: string) => {
+    getNodeTableFields(node)
+      .filter(isFilterableField)
+      .forEach((field) => {
+        const path = `${parentPath}.${field.id}`;
+        const meta = fieldMeta(node, field);
+        const children = getObjectFieldVariableChildren(
+          group,
+          field,
+          path,
+          { ...meta, objectKey: path },
+          tr
+        );
+        add(group, field.name || field.id, path, {
+          ...meta,
+          parentObjectKey: parentPath,
+          ...(children.length ? { objectKey: path, objectValue: true } : {}),
+        });
+        options.push(...children);
+      });
+  };
 
   const trigger = upstreamNodes.find((node) => node.category === 'trigger');
   const triggerTableId =
     typeof trigger?.config?.tableId === 'string' && trigger.config.tableId
       ? trigger.config.tableId
       : undefined;
-  if (trigger && !triggerTableId) {
+  if (trigger?.type === 'webhook') {
+    const group = nodeGroup(trigger);
+    const bodyPath = 'trigger.body';
+    add(group, panelText(tr, 'variables.webhookBody', 'Body'), bodyPath, {
+      ...objectMeta(trigger, bodyPath),
+      icon: VariableObjectIcon,
+      iconClassName: 'text-muted-foreground',
+      iconWrapperClassName: 'border-0 bg-transparent',
+    });
+  } else if (trigger && !triggerTableId) {
     const group = nodeGroup(trigger);
     const meta = nodeMeta(trigger);
     options.push({
@@ -2237,83 +2482,132 @@ const buildVariableOptions = (
   }
   if (trigger && triggerTableId) {
     const group = nodeGroup(trigger);
+    const triggerRecordPath = 'trigger.record';
+    const triggerRecordFieldsPath = `${triggerRecordPath}.fields`;
+    add(group, panelText(tr, 'resultLabels.record', 'Record'), triggerRecordPath, {
+      ...objectMeta(trigger, triggerRecordPath),
+      icon: VariableObjectIcon,
+      iconClassName: 'text-muted-foreground',
+      iconWrapperClassName: 'border-0 bg-transparent',
+    });
+    add(group, panelText(tr, 'resultLabels.fieldValues', 'Field values'), triggerRecordFieldsPath, {
+      ...objectMeta(trigger, triggerRecordFieldsPath),
+      parentObjectKey: triggerRecordPath,
+      icon: VariableObjectIcon,
+      iconClassName: 'text-muted-foreground',
+      iconWrapperClassName: 'border-0 bg-transparent',
+    });
     triggerFields.filter(isFilterableField).forEach((field) => {
       const path = `trigger.record.fields.${field.id}`;
       const meta = fieldMeta(trigger, field);
-      add(group, field.name || field.id, path, meta);
-      options.push(...getObjectFieldVariableChildren(group, field, path, meta, tr));
+      const children = getObjectFieldVariableChildren(
+        group,
+        field,
+        path,
+        { ...meta, objectKey: path },
+        tr
+      );
+      add(group, field.name || field.id, path, {
+        ...meta,
+        parentObjectKey: triggerRecordFieldsPath,
+        ...(children.length ? { objectKey: path, objectValue: true } : {}),
+      });
+      options.push(...children);
+    });
+    const recordChildMeta = (meta: Partial<IVariableOption>): Partial<IVariableOption> => ({
+      ...meta,
+      parentObjectKey: triggerRecordPath,
     });
     add(
       group,
       panelText(tr, 'variables.recordId', 'Record ID'),
       'trigger.record.id',
-      leafMeta(trigger, 'text', FieldTextIcon)
+      recordChildMeta(leafMeta(trigger, 'text', FieldTextIcon))
     );
     add(
       group,
       panelText(tr, 'variables.recordUrl', 'Record URL'),
       'trigger.record.url',
-      leafMeta(trigger, 'text', FieldLinkIcon)
+      recordChildMeta(leafMeta(trigger, 'text', FieldLinkIcon))
     );
     add(
       group,
       panelText(tr, 'variables.recordName', 'Record name'),
       'trigger.record.name',
-      leafMeta(trigger, 'text', FieldTextIcon)
+      recordChildMeta(leafMeta(trigger, 'text', FieldTextIcon))
     );
     add(
       group,
       panelText(tr, 'variables.createdById', 'Created by ID'),
       'trigger.record.createdBy',
-      leafMeta(trigger, 'text', FieldCreatedByIcon)
+      recordChildMeta(leafMeta(trigger, 'text', FieldCreatedByIcon))
     );
     add(
       group,
       panelText(tr, 'variables.lastModifiedById', 'Last modified by ID'),
       'trigger.record.lastModifiedBy',
-      leafMeta(trigger, 'text', FieldLastModifiedByIcon)
+      recordChildMeta(leafMeta(trigger, 'text', FieldLastModifiedByIcon))
     );
     add(
       group,
       panelText(tr, 'variables.createdTime', 'Created time'),
       'trigger.record.createdTime',
-      leafMeta(trigger, 'date', FieldCreatedTimeIcon)
+      recordChildMeta(leafMeta(trigger, 'date', FieldCreatedTimeIcon))
     );
     add(
       group,
       panelText(tr, 'variables.lastModifiedTime', 'Last modified time'),
       'trigger.record.lastModifiedTime',
-      leafMeta(trigger, 'date', FieldLastModifiedTimeIcon)
+      recordChildMeta(leafMeta(trigger, 'date', FieldLastModifiedTimeIcon))
     );
     add(
       group,
       panelText(tr, 'variables.autoNumber', 'Auto number'),
       'trigger.record.autoNumber',
-      leafMeta(trigger, 'number', FieldAutoNumberIcon)
+      recordChildMeta(leafMeta(trigger, 'number', FieldAutoNumberIcon))
     );
-    add(group, 'id', 'trigger.user.id', leafMeta(trigger, 'text', FieldTextIcon));
-    add(group, 'name', 'trigger.user.name', leafMeta(trigger, 'text', FieldTextIcon));
-    add(group, 'email', 'trigger.user.email', leafMeta(trigger, 'text', FieldTextIcon));
-    add(group, 'avatarUrl', 'trigger.user.avatarUrl', leafMeta(trigger, 'text', FieldTextIcon));
+    const triggerUserPath = 'trigger.user';
+    const userChildMeta = (meta: Partial<IVariableOption>): Partial<IVariableOption> => ({
+      ...meta,
+      parentObjectKey: triggerUserPath,
+    });
+    add(group, 'id', 'trigger.user.id', userChildMeta(leafMeta(trigger, 'text', FieldTextIcon)));
+    add(
+      group,
+      'name',
+      'trigger.user.name',
+      userChildMeta(leafMeta(trigger, 'text', FieldTextIcon))
+    );
+    add(
+      group,
+      'email',
+      'trigger.user.email',
+      userChildMeta(leafMeta(trigger, 'text', FieldTextIcon))
+    );
+    add(
+      group,
+      'avatarUrl',
+      'trigger.user.avatarUrl',
+      userChildMeta(leafMeta(trigger, 'text', FieldTextIcon))
+    );
   }
 
   upstreamNodes
     .filter((node) => node.category !== 'trigger')
     .forEach((node) => {
       const group = nodeGroup(node);
-      const objectMeta = leafMeta(node, 'text', VariableObjectIcon);
-      add(
-        group,
-        panelText(tr, 'variables.fullOutput', 'Full output'),
-        `nodes.${node.id}`,
-        objectMeta
-      );
+      const fullOutputPath = `nodes.${node.id}`;
+      const fullOutputMeta = objectMeta(node, fullOutputPath);
+      const fullOutputLabel = ['createRecord', 'getRecords', 'updateRecord'].includes(node.type)
+        ? panelText(tr, 'resultLabels.record', 'Record')
+        : panelText(tr, 'variables.fullOutput', 'Full output');
+      add(group, fullOutputLabel, fullOutputPath, fullOutputMeta);
       if (node.category === 'logic') {
         add(
           group,
           panelText(tr, 'variables.conditionResult', 'Condition result'),
           `logic.${node.id}.result`,
-          leafMeta(node, 'checkbox', CheckCircle2)
+          { ...leafMeta(node, 'checkbox', CheckCircle2), parentObjectKey: fullOutputPath }
         );
       }
       if (node.category !== 'action') return;
@@ -2322,54 +2616,54 @@ const buildVariableOptions = (
           group,
           panelText(tr, 'variables.firstRecordId', 'First record ID'),
           `action.${node.id}.0.id`,
-          leafMeta(node, 'text', Link2)
+          { ...leafMeta(node, 'text', Link2), parentObjectKey: fullOutputPath }
         );
+        const firstRecordFieldsPath = `action.${node.id}.0.fields`;
         add(
           group,
           tr
             ? tr('variables.firstRecordFields', 'First record fields object')
             : 'First record fields object',
-          `action.${node.id}.0.fields`,
-          objectMeta
+          firstRecordFieldsPath,
+          { ...objectMeta(node, firstRecordFieldsPath), parentObjectKey: fullOutputPath }
         );
+        addFieldVariables(node, group, firstRecordFieldsPath);
       } else if (node.type === 'updateRecord') {
-        add(
-          group,
-          panelText(tr, 'variables.recordId', 'Record ID'),
-          `action.${node.id}.id`,
-          leafMeta(node, 'text', Link2)
-        );
+        add(group, panelText(tr, 'variables.recordId', 'Record ID'), `action.${node.id}.id`, {
+          ...leafMeta(node, 'text', Link2),
+          parentObjectKey: fullOutputPath,
+        });
+        const recordFieldsPath = `action.${node.id}.fields`;
         add(
           group,
           panelText(tr, 'variables.recordFields', 'Record fields object'),
-          `action.${node.id}.fields`,
-          objectMeta
+          recordFieldsPath,
+          { ...objectMeta(node, recordFieldsPath), parentObjectKey: fullOutputPath }
         );
+        addFieldVariables(node, group, recordFieldsPath);
       } else if (node.type === 'httpRequest') {
         add(
           group,
           panelText(tr, 'variables.httpStatus', 'HTTP status code'),
           `action.${node.id}.status`,
-          leafMeta(node, 'number', Hash)
+          { ...leafMeta(node, 'number', Hash), parentObjectKey: fullOutputPath }
         );
         add(
           group,
           panelText(tr, 'variables.httpBody', 'HTTP response body'),
           `action.${node.id}.body`,
-          objectMeta
+          { ...objectMeta(node, `action.${node.id}.body`), parentObjectKey: fullOutputPath }
         );
-        add(
-          group,
-          panelText(tr, 'variables.httpOk', 'HTTP success'),
-          `action.${node.id}.ok`,
-          leafMeta(node, 'checkbox', CheckCircle2)
-        );
+        add(group, panelText(tr, 'variables.httpOk', 'HTTP success'), `action.${node.id}.ok`, {
+          ...leafMeta(node, 'checkbox', CheckCircle2),
+          parentObjectKey: fullOutputPath,
+        });
       } else if (node.type === 'sendEmail') {
         add(
           group,
           panelText(tr, 'variables.emailSentResult', 'Email sent result'),
           `action.${node.id}.sent`,
-          leafMeta(node, 'checkbox', CheckCircle2)
+          { ...leafMeta(node, 'checkbox', CheckCircle2), parentObjectKey: fullOutputPath }
         );
       }
     });
@@ -2463,7 +2757,7 @@ const readVariableTextNode = (node: ChildNode): string => {
 };
 
 const FieldBlock = (props: {
-  label: string;
+  label: ReactNode;
   children: ReactNode;
   action?: ReactNode;
   description?: string;
@@ -2566,9 +2860,9 @@ const getSelectChoices = (field?: TableField): SelectChoice[] => {
 const FieldOptionContent = (props: { field: TableField; disabledReason?: string }) => {
   const Icon = getFieldIcon(props.field);
   return (
-    <span className="inline-flex min-w-0 flex-1 items-center gap-1 truncate align-middle">
+    <span className="inline-flex min-w-0 flex-1 items-center justify-start gap-1 truncate text-left align-middle">
       <Icon className="size-4 shrink-0 text-muted-foreground" />
-      <span className="min-w-0 flex-1 truncate text-[13px] leading-4">
+      <span className="min-w-0 flex-1 truncate text-left text-[13px] leading-4">
         {props.field.name || props.field.id}
       </span>
       {props.disabledReason && (
@@ -2609,19 +2903,69 @@ const TableSelect = (props: {
   onChange: (value: string) => void;
 }) => {
   const tr = usePanelTranslate();
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const selectedTable = props.tables.find((table) => table.id === props.value);
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) setSearch('');
+  };
   return (
-    <Select value={props.value ?? ''} onValueChange={props.onChange}>
-      <SelectTrigger>
-        <SelectValue placeholder={tr('placeholders.select', 'Select...')} />
-      </SelectTrigger>
-      <SelectContent>
-        {props.tables.map((table) => (
-          <SelectItem key={table.id} value={table.id}>
-            {table.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>
+        <Button
+          className="h-8 w-full justify-between px-2 font-normal"
+          role="combobox"
+          variant="outline"
+        >
+          <span
+            className={cn(
+              'min-w-0 truncate text-left text-sm',
+              !selectedTable && 'text-muted-foreground'
+            )}
+          >
+            {selectedTable?.name ?? tr('placeholders.select', 'Select...')}
+          </span>
+          <ChevronDown
+            className={cn('ml-2 size-4 shrink-0 text-muted-foreground', open && 'rotate-180')}
+          />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-[var(--radix-popover-trigger-width)] p-0"
+        data-no-pan="true"
+      >
+        <Command>
+          <CommandInput
+            className="placeholder:text-sm"
+            placeholder={tr('placeholders.search', 'Search...')}
+            value={search}
+            onValueChange={(value) => setSearch(value.trim() ? value : '')}
+          />
+          <CommandList>
+            <CommandEmpty>{tr('empty.noResults', 'No results found')}</CommandEmpty>
+            <CommandGroup className="p-1">
+              {props.tables.map((table) => (
+                <CommandItem
+                  key={table.id}
+                  className="h-8 truncate text-sm"
+                  keywords={[table.name]}
+                  value={table.id}
+                  onSelect={() => {
+                    props.onChange(table.id);
+                    setOpen(false);
+                  }}
+                >
+                  <TableIcon className="mr-2 size-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{table.name}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 };
 
@@ -2631,19 +2975,69 @@ const BaseSelect = (props: {
   onChange: (value: string) => void;
 }) => {
   const tr = usePanelTranslate();
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const selectedBase = props.bases.find((base) => base.id === props.value);
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) setSearch('');
+  };
   return (
-    <Select value={props.value ?? ''} onValueChange={props.onChange}>
-      <SelectTrigger>
-        <SelectValue placeholder={tr('placeholders.select', 'Select...')} />
-      </SelectTrigger>
-      <SelectContent>
-        {props.bases.map((base) => (
-          <SelectItem key={base.id} value={base.id}>
-            {base.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>
+        <Button
+          className="h-8 w-full justify-between px-2 font-normal"
+          role="combobox"
+          variant="outline"
+        >
+          <span
+            className={cn(
+              'min-w-0 truncate text-left text-sm',
+              !selectedBase && 'text-muted-foreground'
+            )}
+          >
+            {selectedBase?.name ?? tr('placeholders.select', 'Select...')}
+          </span>
+          <ChevronDown
+            className={cn('ml-2 size-4 shrink-0 text-muted-foreground', open && 'rotate-180')}
+          />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-[var(--radix-popover-trigger-width)] p-0"
+        data-no-pan="true"
+      >
+        <Command>
+          <CommandInput
+            className="placeholder:text-sm"
+            placeholder={tr('placeholders.search', 'Search...')}
+            value={search}
+            onValueChange={(value) => setSearch(value.trim() ? value : '')}
+          />
+          <CommandList>
+            <CommandEmpty>{tr('empty.noResults', 'No results found')}</CommandEmpty>
+            <CommandGroup className="p-1">
+              {props.bases.map((base) => (
+                <CommandItem
+                  key={base.id}
+                  className="h-8 truncate text-sm"
+                  keywords={[base.name]}
+                  value={base.id}
+                  onSelect={() => {
+                    props.onChange(base.id);
+                    setOpen(false);
+                  }}
+                >
+                  <DatabaseIcon className="mr-2 size-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{base.name}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 };
 
@@ -2709,6 +3103,7 @@ const LoopConfigBlock = (props: {
         className="!h-9 !w-full"
         value={props.value}
         variables={props.variables}
+        mode="object"
         placeholder={tr('placeholders.select', 'Select...')}
         onChange={props.onChange}
       />
@@ -2802,7 +3197,7 @@ const FieldSelect = (props: {
     <Select value={selectValue} onValueChange={(value) => props.onChange(fromOptionValue(value))}>
       <SelectTrigger
         className={cn(
-          'min-w-0 [&>span]:!flex [&>span]:min-w-0 [&>span]:items-center',
+          'min-w-0 [&>span]:!flex [&>span]:min-w-0 [&>span]:flex-1 [&>span]:items-center [&>span]:justify-start [&>span]:text-left',
           props.triggerClassName
         )}
       >
@@ -2912,6 +3307,11 @@ const VariableSourceStatus = (props: { option?: IVariableOption }) => {
   );
 };
 
+const VARIABLE_SOURCE_LABEL_CLASS = 'max-w-[6em] shrink-0 truncate';
+
+const getVariableSourceOption = (grouped: Record<string, IVariableOption[]>, group: string) =>
+  grouped[group]?.find((item) => item.groupNodeStatus) ?? grouped[group]?.[0];
+
 const VariablePicker = (props: {
   variables: IVariableOption[];
   onSelect: (value: string) => void;
@@ -2965,7 +3365,7 @@ const VariablePicker = (props: {
             <ScrollArea className="h-[276px]">
               <div className="p-2">
                 {groupNames.map((group, index) => {
-                  const firstOption = grouped[group]?.[0];
+                  const firstOption = getVariableSourceOption(grouped, group);
                   const nodeStyle = getNodeIconStyle(firstOption?.groupNodeType);
                   const sourceOption = firstOption?.groupNodeType
                     ? {
@@ -2992,7 +3392,9 @@ const VariablePicker = (props: {
                         className="size-4 rounded-none border-0 bg-transparent"
                         option={sourceOption}
                       />
-                      <span className="truncate">{group.replace(/^\d+\.\s*/, '')}</span>
+                      <span className={VARIABLE_SOURCE_LABEL_CLASS}>
+                        {group.replace(/^\d+\.\s*/, '')}
+                      </span>
                       <VariableSourceStatus option={firstOption} />
                     </button>
                   );
@@ -3058,7 +3460,11 @@ const isTriggerFieldVariable = (option: IVariableOption) =>
 
 const isTriggerRecordMetadataVariable = (option: IVariableOption) => {
   const path = getVariablePath(option);
-  return Boolean(path?.startsWith('trigger.record.') && !path.startsWith('trigger.record.fields.'));
+  return Boolean(
+    path?.startsWith('trigger.record.') &&
+      path !== 'trigger.record.fields' &&
+      !path.startsWith('trigger.record.fields.')
+  );
 };
 
 const isTriggerUserVariable = (option: IVariableOption) =>
@@ -3072,7 +3478,9 @@ const RuntimePickerDrillItem = (props: {
   description?: string;
   option?: IVariableOption;
   onClick: () => void;
+  onSelect?: () => void;
 }) => {
+  const tr = usePanelTranslate();
   const option: IVariableOption = props.option ?? {
     group: '',
     label: props.label,
@@ -3081,12 +3489,9 @@ const RuntimePickerDrillItem = (props: {
     iconClassName: 'text-muted-foreground',
     iconWrapperClassName: 'border-0 bg-transparent',
   };
-  return (
-    <button
-      className="relative flex min-h-8 w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
-      type="button"
-      onClick={props.onClick}
-    >
+
+  const content = (
+    <>
       <VariableOptionIcon
         className="mr-2 size-4 rounded-none border-0 bg-transparent"
         option={option}
@@ -3097,6 +3502,59 @@ const RuntimePickerDrillItem = (props: {
           <span className="block truncate text-xs text-muted-foreground">{props.description}</span>
         )}
       </span>
+    </>
+  );
+
+  if (props.onSelect) {
+    return (
+      <div
+        className="group relative flex h-8 w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+        role="button"
+        tabIndex={0}
+        onClick={props.onClick}
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+          props.onClick();
+        }}
+      >
+        {content}
+        <ArrowRight className="size-4 shrink-0 text-muted-foreground group-hover:hidden" />
+        <div className="absolute right-0 hidden gap-1 group-hover:flex">
+          <Button
+            className="h-7 gap-1.5 border border-border bg-background px-2 py-1.5 text-xs font-normal hover:bg-accent"
+            type="button"
+            variant="outline"
+            onClick={(event) => {
+              event.stopPropagation();
+              props.onSelect?.();
+            }}
+          >
+            {tr('actions.select', 'Select')}
+          </Button>
+          <Button
+            className="h-7 gap-1.5 border border-border bg-background px-2 py-1.5 text-xs font-normal hover:bg-accent"
+            type="button"
+            variant="outline"
+            onClick={(event) => {
+              event.stopPropagation();
+              props.onClick();
+            }}
+          >
+            {tr('actions.nextStep', 'Next')}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      className="relative flex min-h-8 w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+      type="button"
+      onClick={props.onClick}
+    >
+      {content}
       <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
     </button>
   );
@@ -3106,31 +3564,100 @@ const RuntimePickerOption = (props: {
   option: IVariableOption;
   selected?: boolean;
   disabled?: boolean;
+  disabledReason?: string;
+  showSelectAction?: boolean;
   onSelect: (value: string) => void;
-}) => (
-  <button
-    className={cn(
-      'relative flex h-8 w-full select-none items-center rounded-sm px-2 py-1.5 text-left text-sm',
-      props.disabled ? 'cursor-not-allowed opacity-45' : 'cursor-pointer hover:bg-accent',
-      props.selected && 'bg-accent'
-    )}
-    disabled={props.disabled}
-    type="button"
-    onClick={() => props.onSelect(props.option.value)}
-  >
-    <VariableOptionIcon
-      className="mr-2 size-4 rounded-none border-0 bg-transparent"
-      option={props.option}
-    />
-    <span className="min-w-0 truncate">{props.option.label}</span>
-  </button>
-);
+}) => {
+  const tr = usePanelTranslate();
+  const disabled = props.disabled;
+  const content = (
+    <>
+      <VariableOptionIcon
+        className="mr-2 size-4 rounded-none border-0 bg-transparent"
+        option={props.option}
+      />
+      <span className="min-w-0 truncate">{props.option.label}</span>
+    </>
+  );
+
+  if (props.showSelectAction && !disabled) {
+    return (
+      <div
+        className={cn(
+          'group relative flex h-8 w-full select-none items-center rounded-sm px-2 py-1.5 text-left text-sm',
+          'cursor-pointer hover:bg-accent',
+          props.selected && 'bg-accent'
+        )}
+        role="button"
+        tabIndex={0}
+        onClick={() => props.onSelect(props.option.value)}
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+          props.onSelect(props.option.value);
+        }}
+      >
+        {content}
+        <div className="absolute right-0 hidden gap-1 group-hover:flex">
+          <Button
+            className="h-7 gap-1.5 border border-border bg-background px-2 py-1.5 text-xs font-normal hover:bg-accent"
+            type="button"
+            variant="outline"
+            onClick={(event) => {
+              event.stopPropagation();
+              props.onSelect(props.option.value);
+            }}
+          >
+            {tr('actions.select', 'Select')}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const optionClassName = cn(
+    'relative flex h-8 w-full select-none items-center rounded-sm px-2 py-1.5 text-left text-sm',
+    disabled ? 'cursor-not-allowed opacity-45' : 'cursor-pointer hover:bg-accent',
+    props.selected && 'bg-accent'
+  );
+
+  if (disabled && props.disabledReason) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div aria-disabled="true" className={optionClassName} role="button">
+              {content}
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>{props.disabledReason}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  return (
+    <button
+      className={optionClassName}
+      disabled={disabled}
+      type="button"
+      onClick={() => props.onSelect(props.option.value)}
+    >
+      {content}
+    </button>
+  );
+};
+
+type RuntimeVariablePickerMode = 'basic' | 'object' | 'attachment';
 
 const RuntimeVariablePicker = (props: {
   variables: IVariableOption[];
   onSelect: (value: string) => void;
   selectedValue?: string;
   disabled?: boolean;
+  mode?: RuntimeVariablePickerMode;
+  allowObjectSelection?: boolean;
+  selectableValueKind?: FieldValueKind;
   isOptionDisabled?: (option: IVariableOption) => boolean;
   trigger: ReactNode;
 }) => {
@@ -3140,6 +3667,7 @@ const RuntimeVariablePicker = (props: {
   const [keyword, setKeyword] = useState('');
   const [view, setView] = useState<'root' | 'record' | 'fields' | 'objectField' | 'user'>('root');
   const [objectFieldId, setObjectFieldId] = useState<string>();
+  const [objectFieldBackView, setObjectFieldBackView] = useState<'root' | 'fields'>('root');
   const handleOpenChange = (nextOpen: boolean) => {
     setOpen(nextOpen);
     if (!nextOpen) {
@@ -3147,9 +3675,26 @@ const RuntimeVariablePicker = (props: {
       setKeyword('');
       setView('root');
       setObjectFieldId(undefined);
+      setObjectFieldBackView('root');
     }
   };
-  const isOptionDisabled = (option: IVariableOption) => props.isOptionDisabled?.(option) ?? false;
+  const mode =
+    props.mode ??
+    (props.selectableValueKind === 'attachment' ? 'attachment' : undefined) ??
+    'basic';
+  const isObjectMode = mode === 'object' || props.allowObjectSelection;
+  const isAttachmentMode = mode === 'attachment';
+  const selectableValueKind = isAttachmentMode ? 'attachment' : props.selectableValueKind;
+  const isAttachmentVariableOption = (option: IVariableOption) =>
+    option.field?.type === FieldType.Attachment || getVariableValueKind(option) === 'attachment';
+  const isOptionDisabled = (option: IVariableOption) =>
+    (props.isOptionDisabled?.(option) ?? false) ||
+    Boolean(selectableValueKind && getVariableValueKind(option) !== selectableValueKind) ||
+    Boolean(isAttachmentMode && !isAttachmentVariableOption(option));
+  const getDisabledReason = (option: IVariableOption) =>
+    isOptionDisabled(option)
+      ? tr('variablePicker.typeMismatch', 'Variable type does not match')
+      : undefined;
   const handleSelect = (value: string) => {
     props.onSelect(value);
     handleOpenChange(false);
@@ -3175,19 +3720,129 @@ const RuntimeVariablePicker = (props: {
   const triggerFields = rightOptions.filter(isTriggerFieldVariable);
   const recordMetadata = rightOptions.filter(isTriggerRecordMetadataVariable);
   const triggerUser = rightOptions.filter(isTriggerUserVariable);
-  const objectChildren = rightOptions.filter((item) => item.parentFieldId === objectFieldId);
+  const rootOptions = rightOptions.filter(
+    (item) =>
+      !item.parentFieldId && (!item.parentObjectKey || item.parentObjectKey.startsWith('nodes.'))
+  );
+  const getOptionObjectKey = (option: IVariableOption) => option.objectKey ?? option.field?.id;
+  const getObjectChildrenByKey = (objectKey?: string) =>
+    objectKey
+      ? rightOptions.filter(
+          (item) => item.parentObjectKey === objectKey || item.parentFieldId === objectKey
+        )
+      : [];
+  const getObjectChildren = (option: IVariableOption) =>
+    getObjectChildrenByKey(getOptionObjectKey(option));
+  const isSelectableValueKind = (option: IVariableOption) =>
+    !selectableValueKind || getVariableValueKind(option) === selectableValueKind;
+  const hasSelectableDescendant = (children: IVariableOption[]): boolean =>
+    children.some((child) => {
+      if (isAttachmentMode && isAttachmentVariableOption(child)) return true;
+      if (!isAttachmentMode && isSelectableValueKind(child)) return true;
+      return hasSelectableDescendant(getObjectChildren(child));
+    });
+  const canDrillObjectOption = (option: IVariableOption, children: IVariableOption[]) =>
+    isAttachmentMode
+      ? !isAttachmentVariableOption(option) && hasSelectableDescendant(children)
+      : isSelectableValueKind(option) || !selectableValueKind || hasSelectableDescendant(children);
+  const canSelectObjectOption = (option: IVariableOption, children: IVariableOption[]) =>
+    isObjectMode &&
+    !option.sourceOnly &&
+    !isOptionDisabled(option) &&
+    (option.objectValue || children.length > 0);
+  const drillIntoObjectOption = (option: IVariableOption, backView: 'root' | 'fields') => {
+    const objectKey = getOptionObjectKey(option);
+    if (!objectKey) return;
+    setObjectFieldId(objectKey);
+    setObjectFieldBackView(backView);
+    setKeyword('');
+    setView('objectField');
+  };
+  const objectChildren = getObjectChildrenByKey(objectFieldId);
+  const activeObjectOption = objectFieldId
+    ? rightOptions.find((item) => getOptionObjectKey(item) === objectFieldId)
+    : undefined;
   const hasTriggerTree = Boolean(
     triggerFields.length || recordMetadata.length || triggerUser.length
   );
+  const firstTriggerOption = triggerFields[0] ?? recordMetadata[0];
+  const triggerRecordOption: IVariableOption | undefined = firstTriggerOption
+    ? {
+        ...firstTriggerOption,
+        label: tr('resultLabels.record', 'Record'),
+        value: '{{trigger.record}}',
+        field: undefined,
+        parentFieldId: undefined,
+        parentObjectKey: undefined,
+        objectKey: 'trigger.record',
+        objectValue: true,
+        valueKind: 'text',
+        icon: VariableObjectIcon,
+        iconClassName: 'text-muted-foreground',
+        iconWrapperClassName: 'border-0 bg-transparent',
+      }
+    : undefined;
+  const triggerRecordChildren = triggerRecordOption ? getObjectChildren(triggerRecordOption) : [];
+  const triggerFieldValuesOption = rightOptions.find(
+    (item) => parseVariableExpression(item.value)?.path === 'trigger.record.fields'
+  );
+  const triggerFieldValuesChildren = triggerFieldValuesOption
+    ? getObjectChildren(triggerFieldValuesOption)
+    : [];
+  const firstTriggerUserOption = triggerUser[0];
+  const triggerUserOption: IVariableOption | undefined = firstTriggerUserOption
+    ? {
+        ...firstTriggerUserOption,
+        label: tr('resultLabels.triggerUser', 'Trigger user'),
+        value: '{{trigger.user}}',
+        field: undefined,
+        parentFieldId: undefined,
+        parentObjectKey: undefined,
+        objectKey: 'trigger.user',
+        objectValue: true,
+        valueKind: 'text',
+        icon: VariableObjectIcon,
+        iconClassName: 'text-muted-foreground',
+        iconWrapperClassName: 'border-0 bg-transparent',
+      }
+    : undefined;
+  const triggerUserChildren = triggerUserOption ? getObjectChildren(triggerUserOption) : [];
   const renderSection = (title: string, options: IVariableOption[]) =>
     options.length ? (
       <>
         <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">{title}</div>
         {options.map((item) => {
-          const children = item.field?.id
-            ? rightOptions.filter((option) => option.parentFieldId === item.field?.id)
-            : [];
+          const children = getObjectChildren(item);
           if (children.length) {
+            if (isAttachmentMode && isAttachmentVariableOption(item)) {
+              return (
+                <RuntimePickerOption
+                  key={`${item.group}-${item.value}`}
+                  option={item}
+                  disabled={isOptionDisabled(item)}
+                  disabledReason={getDisabledReason(item)}
+                  selected={isSelectedOption(item)}
+                  onSelect={handleSelect}
+                />
+              );
+            }
+            if (!canDrillObjectOption(item, children)) {
+              return (
+                <RuntimePickerOption
+                  key={`${item.group}-${item.value}`}
+                  option={{
+                    ...item,
+                    icon: VariableObjectIcon,
+                    iconClassName: 'text-muted-foreground',
+                    iconWrapperClassName: 'border-0 bg-transparent',
+                  }}
+                  disabled
+                  disabledReason={getDisabledReason(item)}
+                  selected={isSelectedOption(item)}
+                  onSelect={handleSelect}
+                />
+              );
+            }
             return (
               <RuntimePickerDrillItem
                 key={`${item.group}-${item.value}`}
@@ -3198,10 +3853,10 @@ const RuntimeVariablePicker = (props: {
                   iconClassName: 'text-muted-foreground',
                   iconWrapperClassName: 'border-0 bg-transparent',
                 }}
-                onClick={() => {
-                  setObjectFieldId(item.field?.id);
-                  setView('objectField');
-                }}
+                onClick={() => drillIntoObjectOption(item, 'root')}
+                onSelect={
+                  canSelectObjectOption(item, children) ? () => handleSelect(item.value) : undefined
+                }
               />
             );
           }
@@ -3210,7 +3865,9 @@ const RuntimeVariablePicker = (props: {
               key={`${item.group}-${item.value}`}
               option={item}
               disabled={isOptionDisabled(item)}
+              disabledReason={getDisabledReason(item)}
               selected={isSelectedOption(item)}
+              showSelectAction={isObjectMode}
               onSelect={handleSelect}
             />
           );
@@ -3218,99 +3875,159 @@ const RuntimeVariablePicker = (props: {
       </>
     ) : null;
 
-  const renderRightContent = () => {
-    if (keywordValue) {
+  const renderTriggerFieldOption = (item: IVariableOption) => {
+    const children = getObjectChildren(item);
+    if (!children.length || (isAttachmentMode && isAttachmentVariableOption(item))) {
       return (
-        <>
-          {renderSection(tr('variablePicker.searchResults', 'Search results'), filteredOptions)}
-          {!filteredOptions.length && (
-            <div className="px-2 py-8 text-center text-xs text-muted-foreground">
-              {tr('empty.noResults', 'No results found')}
-            </div>
-          )}
-        </>
+        <RuntimePickerOption
+          key={`${item.group}-${item.value}`}
+          option={item}
+          disabled={isOptionDisabled(item)}
+          disabledReason={getDisabledReason(item)}
+          selected={isSelectedOption(item)}
+          showSelectAction={isObjectMode}
+          onSelect={handleSelect}
+        />
       );
     }
 
-    if (!hasTriggerTree) {
+    const objectOption = {
+      ...item,
+      icon: VariableObjectIcon,
+      iconClassName: 'text-muted-foreground',
+      iconWrapperClassName: 'border-0 bg-transparent',
+    };
+    if (!canDrillObjectOption(item, children)) {
       return (
-        <>
-          {renderSection(tr('variablePicker.selectData', 'Select data'), rightOptions)}
-          {!rightOptions.length && (
-            <div className="px-2 py-8 text-center text-xs text-muted-foreground">
-              {tr('empty.noResults', 'No results found')}
-            </div>
-          )}
-        </>
+        <RuntimePickerOption
+          key={`${item.group}-${item.value}`}
+          option={objectOption}
+          disabled
+          disabledReason={getDisabledReason(item)}
+          selected={isSelectedOption(item)}
+          onSelect={handleSelect}
+        />
       );
     }
 
-    if (view === 'record') {
-      return (
-        <>
-          {triggerFields.length > 0 && (
-            <>
-              <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-                {tr('resultLabels.fields', 'Fields')}
-              </div>
-              <RuntimePickerDrillItem
-                label={tr('resultLabels.fieldValues', 'Field values')}
-                onClick={() => setView('fields')}
-              />
-            </>
-          )}
-          {renderSection(tr('variablePicker.metadata', 'Metadata'), recordMetadata)}
-        </>
-      );
-    }
+    return (
+      <RuntimePickerDrillItem
+        key={`${item.group}-${item.value}`}
+        label={item.label}
+        option={objectOption}
+        onClick={() => drillIntoObjectOption(item, 'fields')}
+        onSelect={
+          canSelectObjectOption(item, children) ? () => handleSelect(item.value) : undefined
+        }
+      />
+    );
+  };
 
-    if (view === 'fields') {
-      return (
+  const renderNoResults = () => (
+    <div className="px-2 py-8 text-center text-xs text-muted-foreground">
+      {tr('empty.noResults', 'No results found')}
+    </div>
+  );
+  const renderSectionWithEmpty = (title: string, options: IVariableOption[]) => (
+    <>
+      {renderSection(title, options)}
+      {!options.length && renderNoResults()}
+    </>
+  );
+  const renderRecordContent = () => (
+    <>
+      {triggerFields.length > 0 && (
         <>
           <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
             {tr('resultLabels.fields', 'Fields')}
           </div>
-          {triggerFields.map((item) => {
-            const children = item.field?.id
-              ? rightOptions.filter((option) => option.parentFieldId === item.field?.id)
-              : [];
-            if (children.length) {
-              const objectOption = {
-                ...item,
-                icon: VariableObjectIcon,
-                iconClassName: 'text-muted-foreground',
-                iconWrapperClassName: 'border-0 bg-transparent',
-              };
-              return (
-                <RuntimePickerDrillItem
-                  key={`${item.group}-${item.value}`}
-                  label={item.label}
-                  option={objectOption}
-                  onClick={() => {
-                    setObjectFieldId(item.field?.id);
-                    setView('objectField');
-                  }}
-                />
-              );
+          <RuntimePickerDrillItem
+            label={tr('resultLabels.fieldValues', 'Field values')}
+            option={triggerFieldValuesOption}
+            onClick={() => setView('fields')}
+            onSelect={
+              triggerFieldValuesOption &&
+              canSelectObjectOption(triggerFieldValuesOption, triggerFieldValuesChildren)
+                ? () => handleSelect(triggerFieldValuesOption.value)
+                : undefined
             }
-            return (
-              <RuntimePickerOption
-                key={`${item.group}-${item.value}`}
-                option={item}
-                disabled={isOptionDisabled(item)}
-                selected={isSelectedOption(item)}
-                onSelect={handleSelect}
-              />
-            );
-          })}
+          />
         </>
+      )}
+      {renderSection(tr('variablePicker.metadata', 'Metadata'), recordMetadata)}
+    </>
+  );
+  const renderFieldsContent = () => (
+    <>
+      <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+        {tr('resultLabels.fields', 'Fields')}
+      </div>
+      {triggerFields.map(renderTriggerFieldOption)}
+    </>
+  );
+  const renderRootContent = () => (
+    <>
+      {triggerFields.length + recordMetadata.length > 0 && (
+        <>
+          <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+            {tr('variablePicker.insertFromField', 'Insert from field')}
+          </div>
+          <RuntimePickerDrillItem
+            label={tr('resultLabels.record', 'Record')}
+            option={triggerRecordOption}
+            onClick={() => setView('record')}
+            onSelect={
+              triggerRecordOption &&
+              canSelectObjectOption(triggerRecordOption, triggerRecordChildren)
+                ? () => handleSelect(triggerRecordOption.value)
+                : undefined
+            }
+          />
+        </>
+      )}
+      {triggerUser.length > 0 && (
+        <>
+          <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+            {tr('variablePicker.insertMetadata', 'Insert metadata')}
+          </div>
+          <RuntimePickerDrillItem
+            label={tr('resultLabels.triggerUser', 'Trigger user')}
+            option={triggerUserOption}
+            onClick={() => setView('user')}
+            onSelect={
+              triggerUserOption && canSelectObjectOption(triggerUserOption, triggerUserChildren)
+                ? () => handleSelect(triggerUserOption.value)
+                : undefined
+            }
+          />
+        </>
+      )}
+    </>
+  );
+
+  const renderRightContent = () => {
+    if (keywordValue) {
+      return renderSectionWithEmpty(
+        tr('variablePicker.searchResults', 'Search results'),
+        filteredOptions
       );
     }
 
+    if (!hasTriggerTree) {
+      return renderSectionWithEmpty(tr('variablePicker.selectData', 'Select data'), rootOptions);
+    }
+
+    if (view === 'record') {
+      return renderRecordContent();
+    }
+
+    if (view === 'fields') {
+      return renderFieldsContent();
+    }
+
     if (view === 'objectField') {
-      const field = triggerFields.find((item) => item.field?.id === objectFieldId);
       return renderSection(
-        field?.label ?? tr('resultLabels.fieldValues', 'Field values'),
+        activeObjectOption?.label ?? tr('resultLabels.fieldValues', 'Field values'),
         objectChildren
       );
     }
@@ -3319,32 +4036,7 @@ const RuntimeVariablePicker = (props: {
       return renderSection(tr('resultLabels.triggerUser', 'Trigger user'), triggerUser);
     }
 
-    return (
-      <>
-        {triggerFields.length + recordMetadata.length > 0 && (
-          <>
-            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-              {tr('variablePicker.insertFromField', 'Insert from field')}
-            </div>
-            <RuntimePickerDrillItem
-              label={tr('resultLabels.record', 'Record')}
-              onClick={() => setView('record')}
-            />
-          </>
-        )}
-        {triggerUser.length > 0 && (
-          <>
-            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-              {tr('variablePicker.insertMetadata', 'Insert metadata')}
-            </div>
-            <RuntimePickerDrillItem
-              label={tr('resultLabels.triggerUser', 'Trigger user')}
-              onClick={() => setView('user')}
-            />
-          </>
-        )}
-      </>
-    );
+    return renderRootContent();
   };
 
   return (
@@ -3363,10 +4055,10 @@ const RuntimeVariablePicker = (props: {
             <ScrollArea className="h-[276px]">
               <div className="p-2">
                 {groupNames.map((group, index) => {
-                  const firstOption = grouped[group]?.[0];
-                  const nodeStyle = getNodeIconStyle(firstOption?.groupNodeType);
+                  const sourceOption = getVariableSourceOption(grouped, group);
+                  const nodeStyle = getNodeIconStyle(sourceOption?.groupNodeType);
                   const groupLabel = group.replace(/^\d+\.\s*/, '');
-                  const sourceDescription = firstOption?.groupNodeDescription;
+                  const sourceDescription = sourceOption?.groupNodeDescription;
                   return (
                     <button
                       key={group}
@@ -3379,6 +4071,7 @@ const RuntimeVariablePicker = (props: {
                         setActiveGroup(group);
                         setView('root');
                         setObjectFieldId(undefined);
+                        setObjectFieldBackView('root');
                       }}
                     >
                       <span className="w-4 shrink-0 text-xs text-muted-foreground">
@@ -3387,31 +4080,32 @@ const RuntimeVariablePicker = (props: {
                       <VariableOptionIcon
                         className="size-4 rounded-none border-0 bg-transparent"
                         option={{
-                          ...firstOption,
+                          ...sourceOption,
                           icon:
-                            (firstOption?.groupNodeType && NODE_ICONS[firstOption.groupNodeType]) ||
-                            firstOption?.icon,
-                          iconClassName: firstOption?.groupNodeType
+                            (sourceOption?.groupNodeType &&
+                              NODE_ICONS[sourceOption.groupNodeType]) ||
+                            sourceOption?.icon,
+                          iconClassName: sourceOption?.groupNodeType
                             ? nodeStyle.iconClassName
-                            : firstOption?.iconClassName,
-                          iconWrapperClassName: firstOption?.groupNodeType
+                            : sourceOption?.iconClassName,
+                          iconWrapperClassName: sourceOption?.groupNodeType
                             ? nodeStyle.wrapperClassName
-                            : firstOption?.iconWrapperClassName,
+                            : sourceOption?.iconWrapperClassName,
                         }}
                       />
                       {sourceDescription ? (
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <span className="truncate">{groupLabel}</span>
+                              <span className={VARIABLE_SOURCE_LABEL_CLASS}>{groupLabel}</span>
                             </TooltipTrigger>
                             <TooltipContent>{sourceDescription}</TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                       ) : (
-                        <span className="truncate">{groupLabel}</span>
+                        <span className={VARIABLE_SOURCE_LABEL_CLASS}>{groupLabel}</span>
                       )}
-                      <VariableSourceStatus option={firstOption} />
+                      <VariableSourceStatus option={sourceOption} />
                     </button>
                   );
                 })}
@@ -3426,7 +4120,7 @@ const RuntimeVariablePicker = (props: {
                   size="icon-xs"
                   variant="ghost"
                   onClick={() => {
-                    setView(view === 'objectField' ? 'fields' : 'root');
+                    setView(view === 'objectField' ? objectFieldBackView : 'root');
                     if (view === 'objectField') setObjectFieldId(undefined);
                   }}
                 >
@@ -3461,6 +4155,9 @@ const RuntimeVariableSelectButton = (props: {
   placeholder?: string;
   variables: IVariableOption[];
   className?: string;
+  mode?: RuntimeVariablePickerMode;
+  allowObjectSelection?: boolean;
+  selectableValueKind?: FieldValueKind;
   isOptionDisabled?: (option: IVariableOption) => boolean;
   onChange: (value: string) => void;
 }) => {
@@ -3479,6 +4176,9 @@ const RuntimeVariableSelectButton = (props: {
         pickerType="runtime"
         value={props.value}
         variables={props.variables}
+        mode={props.mode}
+        allowObjectSelection={props.allowObjectSelection}
+        selectableValueKind={props.selectableValueKind}
         isOptionDisabled={props.isOptionDisabled}
         placeholder={props.placeholder}
         onChange={props.onChange}
@@ -3489,6 +4189,9 @@ const RuntimeVariableSelectButton = (props: {
   return (
     <RuntimeVariablePicker
       variables={props.variables}
+      mode={props.mode}
+      allowObjectSelection={props.allowObjectSelection}
+      selectableValueKind={props.selectableValueKind}
       isOptionDisabled={props.isOptionDisabled}
       onSelect={props.onChange}
       trigger={
@@ -3511,6 +4214,9 @@ const VariableReferenceEditor = (props: {
   className?: string;
   compact?: boolean;
   pickerType?: 'runtime' | 'generic';
+  mode?: RuntimeVariablePickerMode;
+  allowObjectSelection?: boolean;
+  selectableValueKind?: FieldValueKind;
   isOptionDisabled?: (option: IVariableOption) => boolean;
   onChange: (value: string) => void;
 }) => {
@@ -3541,6 +4247,9 @@ const VariableReferenceEditor = (props: {
       <RuntimeVariablePicker
         selectedValue={props.value}
         variables={props.variables}
+        mode={props.mode}
+        allowObjectSelection={props.allowObjectSelection}
+        selectableValueKind={props.selectableValueKind}
         isOptionDisabled={props.isOptionDisabled}
         onSelect={handleSelect}
         trigger={editTrigger}
@@ -3617,6 +4326,7 @@ const VariableReferenceEditor = (props: {
 const InlineVariableToken = (props: {
   value: string;
   variables: IVariableOption[];
+  selected?: boolean;
   onChange: (value: string) => void;
   onDelete: () => void;
 }) => {
@@ -3629,13 +4339,21 @@ const InlineVariableToken = (props: {
   };
 
   return (
-    <span contentEditable={false} data-variable-value={props.value}>
+    <span
+      className={cn('inline-flex rounded-md', props.selected && 'ring-2 ring-slate-950')}
+      contentEditable={false}
+      data-variable-value={props.value}
+    >
       <Popover>
         <PopoverTrigger asChild>
           <button
-            className="mx-0.5 inline-flex max-w-full items-center rounded-md border bg-muted px-2 py-0.5 text-xs text-foreground hover:bg-accent"
+            className={cn(
+              'mx-0.5 inline-flex max-w-full select-none items-center rounded-md border bg-muted px-2 py-0.5 text-xs text-foreground selection:bg-transparent selection:text-foreground hover:bg-accent',
+              props.selected && 'bg-secondary'
+            )}
             contentEditable={false}
             data-variable-value={props.value}
+            style={{ userSelect: 'none' }}
             type="button"
           >
             <VariableReferenceLabel fallback={label} option={option} value={props.value} />
@@ -3982,7 +4700,8 @@ const SearchableValueSelect = (props: {
                 return (
                   <CommandItem
                     key={option.value}
-                    value={getOptionText(option)}
+                    keywords={[getOptionText(option)]}
+                    value={option.value}
                     className="truncate text-sm"
                     onSelect={() => toggleValue(option.value)}
                   >
@@ -4414,17 +5133,24 @@ const VariableInput = (props: {
   placeholder?: string;
   variables: IVariableOption[];
   multiline?: boolean;
+  fixedHeightClassName?: string;
+  resizable?: boolean;
   onChange: (value: string) => void;
 }) => {
   const tr = usePanelTranslate();
   const value = props.value ?? '';
   const editorRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const resizeTextarea = (textarea: HTMLTextAreaElement | null) => {
-    if (!textarea) return;
-    textarea.style.height = 'auto';
-    textarea.style.height = `${textarea.scrollHeight}px`;
-  };
+  const [isAllContentSelected, setIsAllContentSelected] = useState(false);
+  const hasFixedHeight = Boolean(props.fixedHeightClassName);
+  const resizeTextarea = useCallback(
+    (textarea: HTMLTextAreaElement | null) => {
+      if (!textarea || hasFixedHeight) return;
+      textarea.style.height = 'auto';
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    },
+    [hasFixedHeight]
+  );
   const focusEditorEnd = () => {
     const editor = editorRef.current;
     if (!editor) return;
@@ -4432,6 +5158,15 @@ const VariableInput = (props: {
     const range = document.createRange();
     range.selectNodeContents(editor);
     range.collapse(false);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  };
+  const selectEditorContents = () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const range = document.createRange();
+    range.selectNodeContents(editor);
     const selection = window.getSelection();
     selection?.removeAllRanges();
     selection?.addRange(range);
@@ -4448,10 +5183,12 @@ const VariableInput = (props: {
   };
   const insertVariable = (variable: string) => {
     const currentValue = getCurrentValue();
+    setIsAllContentSelected(false);
     props.onChange(currentValue ? `${currentValue}${variable}` : variable);
     focusEditorEndSoon();
   };
   const replaceToken = (index: number, nextValue: string) => {
+    setIsAllContentSelected(false);
     props.onChange(
       splitVariableText(getCurrentValue())
         .map((token, tokenIndex) => (tokenIndex === index ? nextValue : token.value))
@@ -4459,6 +5196,7 @@ const VariableInput = (props: {
     );
   };
   const deleteToken = (index: number) => {
+    setIsAllContentSelected(false);
     props.onChange(
       splitVariableText(getCurrentValue())
         .filter((_, tokenIndex) => tokenIndex !== index)
@@ -4469,13 +5207,14 @@ const VariableInput = (props: {
   const syncContentEditable = () => {
     const editor = editorRef.current;
     if (!editor) return;
+    setIsAllContentSelected(false);
     const nextValue = Array.from(editor.childNodes).map(readVariableTextNode).join('');
     if (nextValue !== value) props.onChange(nextValue);
   };
 
   useEffect(() => {
     resizeTextarea(textareaRef.current);
-  }, [value]);
+  }, [resizeTextarea, value]);
 
   if (hasVariableTextToken(value)) {
     return (
@@ -4483,7 +5222,11 @@ const VariableInput = (props: {
         <div
           key={value}
           ref={editorRef}
-          className="min-h-9 w-full overflow-hidden break-words rounded-md border border-input bg-background px-3 py-1.5 pr-10 text-sm leading-6 outline-none focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500/30"
+          className={cn(
+            'min-h-9 w-full break-words rounded-md border border-input bg-background px-3 py-1.5 pr-10 text-sm leading-6 outline-none focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500/30',
+            hasFixedHeight ? ['overflow-y-auto', props.fixedHeightClassName] : 'overflow-hidden',
+            props.resizable && 'resize-y'
+          )}
           contentEditable
           role="textbox"
           aria-multiline={props.multiline}
@@ -4491,7 +5234,33 @@ const VariableInput = (props: {
           aria-label={props.placeholder ?? tr('placeholders.inputContent', 'Input content')}
           suppressContentEditableWarning
           onBlur={syncContentEditable}
+          onInput={() => setIsAllContentSelected(false)}
+          onMouseDown={() => setIsAllContentSelected(false)}
           onKeyDown={(event) => {
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+              event.preventDefault();
+              selectEditorContents();
+              setIsAllContentSelected(true);
+              return;
+            }
+            if (isAllContentSelected) {
+              if (event.key === 'Backspace' || event.key === 'Delete') {
+                event.preventDefault();
+                setIsAllContentSelected(false);
+                props.onChange('');
+                return;
+              }
+              if (!event.ctrlKey && !event.metaKey && event.key.length === 1) {
+                event.preventDefault();
+                setIsAllContentSelected(false);
+                props.onChange(event.key);
+                focusEditorEndSoon();
+                return;
+              }
+            }
+            if (!['Alt', 'Control', 'Meta', 'Shift'].includes(event.key)) {
+              setIsAllContentSelected(false);
+            }
             if (!props.multiline && event.key === 'Enter') event.preventDefault();
           }}
         >
@@ -4501,6 +5270,7 @@ const VariableInput = (props: {
                 key={`${token.value}-${index}`}
                 value={token.value}
                 variables={props.variables}
+                selected={isAllContentSelected}
                 onChange={(nextValue) => replaceToken(index, nextValue)}
                 onDelete={() => deleteToken(index)}
               />
@@ -4539,13 +5309,17 @@ const VariableInput = (props: {
     <div className="relative min-w-0" data-no-pan="true">
       <textarea
         ref={textareaRef}
-        className="min-h-9 w-full resize-none overflow-hidden rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm leading-5 outline-none placeholder:text-muted-foreground focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500/30"
+        className={cn(
+          'min-h-9 w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm leading-5 outline-none placeholder:text-muted-foreground focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500/30',
+          props.resizable ? 'resize-y' : 'resize-none',
+          hasFixedHeight ? ['overflow-y-auto', props.fixedHeightClassName] : 'overflow-hidden'
+        )}
         rows={1}
         value={value}
         placeholder={props.placeholder}
         onChange={(e: ChangeEvent<HTMLTextAreaElement>) => {
           props.onChange(e.target.value);
-          resizeTextarea(e.currentTarget);
+          if (!hasFixedHeight) resizeTextarea(e.currentTarget);
         }}
         onKeyDown={(event) => {
           if (!props.multiline && event.key === 'Enter') event.preventDefault();
@@ -4604,13 +5378,14 @@ const KeyValueEditor = (props: {
       )}
       {rows.map((row, index) => (
         <div
-          key={`${row.key}-${index}`}
-          className="grid grid-cols-[minmax(120px,1fr)_minmax(0,1.2fr)_auto] gap-2"
+          key={`key-value-${index}`}
+          className="grid grid-cols-[minmax(120px,1fr)_minmax(0,1.2fr)_auto] items-center gap-2"
         >
-          <Input
+          <VariableInput
             value={row.key}
+            variables={props.variables}
             placeholder={props.keyPlaceholder}
-            onChange={(e) => updateRow(index, { key: e.target.value })}
+            onChange={(value) => updateRow(index, { key: value })}
           />
           <ConditionValueInput
             value={row.value}
@@ -4619,11 +5394,12 @@ const KeyValueEditor = (props: {
             onChange={(value) => updateRow(index, { value })}
           />
           <Button
+            className="self-center"
             size="icon-xs"
             variant="ghost"
             onClick={() => updateRows(rows.filter((_, rowIndex) => rowIndex !== index))}
           >
-            <X className="size-4" />
+            <Trash2 className="size-4" />
           </Button>
         </div>
       ))}
@@ -4635,6 +5411,243 @@ const KeyValueEditor = (props: {
         <Plus className="size-4" />
         {tr('actions.add', 'Add')}
       </Button>
+    </div>
+  );
+};
+
+type HttpBodyFormDataMode = 'mixed' | 'attachment';
+
+type HttpBodyFormDataRow = {
+  key: string;
+  value: string;
+  mode: HttpBodyFormDataMode;
+};
+
+const getHttpBodyFormDataMode = (mode: unknown): HttpBodyFormDataMode =>
+  mode === 'attachment' ? 'attachment' : 'mixed';
+
+const normalizeHttpBodyFormDataRows = (value: unknown): HttpBodyFormDataRow[] => {
+  if (Array.isArray(value)) {
+    return value.filter(isPlainRecord).map((item) => ({
+      key: item.key == null ? '' : String(item.key),
+      value: item.value == null ? '' : String(item.value),
+      mode: getHttpBodyFormDataMode(item.mode ?? item.type),
+    }));
+  }
+
+  if (!isPlainRecord(value)) return [];
+
+  return Object.entries(value).map(([key, item]) => {
+    if (isPlainRecord(item)) {
+      return {
+        key,
+        value: item.value == null ? '' : String(item.value),
+        mode: getHttpBodyFormDataMode(item.mode ?? item.type),
+      };
+    }
+    return {
+      key,
+      value: item == null ? '' : String(item),
+      mode: 'mixed',
+    };
+  });
+};
+
+const serializeHttpBodyFormDataRows = (rows: HttpBodyFormDataRow[]) =>
+  rows
+    .filter((row) => row.key.trim())
+    .map((row) => ({
+      key: row.key,
+      value: row.value,
+      mode: row.mode,
+    }));
+
+const HttpBodyFormDataModeSelect = (props: {
+  value: HttpBodyFormDataMode;
+  onChange: (value: HttpBodyFormDataMode) => void;
+}) => {
+  const tr = usePanelTranslate();
+  const [open, setOpen] = useState(false);
+  const selected =
+    props.value === 'attachment'
+      ? {
+          label: tr('httpBody.attachmentMode', 'Attachment'),
+        }
+      : {
+          label: tr('httpBody.mixedMode', 'Mixed mode'),
+        };
+  const handleChange = (mode: HttpBodyFormDataMode) => {
+    props.onChange(mode);
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button className="size-9 shrink-0 p-0" title={selected.label} variant="outline">
+          <FieldEditIcon className="size-3.5 shrink-0" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 p-1" data-no-pan="true">
+        <Button
+          className="h-auto w-full justify-start gap-2 whitespace-normal p-2 text-left font-normal"
+          variant="ghost"
+          onClick={() => handleChange('mixed')}
+        >
+          <Type className="size-4 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium">{tr('httpBody.mixedMode', 'Mixed mode')}</div>
+            <div className="whitespace-normal break-words text-xs text-muted-foreground">
+              {tr(
+                'httpBody.mixedModeDescription',
+                'Use variables and static values from the current automation flow'
+              )}
+            </div>
+          </div>
+          {props.value === 'mixed' && <Check className="size-4 shrink-0 text-primary" />}
+        </Button>
+        <Button
+          className="h-auto w-full justify-start gap-2 whitespace-normal p-2 text-left font-normal"
+          variant="ghost"
+          onClick={() => handleChange('attachment')}
+        >
+          <FieldAttachmentIcon className="size-4 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium">{tr('httpBody.attachmentMode', 'Attachment')}</div>
+            <div className="whitespace-normal break-words text-xs text-muted-foreground">
+              {tr(
+                'httpBody.attachmentModeDescription',
+                'Only attachment variables can be selected'
+              )}
+            </div>
+          </div>
+          {props.value === 'attachment' && <Check className="size-4 shrink-0 text-primary" />}
+        </Button>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
+const HttpBodyFormDataEditor = (props: {
+  value: unknown;
+  keyPlaceholder: string;
+  valuePlaceholder: string;
+  variables: IVariableOption[];
+  onChange: (value: HttpBodyFormDataRow[]) => void;
+}) => {
+  const tr = usePanelTranslate();
+  const sourceRows = useMemo(() => normalizeHttpBodyFormDataRows(props.value), [props.value]);
+  const [rows, setRows] = useState(sourceRows);
+  const sourceSignature = JSON.stringify(sourceRows);
+
+  useEffect(() => {
+    setRows(sourceRows);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceSignature]);
+
+  const updateRows = (nextRows: HttpBodyFormDataRow[]) => {
+    setRows(nextRows);
+    props.onChange(serializeHttpBodyFormDataRows(nextRows));
+  };
+  const updateRow = (index: number, patch: Partial<HttpBodyFormDataRow>) => {
+    updateRows(rows.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
+  };
+
+  return (
+    <div className="space-y-2" data-no-pan="true">
+      {rows.map((row, index) => {
+        return (
+          <div
+            key={`http-form-data-${index}`}
+            className="grid grid-cols-[minmax(96px,1fr)_minmax(0,1.2fr)_auto_auto] items-center gap-2"
+          >
+            <VariableInput
+              value={row.key}
+              variables={props.variables}
+              placeholder={props.keyPlaceholder}
+              onChange={(value) => updateRow(index, { key: value })}
+            />
+            {row.mode === 'attachment' ? (
+              <RuntimeVariableSelectButton
+                className="!h-9 !w-full"
+                value={row.value}
+                variables={props.variables}
+                mode="attachment"
+                placeholder={props.valuePlaceholder}
+                onChange={(value) => updateRow(index, { value })}
+              />
+            ) : (
+              <VariableInput
+                value={row.value}
+                variables={props.variables}
+                placeholder={props.valuePlaceholder}
+                onChange={(value) => updateRow(index, { value })}
+              />
+            )}
+            <HttpBodyFormDataModeSelect
+              value={row.mode}
+              onChange={(mode) =>
+                updateRow(index, { mode, value: mode === 'attachment' ? '' : row.value })
+              }
+            />
+            <Button
+              className="self-center"
+              size="icon-xs"
+              variant="ghost"
+              onClick={() => updateRows(rows.filter((_, rowIndex) => rowIndex !== index))}
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
+        );
+      })}
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => updateRows([...rows, { key: '', value: '', mode: 'mixed' }])}
+      >
+        <Plus className="size-4" />
+        {tr('actions.add', 'Add')}
+      </Button>
+    </div>
+  );
+};
+
+const HTTP_BODY_TYPES_WITH_BODY = new Set(['formData', 'urlencoded', 'rawText', 'json']);
+
+const HttpRequestBodyEditor = (props: {
+  bodyType: string;
+  body: unknown;
+  variables: IVariableOption[];
+  placeholder: string;
+  keyPlaceholder: string;
+  valuePlaceholder: string;
+  onBodyTypeChange: (value: string) => void;
+  onBodyChange: (value: unknown) => void;
+}) => {
+  const bodyType = HTTP_BODY_TYPES_WITH_BODY.has(props.bodyType) ? props.bodyType : 'none';
+  return (
+    <div className="space-y-2">
+      <BodyTypeSelect value={bodyType} onChange={props.onBodyTypeChange} />
+      {bodyType === 'formData' && (
+        <HttpBodyFormDataEditor
+          value={props.body}
+          keyPlaceholder={props.keyPlaceholder}
+          valuePlaceholder={props.valuePlaceholder}
+          variables={props.variables}
+          onChange={props.onBodyChange}
+        />
+      )}
+      {bodyType !== 'none' && bodyType !== 'formData' && (
+        <VariableInput
+          value={typeof props.body === 'string' ? props.body : ''}
+          variables={props.variables}
+          multiline
+          fixedHeightClassName="h-[128px]"
+          placeholder={props.placeholder}
+          onChange={props.onBodyChange}
+        />
+      )}
     </div>
   );
 };
@@ -4729,10 +5742,16 @@ const FieldMappingEditor = (props: {
           );
         }
         const disabledReason = getFieldWriteDisabledReason(field, tr);
+        const Icon = getFieldIcon(field);
         return (
           <div key={fieldId} className="group">
             <FieldBlock
-              label={field.name}
+              label={
+                <span className="inline-flex min-w-0 items-center gap-1">
+                  <Icon className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 truncate">{field.name || field.id}</span>
+                </span>
+              }
               description={disabledReason ?? getDescription(field)}
               action={
                 <Button
@@ -4783,7 +5802,8 @@ const FieldMappingEditor = (props: {
                   return (
                     <CommandItem
                       key={field.id}
-                      value={field.name || field.id}
+                      keywords={[field.name]}
+                      value={field.id}
                       disabled={Boolean(disabledReason)}
                       onSelect={() => {
                         if (disabledReason) return;
@@ -4843,6 +5863,7 @@ const buildMailTransportConfig = (draft: MailTransportDraft) =>
 
 const MailTransportConfigDialog = (props: {
   value: unknown;
+  triggerClassName?: string;
   onChange: (value: Record<string, unknown>) => void;
 }) => {
   const tr = usePanelTranslate();
@@ -4872,11 +5893,11 @@ const MailTransportConfigDialog = (props: {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="outline">
+        <Button className={cn('h-9', props.triggerClassName)} size="sm" variant="outline">
           {tr('actions.addConfig', 'Add config')}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="max-h-[calc(100vh-3rem)] max-w-[448px] overflow-y-auto">
         <DialogTitle>{tr('mailConfig.title', 'Email configuration')}</DialogTitle>
         <DialogDescription className="sr-only">
           {tr('mailConfig.description', 'Configure the SMTP service used by the send email node')}
@@ -4904,9 +5925,10 @@ const MailTransportConfigDialog = (props: {
               onChange={(e) => updateDraft({ port: e.target.value })}
             />
           </FieldBlock>
-          <FieldBlock label="SSL/TLS">
+          <div className="flex h-8 items-center justify-between gap-3">
+            <Label className="text-sm font-medium">SSL/TLS</Label>
             <Switch checked={draft.secure} onCheckedChange={(secure) => updateDraft({ secure })} />
-          </FieldBlock>
+          </div>
           <FieldBlock label={tr('mailConfig.username', 'Username')} required>
             <Input
               value={draft.user}
@@ -4937,23 +5959,68 @@ const MailTransportConfigDialog = (props: {
             />
           </FieldBlock>
         </div>
-        <DialogFooter className="items-center gap-2 sm:justify-between">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
+        <DialogFooter className="flex-col gap-4 sm:flex-col sm:space-x-0">
+          <div className="flex w-full min-w-0 items-center gap-2">
             <Input
+              className="min-w-0 flex-1"
               value={testEmail}
               placeholder={tr('mailConfig.testEmailPlaceholder', 'Enter test email')}
               onChange={(e) => setTestEmail(e.target.value)}
             />
             <Button disabled={!testEmail.trim()} variant="outline">
+              <Send className="size-4" />
               {tr('actions.send', 'Send')}
             </Button>
           </div>
-          <div className="flex gap-2">
+          <div className="flex w-full justify-end gap-2">
             <Button variant="outline" onClick={() => setOpen(false)}>
               {tr('actions.cancel', 'Cancel')}
             </Button>
             <Button onClick={handleConfirm}>{tr('actions.confirm', 'Confirm')}</Button>
           </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+const LargeVariableInputDialog = (props: {
+  title: string;
+  value: string;
+  variables: IVariableOption[];
+  placeholder?: string;
+  onChange: (value: string) => void;
+}) => {
+  const tr = usePanelTranslate();
+  const [open, setOpen] = useState(false);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button className="h-7 gap-1 px-1.5 text-xs font-normal" size="sm" variant="ghost">
+          <Maximize2 className="size-3.5" />
+          {tr('actions.edit', 'Edit')}
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[calc(100vh-3rem)] max-w-[720px] overflow-y-auto">
+        <DialogTitle>{props.title}</DialogTitle>
+        <div className="grid gap-4 md:grid-cols-2">
+          <VariableInput
+            value={props.value}
+            variables={props.variables}
+            multiline
+            fixedHeightClassName="h-[568px]"
+            placeholder={props.placeholder}
+            onChange={props.onChange}
+          />
+          <div className="h-[568px] overflow-y-auto whitespace-pre-wrap break-words rounded-md border bg-background p-4 text-sm leading-6">
+            {props.value}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>
+            {tr('actions.return', 'Return')}
+          </Button>
+          <Button>{tr('actions.generatePreview', 'Generate preview')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -5560,63 +6627,138 @@ const WatchFieldEditor = (props: {
   fields: TableField[];
   placeholder?: string;
   emptyText?: string | false;
+  multiple?: boolean;
+  showBulkActions?: boolean;
   onChange: (value: string[]) => void;
 }) => {
   const tr = usePanelTranslate();
+  const [open, setOpen] = useState(false);
+  const multiple = props.multiple ?? true;
+  const showBulkActions = props.showBulkActions ?? multiple;
   const selected = Array.isArray(props.value)
     ? props.value.filter((item): item is string => typeof item === 'string')
     : [];
-  const remaining = props.fields.filter((field) => !selected.includes(field.id));
-  const selectedFields = selected.map(
-    (fieldId) => props.fields.find((field) => field.id === fieldId)?.name ?? fieldId
-  );
-  const selectedLabel = selectedFields.join('、');
+  const selectedSet = new Set(selected);
+  const selectedFields = selected
+    .map((fieldId) => props.fields.find((field) => field.id === fieldId))
+    .filter((field): field is TableField => Boolean(field));
+  const toggleField = (fieldId: string) => {
+    props.onChange(
+      selectedSet.has(fieldId)
+        ? selected.filter((item) => item !== fieldId)
+        : [...selected, fieldId]
+    );
+  };
+
+  if (!multiple) {
+    return (
+      <div className="space-y-2" data-no-pan="true">
+        <FieldSelect
+          fields={props.fields}
+          value={selected[0]}
+          placeholder={props.placeholder || tr('actions.addField', 'Add field')}
+          showEmptyOption={false}
+          onChange={(fieldId) => props.onChange(fieldId ? [fieldId] : [])}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2" data-no-pan="true">
-      <Select
-        value={EMPTY_SELECT_VALUE}
-        onValueChange={(fieldId) => {
-          const nextFieldId = fromOptionValue(fieldId);
-          if (nextFieldId) props.onChange([...selected, nextFieldId]);
-        }}
-      >
-        <SelectTrigger>
-          <span className={cn('truncate', !selectedLabel && 'text-muted-foreground')}>
-            {selectedLabel || props.placeholder || tr('actions.addField', 'Add field')}
-          </span>
-        </SelectTrigger>
-        <SelectContent>
-          {remaining.length ? (
-            remaining.map((field) => (
-              <SelectItem key={field.id} value={field.id}>
-                {field.name || field.id}
-              </SelectItem>
-            ))
-          ) : (
-            <div className="px-3 py-6 text-center text-sm text-muted-foreground">
-              {tr('empty.noResults', 'No results found')}
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            className="h-9 w-full justify-between overflow-hidden px-3 py-2 font-normal"
+            role="combobox"
+            variant="outline"
+          >
+            {selectedFields.length ? (
+              <div className="flex w-full gap-1 overflow-x-auto">
+                {selectedFields.map((field) => {
+                  const Icon = getFieldIcon(field);
+                  return (
+                    <div
+                      key={field.id}
+                      className="flex h-6 shrink-0 items-center rounded-md border bg-muted px-2 py-1 text-xs font-normal"
+                    >
+                      <Icon className="mr-1 size-4 text-muted-foreground" />
+                      <span>{field.name || field.id}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <span className="truncate text-muted-foreground">
+                {props.placeholder || tr('actions.addField', 'Add field')}
+              </span>
+            )}
+            <ChevronDown
+              className={cn('ml-2 size-4 shrink-0 text-muted-foreground', open && 'rotate-180')}
+            />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          className="w-[var(--radix-popover-trigger-width)] p-0"
+          data-no-pan="true"
+        >
+          <Command>
+            <CommandInput
+              className="h-9 placeholder:text-sm"
+              placeholder={tr('placeholders.search', 'Search...')}
+            />
+            <CommandList className="max-h-[272px] overflow-y-auto overflow-x-hidden">
+              <CommandEmpty>{tr('empty.noResults', 'No results found')}</CommandEmpty>
+              <CommandGroup>
+                {props.fields.map((field) => {
+                  const isSelected = selectedSet.has(field.id);
+                  return (
+                    <CommandItem
+                      key={field.id}
+                      keywords={[field.name]}
+                      value={field.id}
+                      className="flex h-8 cursor-pointer items-center"
+                      onSelect={() => toggleField(field.id)}
+                    >
+                      <FieldOptionContent field={field} />
+                      <Check
+                        className={cn(
+                          'ml-2 size-4 shrink-0',
+                          isSelected ? 'opacity-100' : 'opacity-0'
+                        )}
+                      />
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+          {showBulkActions && (
+            <div className="flex items-center justify-around border-t px-6 py-2">
+              <Button
+                className="h-8 w-32 px-3 py-1.5 text-[13px] font-normal"
+                size="sm"
+                type="button"
+                variant="ghost"
+                onClick={() => props.onChange(props.fields.map((field) => field.id))}
+              >
+                {tr('actions.watchAllFields', 'Watch all')}
+              </Button>
+              <Button
+                className="h-8 w-32 px-3 py-1.5 text-[13px] font-normal"
+                size="sm"
+                type="button"
+                variant="ghost"
+                onClick={() => props.onChange([])}
+              >
+                {tr('actions.unwatchAllFields', 'Unwatch all')}
+              </Button>
             </div>
           )}
-        </SelectContent>
-      </Select>
-      <div className="flex flex-wrap gap-2">
-        {selected.map((fieldId) => {
-          const field = props.fields.find((item) => item.id === fieldId);
-          return (
-            <Badge key={fieldId} className="gap-1" variant="secondary">
-              {field?.name ?? fieldId}
-              <button
-                type="button"
-                onClick={() => props.onChange(selected.filter((item) => item !== fieldId))}
-              >
-                <X className="size-3" />
-              </button>
-            </Badge>
-          );
-        })}
-      </div>
-      {!selected.length && props.emptyText !== false && (
+        </PopoverContent>
+      </Popover>
+      {multiple && !selected.length && props.emptyText !== false && (
         <div className="text-xs text-muted-foreground">
           {props.emptyText ??
             tr(
@@ -5629,14 +6771,28 @@ const WatchFieldEditor = (props: {
   );
 };
 
-const copyResultJson = async (value: unknown, tr?: PanelTranslate) => {
-  const text = JSON.stringify(value, null, 2);
+const copyTextToClipboard = async (text: string, tr?: PanelTranslate) => {
   try {
-    await navigator.clipboard.writeText(text);
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    }
     sonner.toast.success(panelText(tr, 'toast.copySuccess', 'Copied successfully'));
   } catch {
     sonner.toast(panelText(tr, 'toast.copyFailed', 'Copy failed'));
   }
+};
+
+const copyResultJson = async (value: unknown, tr?: PanelTranslate) => {
+  await copyTextToClipboard(JSON.stringify(value, null, 2), tr);
 };
 
 const ResultRawBlock = (props: { value: unknown }) => {
@@ -5655,6 +6811,384 @@ const ResultRawBlock = (props: { value: unknown }) => {
       <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all p-4 pr-10 text-xs leading-relaxed">
         {JSON.stringify(props.value, null, 2)}
       </pre>
+    </div>
+  );
+};
+
+const createWebhookAuthorization = (webhookToken: IWorkflowWebhookTokenVo) => ({
+  type: 'bearer',
+  token: webhookToken.token,
+  secret: webhookToken.secret,
+});
+
+const getWebhookUrl = (baseId: string, workflowId: string) => {
+  const path = `/api/webhook/base/${baseId}/workflow/${workflowId}`;
+  return typeof window === 'undefined' ? path : `${window.location.origin}${path}`;
+};
+
+const getWebhookCurl = (webhookUrl: string, isAuthorizationEnabled: boolean) =>
+  [
+    'curl --request POST \\',
+    `  --url ${webhookUrl} \\`,
+    '  --header "Content-Type: application/json" \\',
+    ...(isAuthorizationEnabled ? ['  --header "Authorization: Bearer <token>" \\'] : []),
+    "  --data '{}'",
+  ].join('\n');
+
+const getDisplayedWebhookCurl = (
+  webhookUrl: string,
+  isAuthorizationEnabled: boolean,
+  token: string,
+  isTokenVisible: boolean
+) =>
+  getWebhookCurl(webhookUrl, isAuthorizationEnabled).replace(
+    'Authorization: Bearer <token>',
+    `Authorization: Bearer ${isAuthorizationEnabled && isTokenVisible ? token : '<token>'}`
+  );
+
+const CURL_HIGHLIGHT_COLORS = {
+  light: {
+    base: '#383A42',
+    command: '#4078F2',
+    option: '#986801',
+    value: '#50A14F',
+    slash: '#0184BC',
+  },
+  dark: {
+    base: '#ABB2BF',
+    command: '#61AFEF',
+    option: '#D19A66',
+    value: '#98C379',
+    slash: '#56B6C2',
+  },
+} as const;
+
+type CurlHighlightColors = (typeof CURL_HIGHLIGHT_COLORS)[keyof typeof CURL_HIGHLIGHT_COLORS];
+
+const getWebhookCurlLines = (curlExample: string) => curlExample.split('\n');
+
+const WebhookCurlExample = ({ curlExample }: { curlExample: string }) => {
+  const lines = getWebhookCurlLines(curlExample);
+
+  const renderLine = (line: string, index: number, colors: CurlHighlightColors) => {
+    const hasSlash = line.endsWith('\\');
+    const lineWithoutSlash = hasSlash ? line.slice(0, -2) : line;
+    const trimmedLine = lineWithoutSlash.trimStart();
+    const indent = lineWithoutSlash.slice(0, lineWithoutSlash.length - trimmedLine.length);
+    const firstSpaceIndex = trimmedLine.indexOf(' ');
+    const option = firstSpaceIndex === -1 ? trimmedLine : trimmedLine.slice(0, firstSpaceIndex);
+    const value = firstSpaceIndex === -1 ? '' : trimmedLine.slice(firstSpaceIndex + 1);
+    const isCommandLine = index === 0;
+
+    return (
+      <span key={`${line}-${index}`} className="line">
+        {isCommandLine ? (
+          <>
+            <span style={{ color: colors.command }}>curl</span>
+            <span style={{ color: colors.option }}> --request</span>
+            <span style={{ color: colors.value }}> POST</span>
+          </>
+        ) : (
+          <>
+            <span style={{ color: colors.option }}>
+              {indent}
+              {option}
+            </span>
+            {value && <span style={{ color: colors.value }}> {value}</span>}
+          </>
+        )}
+        {hasSlash && <span style={{ color: colors.slash }}>{' \\'}</span>}
+        {index < lines.length - 1 && '\n'}
+      </span>
+    );
+  };
+
+  const renderPre = (
+    theme: keyof typeof CURL_HIGHLIGHT_COLORS,
+    className: string,
+    style: { backgroundColor: string; color: string }
+  ) => (
+    <div
+      className={cn(
+        className,
+        'overflow-hidden [&>pre]:m-0 [&>pre]:p-4 [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm'
+      )}
+    >
+      <pre className={cn('shiki', theme === 'light' ? 'one-light' : 'one-dark-pro')} style={style}>
+        <code>
+          {lines.map((line, index) => renderLine(line, index, CURL_HIGHLIGHT_COLORS[theme]))}
+        </code>
+      </pre>
+    </div>
+  );
+
+  return (
+    <div className="group relative w-full overflow-hidden rounded-md border-none bg-muted/50 text-foreground [&>div>div>pre]:whitespace-pre-wrap [&>div>div>pre]:break-all [&>div>div>pre]:!p-2 [&_code]:text-xs">
+      <div className="relative">
+        {renderPre('light', 'dark:hidden [&>pre]:!bg-background [&>pre]:!text-foreground', {
+          backgroundColor: '#FAFAFA',
+          color: CURL_HIGHLIGHT_COLORS.light.base,
+        })}
+        {renderPre('dark', 'hidden dark:block [&>pre]:!bg-background [&>pre]:!text-foreground', {
+          backgroundColor: '#282c34',
+          color: CURL_HIGHLIGHT_COLORS.dark.base,
+        })}
+      </div>
+    </div>
+  );
+};
+
+const WebhookConfigBlock = (props: {
+  baseId: string;
+  workflowId: string;
+  config: Record<string, unknown>;
+  onEnableAuthorization: () => Promise<void>;
+  onDisableAuthorization: () => Promise<void>;
+  onRegenerateAuthorization: () => Promise<void>;
+}) => {
+  const tr = usePanelTranslate();
+  const [isTokenVisible, setIsTokenVisible] = useState(false);
+  const [regenConfirmOpen, setRegenConfirmOpen] = useState(false);
+  const [isAuthorizationSaving, setIsAuthorizationSaving] = useState(false);
+  const authorization = isPlainRecord(props.config.authorization)
+    ? props.config.authorization
+    : undefined;
+  const isAuthorizationEnabled = authorization?.type === 'bearer';
+  const token = typeof authorization?.token === 'string' ? authorization.token : '';
+  const webhookUrl = getWebhookUrl(props.baseId, props.workflowId);
+  const curlExample = getDisplayedWebhookCurl(
+    webhookUrl,
+    isAuthorizationEnabled,
+    token,
+    isTokenVisible
+  );
+  const displayedToken = isTokenVisible ? token : '*'.repeat(Math.max(token.length, 12));
+
+  const handleAuthorizationAction = async (action: () => Promise<void>) => {
+    try {
+      setIsAuthorizationSaving(true);
+      await action();
+    } finally {
+      setIsAuthorizationSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <div className="flex items-center gap-1">
+          <Label className="text-sm font-medium">{tr('fields.webhookUrl', 'Webhook URL')}</Label>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  aria-label={tr('fields.webhookUrl', 'Webhook URL')}
+                  className="size-5 text-muted-foreground"
+                  size="icon-xs"
+                  type="button"
+                  variant="ghost"
+                >
+                  <CircleHelp className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {tr(
+                  'descriptions.webhookUrlPublic',
+                  'Anyone with this URL can trigger your automation. Be careful where you share it.'
+                )}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+        <div className="relative">
+          <Button
+            aria-label={tr('actions.copy', 'Copy')}
+            className="absolute right-1 top-1 z-10 shrink-0"
+            size="xs"
+            title={tr('actions.copy', 'Copy')}
+            type="button"
+            variant="ghost"
+            onClick={() => copyTextToClipboard(webhookUrl, tr)}
+          >
+            <Copy className="size-4" />
+          </Button>
+          <div className="flex h-9 items-center rounded-md border bg-muted pl-3 pr-8">
+            <span className="truncate text-sm text-foreground">{webhookUrl}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <div
+          className={cn(
+            'flex flex-col gap-2 rounded-md border p-3',
+            isAuthorizationEnabled
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-50'
+              : 'border-yellow-200 bg-yellow-50 text-yellow-900 dark:border-yellow-900 dark:bg-yellow-950 dark:text-yellow-50'
+          )}
+        >
+          <div className="flex items-start gap-2">
+            {isAuthorizationEnabled ? (
+              <ShieldCheck className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-500" />
+            ) : (
+              <TriangleAlert className="mt-0.5 size-4 shrink-0 text-yellow-600 dark:text-yellow-500" />
+            )}
+            <p className="text-xs">
+              {isAuthorizationEnabled
+                ? tr(
+                    'descriptions.webhookAuthorizationEnabled',
+                    'Authorization is enabled. Only requests with the correct Bearer token can trigger this automation.'
+                  )
+                : tr(
+                    'descriptions.webhookUrlPublic',
+                    'Anyone with this URL can trigger your automation. Be careful where you share it.'
+                  )}
+            </p>
+          </div>
+          {!isAuthorizationEnabled && (
+            <Button
+              className="h-7 self-start px-2 py-1.5 text-xs"
+              disabled={isAuthorizationSaving}
+              size="sm"
+              type="button"
+              variant="outline"
+              onClick={() => handleAuthorizationAction(props.onEnableAuthorization)}
+            >
+              {tr('actions.enableAuthorization', 'Enable authorization')}
+            </Button>
+          )}
+        </div>
+
+        {isAuthorizationEnabled && (
+          <div className="space-y-2 pt-1">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1">
+                <span className="text-sm">
+                  {tr('fields.authorizationBearerToken', 'Authorization (Bearer token)')}
+                </span>
+              </div>
+              <Switch
+                checked
+                className="h-5 w-9"
+                disabled={isAuthorizationSaving}
+                onCheckedChange={(checked) => {
+                  void handleAuthorizationAction(
+                    checked ? props.onEnableAuthorization : props.onDisableAuthorization
+                  );
+                }}
+              />
+            </div>
+            <div className="space-y-2">
+              <div className="relative">
+                <div className="absolute right-1 top-1 z-10 flex items-center gap-1">
+                  <Button
+                    aria-label={tr('actions.showOrHide', 'Show or hide')}
+                    className="shrink-0"
+                    disabled={isAuthorizationSaving}
+                    size="xs"
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setIsTokenVisible((visible) => !visible)}
+                  >
+                    {isTokenVisible ? (
+                      <EyeOff className="size-3.5" />
+                    ) : (
+                      <Eye className="size-3.5" />
+                    )}
+                  </Button>
+                  <Button
+                    aria-label={tr('actions.copy', 'Copy')}
+                    className="shrink-0"
+                    disabled={isAuthorizationSaving}
+                    size="xs"
+                    title={tr('actions.copy', 'Copy')}
+                    type="button"
+                    variant="ghost"
+                    onClick={() => copyTextToClipboard(token, tr)}
+                  >
+                    <Copy className="size-3.5" />
+                  </Button>
+                  <Button
+                    aria-label={tr('actions.regenerate', 'Regenerate')}
+                    className="size-7 shrink-0"
+                    disabled={isAuthorizationSaving}
+                    size="icon-xs"
+                    title={tr('actions.regenerate', 'Regenerate')}
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setRegenConfirmOpen(true)}
+                  >
+                    <RefreshCcw className="size-3 shrink-0" />
+                  </Button>
+                </div>
+                <ScrollArea
+                  className="h-10 w-[calc(100%-6.75rem)] rounded-md bg-muted/50"
+                  scrollBar="horizontal"
+                >
+                  <div
+                    className={cn(
+                      'flex h-10 min-w-max items-center px-2 font-mono text-xs',
+                      isTokenVisible
+                        ? 'text-[#4078F2] dark:text-[#61AFEF]'
+                        : 'text-muted-foreground'
+                    )}
+                  >
+                    <span className="whitespace-nowrap">{displayedToken}</span>
+                  </div>
+                  <ScrollBar orientation="horizontal" />
+                </ScrollArea>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-sm font-medium">{tr('fields.callExample', 'Call example')}</Label>
+        <div className="relative">
+          <Button
+            aria-label={tr('actions.copy', 'Copy')}
+            className="absolute right-1 top-1 z-10 shrink-0"
+            size="xs"
+            title={tr('actions.copy', 'Copy')}
+            type="button"
+            variant="ghost"
+            onClick={() => copyTextToClipboard(curlExample, tr)}
+          >
+            <Copy className="size-4" />
+          </Button>
+          <WebhookCurlExample curlExample={curlExample} />
+        </div>
+      </div>
+      <AlertDialog open={regenConfirmOpen} onOpenChange={setRegenConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {tr('actions.regenerateToken', 'Regenerate token?')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {tr(
+                'descriptions.regenerateToken',
+                'Regenerating will immediately invalidate the old token and may break existing integrations.'
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setRegenConfirmOpen(false)}>
+              {tr('actions.cancel', 'Cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isAuthorizationSaving}
+              onClick={async () => {
+                await handleAuthorizationAction(props.onRegenerateAuthorization);
+                setRegenConfirmOpen(false);
+              }}
+            >
+              {tr('actions.confirm', 'Confirm')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
@@ -5881,6 +7415,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
   const [isRunOverviewOpen, setIsRunOverviewOpen] = useState(true);
   const [nodeDescriptionDraft, setNodeDescriptionDraft] = useState('');
   const workflowNameInputRef = useRef<HTMLInputElement>(null);
+  const canvasContentRef = useRef<HTMLDivElement>(null);
   const loadedWorkflowIdRef = useRef<string>();
   const lastSavedDraftSignatureRef = useRef('');
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -5967,7 +7502,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
     setWorkflowName(nextName);
     setNodes(nextNodes);
     setEdges(nextEdges);
-    setSelectedNodeId(nextNodes[0]?.id);
+    setSelectedNodeId(undefined);
     setNodeTestResults(
       Object.fromEntries(
         nextNodes
@@ -6041,10 +7576,84 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
     enabled: Boolean(selectedConfigTableId),
   });
 
+  const workflowTableIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          nodes
+            .map((node) =>
+              typeof node.config?.tableId === 'string' ? node.config.tableId : undefined
+            )
+            .filter((tableId): tableId is string => Boolean(tableId))
+        )
+      ),
+    [nodes]
+  );
+  const additionalTableIds = useMemo(
+    () =>
+      workflowTableIds.filter(
+        (tableId) => tableId !== triggerTableId && tableId !== selectedConfigTableId
+      ),
+    [selectedConfigTableId, triggerTableId, workflowTableIds]
+  );
+  const additionalTableFieldQueries = useQueries({
+    queries: additionalTableIds.map((tableId) => ({
+      queryKey: ReactQueryKeys.fieldList(tableId),
+      queryFn: () => getFields(tableId).then((res) => res.data.map(toTableField)),
+      enabled: Boolean(tableId),
+    })),
+  });
+
   const configFields =
     selectedConfigTableId && selectedConfigTableId === triggerTableId
       ? triggerFields
       : selectedTableFields;
+  const fieldsByTableId = useMemo(() => {
+    const result: Record<string, TableField[]> = {};
+    additionalTableFieldQueries.forEach((query, index) => {
+      const tableId = additionalTableIds[index];
+      if (tableId && query.data) result[tableId] = query.data;
+    });
+    if (triggerTableId) result[triggerTableId] = triggerFields;
+    if (selectedConfigTableId) result[selectedConfigTableId] = configFields;
+    return result;
+  }, [
+    additionalTableFieldQueries,
+    additionalTableIds,
+    configFields,
+    selectedConfigTableId,
+    triggerFields,
+    triggerTableId,
+  ]);
+  const getRecordsViewTableIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          nodes
+            .filter((node) => node.type === 'getRecords' && hasText(node.config?.viewId))
+            .map((node) =>
+              typeof node.config?.tableId === 'string' ? node.config.tableId : undefined
+            )
+            .filter((tableId): tableId is string => Boolean(tableId))
+        )
+      ),
+    [nodes]
+  );
+  const getRecordsViewQueries = useQueries({
+    queries: getRecordsViewTableIds.map((tableId) => ({
+      queryKey: ReactQueryKeys.viewList(tableId),
+      queryFn: () => getViewList(tableId).then((res) => res.data),
+      enabled: Boolean(tableId),
+    })),
+  });
+  const viewsByTableId = useMemo(() => {
+    const result: Record<string, { id: string; name: string }[]> = {};
+    getRecordsViewQueries.forEach((query, index) => {
+      const tableId = getRecordsViewTableIds[index];
+      if (tableId && query.data) result[tableId] = query.data;
+    });
+    return result;
+  }, [getRecordsViewQueries, getRecordsViewTableIds]);
   const workflowFields = useMemo(() => {
     const fieldMap = new Map<string, TableField>();
     [...triggerFields, ...selectedTableFields].forEach((field) => fieldMap.set(field.id, field));
@@ -6067,8 +7676,8 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
     [edges, graphNodeOrder, selectedNode?.id]
   );
   const variableOptions = useMemo(
-    () => buildVariableOptions(upstreamNodes, triggerFields, nodeTestResults, tr),
-    [nodeTestResults, tr, triggerFields, upstreamNodes]
+    () => buildVariableOptions(upstreamNodes, triggerFields, nodeTestResults, fieldsByTableId, tr),
+    [fieldsByTableId, nodeTestResults, tr, triggerFields, upstreamNodes]
   );
   const collaboratorById = useMemo(
     () => new Map(collaborators.map((collaborator) => [collaborator.id, collaborator])),
@@ -6127,6 +7736,35 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
     },
     [baseId, queryClient, t, workflowId]
   );
+  const updateWorkflowBaseNodeNameCache = useCallback(
+    (name: string) => {
+      queryClient.setQueryData<IBaseNodeTreeVo>(ReactQueryKeys.baseNodeTree(baseId), (current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          nodes: current.nodes.map((node) =>
+            node.resourceType === BaseNodeResourceType.Workflow && node.resourceId === workflowId
+              ? {
+                  ...node,
+                  resourceMeta: {
+                    ...node.resourceMeta,
+                    name: name.trim() || t('noun.automation'),
+                  },
+                }
+              : node
+          ),
+        };
+      });
+    },
+    [baseId, queryClient, t, workflowId]
+  );
+  const handleWorkflowNameChange = useCallback(
+    (name: string) => {
+      setWorkflowName(name);
+      updateWorkflowBaseNodeNameCache(name);
+    },
+    [updateWorkflowBaseNodeNameCache]
+  );
 
   const saveDraft = useCallback(
     async (options?: {
@@ -6172,6 +7810,84 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
       workflowId,
     ]
   );
+
+  const saveWorkflowNode = useCallback(
+    async (
+      node: IWorkflowNode & { category: WorkflowNodeCategory },
+      nextConfig: Record<string, unknown>
+    ) => {
+      const hasPendingDraftChanges = draftSignature !== lastSavedDraftSignatureRef.current;
+      let nextNodesForRetry: IWorkflowNode[] | undefined;
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+      setIsSaving(true);
+      try {
+        const res = await updateWorkflowNode(baseId, workflowId, node.category, node.id, {
+          config: nextConfig,
+        });
+        const nextNode = res.data;
+        const nextNodes = nodes.map((item) => (item.id === node.id ? nextNode : item));
+        nextNodesForRetry = nextNodes;
+        setNodes(nextNodes);
+        queryClient.setQueryData<IWorkflowVo>(workflowQueryKey(baseId, workflowId), (current) => {
+          if (!current) return current;
+          return {
+            ...current,
+            nodes: nextNodes,
+            trigger:
+              nextNode.category === 'trigger'
+                ? { type: nextNode.type, config: nextNode.config ?? {} }
+                : current.trigger,
+          };
+        });
+        if (hasPendingDraftChanges) {
+          await saveDraft({ silent: true, nodes: nextNodes });
+        } else {
+          lastSavedDraftSignatureRef.current = getWorkflowDraftSignature(
+            savedWorkflowName,
+            nextNodes,
+            edges
+          );
+        }
+        return nextNode;
+      } catch (error) {
+        if (hasPendingDraftChanges) {
+          autoSaveTimerRef.current = setTimeout(() => {
+            void saveDraft({ silent: true, nodes: nextNodesForRetry });
+          }, 800);
+        }
+        throw error;
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [baseId, draftSignature, edges, nodes, queryClient, saveDraft, savedWorkflowName, workflowId]
+  );
+
+  const updateWebhookAuthorization = useCallback(
+    async (authorization: Record<string, unknown>) => {
+      if (!selectedNode || selectedNode.type !== 'webhook' || selectedNode.category !== 'trigger') {
+        return;
+      }
+      const webhookNode: IWorkflowNode & { category: WorkflowNodeCategory } = {
+        ...selectedNode,
+        category: 'trigger',
+      };
+      await saveWorkflowNode(
+        webhookNode,
+        omitUndefined({
+          ...(webhookNode.config ?? {}),
+          authorization,
+        })
+      );
+    },
+    [saveWorkflowNode, selectedNode]
+  );
+
+  const generateAndSaveWebhookAuthorization = useCallback(async () => {
+    if (!selectedNode || selectedNode.type !== 'webhook') return;
+    const res = await generateWorkflowWebhookToken(baseId, workflowId, selectedNode.id);
+    await updateWebhookAuthorization(createWebhookAuthorization(res.data));
+  }, [baseId, selectedNode, updateWebhookAuthorization, workflowId]);
 
   useEffect(() => {
     if (!workflow || loadedWorkflowIdRef.current !== workflow.id) return;
@@ -6379,23 +8095,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
 
   const copyNodeId = useCallback(
     async (nodeId: string) => {
-      try {
-        if (navigator.clipboard?.writeText) {
-          await navigator.clipboard.writeText(nodeId);
-        } else {
-          const textarea = document.createElement('textarea');
-          textarea.value = nodeId;
-          textarea.style.position = 'fixed';
-          textarea.style.opacity = '0';
-          document.body.appendChild(textarea);
-          textarea.select();
-          document.execCommand('copy');
-          document.body.removeChild(textarea);
-        }
-        sonner.toast.success(tr('toast.copySuccess', 'Copied successfully'));
-      } catch {
-        sonner.toast(tr('toast.copyNodeIdFailed', 'Failed to copy node ID'));
-      }
+      await copyTextToClipboard(nodeId, tr);
     },
     [tr]
   );
@@ -6489,14 +8189,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
     if (['buttonClick', 'recordUpdated'].includes(selectedNode.type)) {
       nextConfig.watchFieldIds = [];
     }
-    if (
-      [
-        'buttonClick',
-        'recordCreated',
-        'recordCreatedOrUpdated',
-        'recordMatchesConditions',
-      ].includes(selectedNode.type)
-    ) {
+    if (['buttonClick', 'recordCreated', 'recordMatchesConditions'].includes(selectedNode.type)) {
       nextConfig.filter = { conjunction: 'and', filterSet: [] };
     }
     updateNode(selectedNode.id, { config: omitUndefined(nextConfig) });
@@ -6515,14 +8208,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
     if (['buttonClick', 'recordUpdated'].includes(selectedNode.type)) {
       nextConfig.watchFieldIds = [];
     }
-    if (
-      [
-        'buttonClick',
-        'recordCreated',
-        'recordCreatedOrUpdated',
-        'recordMatchesConditions',
-      ].includes(selectedNode.type)
-    ) {
+    if (['buttonClick', 'recordCreated', 'recordMatchesConditions'].includes(selectedNode.type)) {
       nextConfig.filter = { conjunction: 'and', filterSet: [] };
     }
     updateNode(selectedNode.id, { config: omitUndefined(nextConfig) });
@@ -6703,7 +8389,6 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
       'buttonClick',
       'recordCreated',
       'recordUpdated',
-      'recordCreatedOrUpdated',
       'recordMatchesConditions',
       'formSubmitted',
       'createRecord',
@@ -6725,12 +8410,11 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
               <SelectTrigger>
                 <NodeTypeSelectValue item={getNodeCatalogItem(selectedNode.type)} />
               </SelectTrigger>
-              <SelectContent className="w-[392px] p-0">
-                <NodeTypeSelectGroup
-                  title={tr('nodeGroups.triggers', 'Triggers')}
-                  items={TRIGGER_NODES}
-                  value={selectedNode.type}
-                />
+              <SelectContent
+                hideScrollButtons
+                className="max-h-none w-[var(--radix-select-trigger-width)] p-0 [&_[data-radix-select-viewport]]:h-auto [&_[data-radix-select-viewport]]:min-w-0"
+              >
+                <NodeTypeSelectGroup items={TRIGGER_NODES} value={selectedNode.type} />
               </SelectContent>
             </Select>
             <div className="text-xs leading-relaxed text-muted-foreground">
@@ -6745,12 +8429,11 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
               <SelectTrigger>
                 <NodeTypeSelectValue item={getNodeCatalogItem(selectedNode.type)} />
               </SelectTrigger>
-              <SelectContent className="w-[392px] p-0">
-                <NodeTypeSelectGroup
-                  title={tr('nodeGroups.manualBuild', 'Manual build')}
-                  items={ACTION_NODES}
-                  value={selectedNode.type}
-                />
+              <SelectContent
+                hideScrollButtons
+                className="max-h-none w-[var(--radix-select-trigger-width)] p-0 [&_[data-radix-select-viewport]]:h-auto [&_[data-radix-select-viewport]]:min-w-0"
+              >
+                <NodeTypeSelectGroup items={ACTION_NODES} value={selectedNode.type} />
               </SelectContent>
             </Select>
             <div className="text-xs leading-relaxed text-muted-foreground">
@@ -6828,6 +8511,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
                 <WatchFieldEditor
                   fields={buttonFields}
                   value={config.watchFieldIds}
+                  multiple={false}
                   placeholder={tr('actions.addField', 'Add field')}
                   emptyText={
                     buttonFields.length
@@ -6858,7 +8542,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
             </FieldBlock>
           )}
 
-          {['recordCreated', 'recordCreatedOrUpdated'].includes(selectedNode.type) &&
+          {selectedNode.type === 'recordCreated' &&
             selectedConfigTableId &&
             renderConditionEditor('filter')}
 
@@ -6877,6 +8561,17 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
                 className="my-0 h-9 w-full max-w-none"
               />
             </FieldBlock>
+          )}
+
+          {selectedNode.type === 'webhook' && (
+            <WebhookConfigBlock
+              baseId={baseId}
+              config={config}
+              workflowId={workflowId}
+              onEnableAuthorization={generateAndSaveWebhookAuthorization}
+              onDisableAuthorization={() => updateWebhookAuthorization({ type: 'none' })}
+              onRegenerateAuthorization={generateAndSaveWebhookAuthorization}
+            />
           )}
 
           {selectedNode.type === 'createRecord' && (
@@ -7040,14 +8735,16 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
           {selectedNode.type === 'sendEmail' && (
             <>
               <FieldBlock label={tr('fields.customMailServer', 'Custom mail server')}>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex items-center gap-2">
                   <MailTransportConfigDialog
                     value={config.mailTransportConfig}
+                    triggerClassName="min-w-0 flex-1"
                     onChange={(value) => updateNodeConfig('mailTransportConfig', value)}
                   />
                   <Button
+                    className="px-2 text-muted-foreground"
                     size="sm"
-                    variant="outline"
+                    variant="ghost"
                     onClick={() => updateNodeConfig('mailTransportConfig', undefined)}
                   >
                     {tr('actions.reset', 'Reset')}
@@ -7120,32 +8817,24 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
                 label={tr('fields.body', 'Body')}
                 required
                 action={
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button className="h-7 px-2 text-xs font-normal" size="sm" variant="outline">
-                        {tr('actions.edit', 'Edit')}
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-2xl">
-                      <DialogTitle>{tr('fields.editBody', 'Edit body')}</DialogTitle>
-                      <VariableInput
-                        value={String(config.body ?? '')}
-                        variables={variableOptions}
-                        multiline
-                        placeholder={tr(
-                          'placeholders.inputOrSelectVariable',
-                          'Input / select variable'
-                        )}
-                        onChange={(value) => updateNodeConfig('body', value)}
-                      />
-                    </DialogContent>
-                  </Dialog>
+                  <LargeVariableInputDialog
+                    title={tr('fields.editBody', 'Edit body')}
+                    value={String(config.body ?? '')}
+                    variables={variableOptions}
+                    placeholder={tr(
+                      'placeholders.inputOrSelectVariable',
+                      'Input / select variable'
+                    )}
+                    onChange={(value) => updateNodeConfig('body', value)}
+                  />
                 }
               >
                 <VariableInput
                   value={String(config.body ?? '')}
                   variables={variableOptions}
                   multiline
+                  fixedHeightClassName="h-[128px]"
+                  resizable
                   placeholder={tr('placeholders.inputOrSelectVariable', 'Input / select variable')}
                   onChange={(value) => updateNodeConfig('body', value)}
                 />
@@ -7181,32 +8870,24 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
               <FieldBlock label={tr('fields.requestHeaders', 'Request headers')}>
                 <KeyValueEditor
                   value={config.headers}
-                  keyPlaceholder="Header"
-                  valuePlaceholder={tr('fields.value', 'Value')}
+                  keyPlaceholder={tr('placeholders.inputKey', 'Enter key')}
+                  valuePlaceholder={tr('placeholders.inputValue', 'Enter value')}
                   variables={variableOptions}
                   onChange={(value) => updateNodeConfig('headers', value)}
                 />
               </FieldBlock>
-              <FieldBlock label="Body">
-                <BodyTypeSelect
-                  value={String(config.bodyType ?? 'none')}
-                  onChange={(bodyType) => updateNodeConfig('bodyType', bodyType)}
+              <FieldBlock label={tr('fields.body', 'Body')}>
+                <HttpRequestBodyEditor
+                  bodyType={String(config.bodyType ?? 'none')}
+                  body={config.body}
+                  variables={variableOptions}
+                  placeholder={tr('placeholders.inputOrSelectVariable', 'Input / select variable')}
+                  keyPlaceholder={tr('placeholders.inputKey', 'Enter key')}
+                  valuePlaceholder={tr('placeholders.inputValue', 'Enter value')}
+                  onBodyTypeChange={(bodyType) => updateNodeConfig('bodyType', bodyType)}
+                  onBodyChange={(value) => updateNodeConfig('body', value)}
                 />
               </FieldBlock>
-              {String(config.bodyType ?? 'none') !== 'none' && (
-                <FieldBlock label={tr('fields.requestBody', 'Request body')}>
-                  <VariableInput
-                    value={String(config.body ?? '')}
-                    variables={variableOptions}
-                    multiline
-                    placeholder={tr(
-                      'placeholders.inputOrSelectVariable',
-                      'Input / select variable'
-                    )}
-                    onChange={(value) => updateNodeConfig('body', value)}
-                  />
-                </FieldBlock>
-              )}
             </>
           )}
 
@@ -7303,83 +8984,13 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
   const renderWorkflowNode = (node: IWorkflowNode, index: number) => {
     const status = getNodeStatus(node);
     const StatusIcon = status.Icon;
-    const nodeTableName = knownTables.find((table) => table.id === node.config?.tableId)?.name;
-    const nodeDescription = (() => {
-      const customDescription =
-        typeof node.config?.note === 'string' ? node.config.note.trim() : '';
-      if (customDescription) return customDescription;
-      if (!nodeTableName) return getNodeDescription(node, tr);
-      switch (node.type) {
-        case 'recordCreated':
-          return tr(
-            'canvas.nodeDescriptions.recordCreatedWithTable',
-            'When a record is created in {{table}}',
-            {
-              table: nodeTableName,
-            }
-          );
-        case 'recordUpdated':
-          return tr(
-            'canvas.nodeDescriptions.recordUpdatedWithTable',
-            'When a record in {{table}} is updated',
-            {
-              table: nodeTableName,
-            }
-          );
-        case 'recordCreatedOrUpdated':
-          return tr(
-            'canvas.nodeDescriptions.recordCreatedOrUpdatedWithTable',
-            'When a record in {{table}} is created or updated',
-            { table: nodeTableName }
-          );
-        case 'recordMatchesConditions':
-          return tr(
-            'canvas.nodeDescriptions.recordMatchesConditionsWithTable',
-            'When a record in {{table}} matches conditions',
-            {
-              table: nodeTableName,
-            }
-          );
-        case 'buttonClick':
-          return tr(
-            'canvas.nodeDescriptions.buttonClickWithTable',
-            'When a button in {{table}} is clicked',
-            {
-              table: nodeTableName,
-            }
-          );
-        case 'formSubmitted':
-          return tr(
-            'canvas.nodeDescriptions.formSubmittedWithTable',
-            'When a form in {{table}} is submitted',
-            {
-              table: nodeTableName,
-            }
-          );
-        case 'createRecord':
-          return tr(
-            'canvas.nodeDescriptions.createRecordWithTable',
-            'Create a new record in {{table}}.',
-            {
-              table: nodeTableName,
-            }
-          );
-        case 'updateRecord':
-          return tr(
-            'canvas.nodeDescriptions.updateRecordWithTable',
-            'Update a record in {{table}}.',
-            {
-              table: nodeTableName,
-            }
-          );
-        case 'getRecords':
-          return tr('canvas.nodeDescriptions.getRecordsWithTable', 'Get records from {{table}}.', {
-            table: nodeTableName,
-          });
-        default:
-          return getNodeDescription(node, tr);
-      }
-    })();
+    const nodeDescription = getWorkflowCanvasNodeDescription(
+      node,
+      knownTables,
+      fieldsByTableId,
+      viewsByTableId,
+      tr
+    );
     const categoryLabel =
       node.category === 'trigger'
         ? tr('nodeGroups.trigger', 'Trigger')
@@ -7655,7 +9266,32 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
   };
 
   const handleCanvasWheel = (event: WheelEvent<HTMLDivElement>) => {
-    changeZoom(event.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP);
+    event.preventDefault();
+    const content = canvasContentRef.current;
+    const containerRect = event.currentTarget.getBoundingClientRect();
+    const contentRect = content?.getBoundingClientRect();
+    const pointerX = event.clientX - containerRect.left;
+    const pointerY = event.clientY - containerRect.top;
+    const delta = event.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+
+    setViewport((current) => {
+      const nextScale = clampZoom(current.scale + delta);
+      if (!contentRect || nextScale === current.scale) {
+        return { ...current, scale: nextScale };
+      }
+
+      const contentLeft = contentRect.left - containerRect.left;
+      const contentTop = contentRect.top - containerRect.top;
+      const contentWidth = contentRect.width / current.scale;
+      const focalX = (pointerX - contentLeft) / current.scale;
+      const focalY = (pointerY - contentTop) / current.scale;
+
+      return {
+        scale: nextScale,
+        x: pointerX - focalX * nextScale - containerRect.width / 2 + contentWidth / 2,
+        y: pointerY - focalY * nextScale,
+      };
+    });
   };
 
   const renderCanvas = () => {
@@ -7734,7 +9370,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
           className="h-8 max-w-72 border-0 px-1 text-base font-medium shadow-none focus-visible:ring-0"
           value={workflowName}
           placeholder={t('noun.automation')}
-          onChange={(e) => setWorkflowName(e.target.value)}
+          onChange={(e) => handleWorkflowNameChange(e.target.value)}
         />
         <div className="flex-1" />
         <Button
@@ -8132,13 +9768,15 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
               </Collapsible>
             </>
           ) : (
-            <div className="flex min-h-0 flex-1 items-center justify-center">
-              <span className="text-xs text-primary/60">
-                {tr(
-                  'runHistory.empty',
-                  'Run history records will appear here after the automation flow runs.'
-                )}
-              </span>
+            <div className="min-h-0 flex-1 px-3">
+              <div className="flex h-12 items-center justify-center">
+                <span className="text-xs text-primary/60">
+                  {tr(
+                    'runHistory.empty',
+                    'Run history records will appear here after the automation flow runs.'
+                  )}
+                </span>
+              </div>
             </div>
           )}
         </SheetContent>
@@ -8164,7 +9802,8 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
             }}
           />
           <div
-            className="absolute left-1/2 top-0 origin-top"
+            ref={canvasContentRef}
+            className="absolute left-1/2 top-0 origin-top-left"
             style={{
               transform: `translate(calc(-50% + ${viewport.x}px), ${viewport.y}px) scale(${viewport.scale})`,
             }}

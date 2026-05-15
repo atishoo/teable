@@ -765,10 +765,6 @@
           "label": "Wenn der Datensatz aktualisiert wird",
           "description": "Führen Sie die Automatisierung aus, wenn sich bestimmte Datensätze ändern"
         },
-        "recordCreatedOrUpdated": {
-          "label": "Wenn der Datensatz erstellt oder aktualisiert wird",
-          "description": "Führen Sie die Automatisierung aus, wenn ein Datensatz erstellt oder aktualisiert wird"
-        },
         "recordMatchesConditions": {
           "label": "Wenn der Datensatz mit den Bedingungen übereinstimmt",
           "description": "Führen Sie die Automatisierung aus, wenn ein Datensatz beginnt, Bedingungen zu erfüllen"
@@ -794,16 +790,20 @@
           "description": "Senden Sie eine benutzerdefinierte E-Mail"
         },
         "httpRequest": {
-          "label": "HTTP request",
+          "label": "HTTP-Anfrage",
           "description": "Stellen Sie über APIs eine Verbindung zu externen Diensten her und tauschen Sie Daten aus"
         },
         "condition": {
           "label": "Wenn die Bedingungen passen...",
-          "description": "Entscheiden Sie anhand der Bedingung, ob Sie fortfahren möchten"
+          "description": "Verschiedene Aktionen basierend auf bestimmten Bedingungen ausführen"
         },
         "unknown": {
           "label": "Unbekannter Knoten",
           "description": "Unbekannter Knoten"
+        },
+        "webhook": {
+          "label": "Beim Empfang eines Webhooks",
+          "description": "Automatisierung durch eine externe HTTP-Anfrage auslösen"
         }
       },
       "nodeGroups": {
@@ -932,7 +932,8 @@
         "input": "Eingabe",
         "output": "Ausgabe",
         "callDetails": "Anrufdetails",
-        "ranAt": "Ran rannte"
+        "ranAt": "Ran rannte",
+        "authorization": "Autorisierung"
       },
       "validation": {
         "needTrigger": "Es ist mindestens ein Auslöser erforderlich",
@@ -973,7 +974,8 @@
         "httpStatus": "HTTP-Statuscode",
         "httpBody": "HTTP-Antworttext",
         "httpOk": "HTTP-Erfolg",
-        "emailSentResult": "Ergebnis per E-Mail gesendet"
+        "emailSentResult": "Ergebnis per E-Mail gesendet",
+        "webhookBody": "Textkörper"
       },
       "actions": {
         "loop": "Schleife",
@@ -985,6 +987,8 @@
         "selectVariable": "Variable auswählen",
         "add": "Hinzufügen",
         "addField": "Feld hinzufügen",
+        "watchAllFields": "Alle überwachen",
+        "unwatchAllFields": "Alle nicht überwachen",
         "addConfig": "Konfiguration hinzufügen",
         "send": "Senden",
         "confirm": "Bestätigen",
@@ -1004,7 +1008,13 @@
         "enableNow": "Jetzt aktivieren",
         "resetViewport": "Zurücksetzen",
         "copyNodeId": "Klicken Sie, um die Knoten-ID zu kopieren",
-        "deleteNode": "Knoten löschen"
+        "deleteNode": "Knoten löschen",
+        "select": "Auswählen",
+        "nextStep": "Weiter",
+        "return": "Zurück",
+        "enableAuthorization": "Autorisierung aktivieren",
+        "regenerate": "Neu generieren",
+        "regenerateToken": "Token neu generieren?"
       },
       "fields": {
         "database": "Datenbank",
@@ -1031,7 +1041,10 @@
         "requestUrl": "Anfrage-URL",
         "requestHeaders": "Header anfordern",
         "requestBody": "Anforderungstext",
-        "unsubscribeList": "Abmeldeliste"
+        "unsubscribeList": "Abmeldeliste",
+        "webhookUrl": "Webhook-URL",
+        "authorizationBearerToken": "Autorisierung (Bearer-Token)",
+        "callExample": "Aufrufbeispiel"
       },
       "descriptions": {
         "crossDatabaseAccess": "Auf die externe Datenbank wird mit den Berechtigungen und der Identität des Automatisierungskonfigurators zugegriffen. Wenn der Konfigurator den Zugriff auf die Zieldatenbank verliert, schlägt die Automatisierung fehl.",
@@ -1041,7 +1054,10 @@
         "watchFields": "Aktualisierungen ausgewählter Felder lösen die Automatisierung aus. Wenn alle Felder überwacht werden, werden auch neu erstellte Felder überwacht.",
         "queryLimit": "Jede Abfrage gibt bis zu 1000 Datensätze zurück.",
         "recordId": "Die ID des zu aktualisierenden Datensatzes. Um einen Datensatz aus einem vorherigen Schritt zu aktualisieren, verwenden Sie das Menü „+“, um den Schritt und seine Datensatz-ID auszuwählen.",
-        "testStep": "Testen Sie diesen Schritt, um sicherzustellen, dass die Konfiguration korrekt ist. Nach einem erfolgreichen Test kann dieser Schritt eine Automatisierung ermöglichen."
+        "testStep": "Testen Sie diesen Schritt, um sicherzustellen, dass die Konfiguration korrekt ist. Nach einem erfolgreichen Test kann dieser Schritt eine Automatisierung ermöglichen.",
+        "webhookUrlPublic": "Jede Person mit dieser URL kann Ihre Automatisierung auslösen. Teilen Sie diese URL vorsichtig.",
+        "webhookAuthorizationEnabled": "Autorisierung ist aktiviert. Nur Anfragen mit dem richtigen Bearer-Token können diese Automatisierung auslösen.",
+        "regenerateToken": "Durch die Neugenerierung wird das alte Token sofort ungültig und bestehende Integrationen können unterbrochen werden."
       },
       "placeholders": {
         "select": "Wählen Sie...",
@@ -1055,7 +1071,9 @@
         "search": "Suchen...",
         "inputOrSelectVariable": "Variable eingeben/auswählen",
         "searchFields": "Suchfelder...",
-        "inputDescription": "Geben Sie eine Beschreibung ein"
+        "inputDescription": "Geben Sie eine Beschreibung ein",
+        "inputKey": "Schlüssel eingeben",
+        "inputValue": "Wert eingeben"
       },
       "empty": {
         "noResults": "Keine Ergebnisse gefunden",
@@ -1128,7 +1146,8 @@
         "insertFromField": "Aus Feld einfügen",
         "searchResults": "Suchergebnisse",
         "metadata": "Metadaten",
-        "insertMetadata": "Metadaten einfügen"
+        "insertMetadata": "Metadaten einfügen",
+        "typeMismatch": "Variablentyp stimmt nicht überein"
       },
       "toast": {
         "copySuccess": "Erfolgreich kopiert",
@@ -1156,13 +1175,17 @@
         "nodeDescriptions": {
           "recordCreatedWithTable": "Wenn ein Datensatz in {{table}} erstellt wird",
           "recordUpdatedWithTable": "Wenn ein Datensatz in {{table}} aktualisiert wird",
-          "recordCreatedOrUpdatedWithTable": "Wenn ein Datensatz in {{table}} erstellt oder aktualisiert wird",
           "recordMatchesConditionsWithTable": "Wenn ein Datensatz in {{table}} Bedingungen erfüllt",
           "buttonClickWithTable": "Wenn auf eine Schaltfläche in {{table}} geklickt wird",
           "formSubmittedWithTable": "Wenn ein Formular in {{table}} gesendet wird",
           "createRecordWithTable": "Erstellen Sie einen neuen Datensatz in {{table}}.",
+          "getRecordsFromView": "Datensätze aus der Ansicht {{view}} abrufen",
+          "updateRecordFields": "{{fields}} aktualisieren",
+          "sendEmailTo": "E-Mail an {{recipient}} senden",
+          "fieldListSeparator": ", ",
           "updateRecordWithTable": "Aktualisieren Sie einen Datensatz in {{table}}.",
-          "getRecordsWithTable": "Holen Sie sich Datensätze von {{table}}."
+          "getRecordsWithTable": "Holen Sie sich Datensätze von {{table}}.",
+          "webhook": "Automatisierung beim Empfang eines Webhooks ausführen"
         }
       },
       "states": {
@@ -1182,6 +1205,12 @@
         "dateRangePlaceholder": "Wählen Sie den Datumsbereich aus",
         "overview": "Übersicht",
         "averageRunTime": "Durchschnittliche Ausführungszeit"
+      },
+      "httpBody": {
+        "mixedMode": "Gemischter Modus",
+        "mixedModeDescription": "Variablen und statische Werte aus dem aktuellen Automatisierungsablauf verwenden",
+        "attachmentMode": "Anhang",
+        "attachmentModeDescription": "Es können nur Variablen vom Typ Anhang ausgewählt werden"
       }
     }
   },

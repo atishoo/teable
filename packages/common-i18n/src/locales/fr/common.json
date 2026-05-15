@@ -770,10 +770,6 @@
           "label": "Quand l'enregistrement est mis à jour",
           "description": "Exécuter l'automatisation lorsque des enregistrements spécifiques changent"
         },
-        "recordCreatedOrUpdated": {
-          "label": "Lors de la création ou de la mise à jour de l'enregistrement",
-          "description": "Exécuter l'automatisation lorsqu'un enregistrement est créé ou mis à jour"
-        },
         "recordMatchesConditions": {
           "label": "Lorsque l'enregistrement correspond aux conditions",
           "description": "Exécuter l'automatisation lorsqu'un enregistrement commence à correspondre aux conditions"
@@ -799,16 +795,20 @@
           "description": "Envoyer un e-mail personnalisé"
         },
         "httpRequest": {
-          "label": "HTTP request",
+          "label": "Requête HTTP",
           "description": "Connectez-vous à des services externes via des API et échangez des données"
         },
         "condition": {
           "label": "Quand les conditions correspondent...",
-          "description": "Décidez si vous souhaitez continuer selon certaines conditions"
+          "description": "Exécuter différentes actions selon des conditions spécifiques"
         },
         "unknown": {
           "label": "Nœud inconnu",
           "description": "Nœud inconnu"
+        },
+        "webhook": {
+          "label": "Lors de la réception d’un Webhook",
+          "description": "Déclencher l’automatisation via une requête HTTP externe"
         }
       },
       "nodeGroups": {
@@ -937,7 +937,8 @@
         "input": "Entrée",
         "output": "Sortie",
         "callDetails": "Détails de l'appel",
-        "ranAt": "A couru à"
+        "ranAt": "A couru à",
+        "authorization": "autorisation"
       },
       "validation": {
         "needTrigger": "Au moins un déclencheur est requis",
@@ -978,7 +979,8 @@
         "httpStatus": "Code d'état HTTP",
         "httpBody": "Corps de la réponse HTTP",
         "httpOk": "Succès HTTP",
-        "emailSentResult": "Résultat envoyé par email"
+        "emailSentResult": "Résultat envoyé par email",
+        "webhookBody": "Corps"
       },
       "actions": {
         "loop": "Boucle",
@@ -990,6 +992,8 @@
         "selectVariable": "Sélectionner une variable",
         "add": "Ajouter",
         "addField": "Ajouter un champ",
+        "watchAllFields": "Surveiller tous",
+        "unwatchAllFields": "Ne plus surveiller tous",
         "addConfig": "Ajouter une configuration",
         "send": "Envoyer",
         "confirm": "Confirmer",
@@ -1009,7 +1013,13 @@
         "enableNow": "Activer maintenant",
         "resetViewport": "Réinitialiser",
         "copyNodeId": "Cliquez pour copier l'ID du nœud",
-        "deleteNode": "Supprimer le nœud"
+        "deleteNode": "Supprimer le nœud",
+        "select": "Sélectionner",
+        "nextStep": "Suivant",
+        "return": "Retour",
+        "enableAuthorization": "Activer l’autorisation",
+        "regenerate": "Régénérer",
+        "regenerateToken": "Régénérer le jeton ?"
       },
       "fields": {
         "database": "Base de données",
@@ -1036,7 +1046,10 @@
         "requestUrl": "URL de la demande",
         "requestHeaders": "En-têtes de requête",
         "requestBody": "Corps de la demande",
-        "unsubscribeList": "Liste de désabonnement"
+        "unsubscribeList": "Liste de désabonnement",
+        "webhookUrl": "URL du Webhook",
+        "authorizationBearerToken": "Autorisation (jeton Bearer)",
+        "callExample": "Exemple d’appel"
       },
       "descriptions": {
         "crossDatabaseAccess": "La base de données externe sera accessible avec les autorisations et l'identité du configurateur d'automatisation. Si le configurateur perd l'accès à la base de données cible, l'automatisation échouera.",
@@ -1046,7 +1059,10 @@
         "watchFields": "Les mises à jour des champs sélectionnés déclencheront l’automatisation. Lorsque tous les champs sont surveillés, les champs nouvellement créés le seront également.",
         "queryLimit": "Chaque requête renvoie jusqu'à 1 000 enregistrements.",
         "recordId": "L’ID de l’enregistrement à mettre à jour. Pour mettre à jour un enregistrement d'une étape précédente, utilisez le menu + pour sélectionner l'étape et son ID d'enregistrement.",
-        "testStep": "Testez cette étape pour confirmer que sa configuration est correcte. Après un test réussi, cette étape peut permettre l'automatisation."
+        "testStep": "Testez cette étape pour confirmer que sa configuration est correcte. Après un test réussi, cette étape peut permettre l'automatisation.",
+        "webhookUrlPublic": "Toute personne disposant de cette URL peut déclencher votre automatisation. Partagez-la avec prudence.",
+        "webhookAuthorizationEnabled": "L’autorisation est activée. Seules les requêtes avec le bon jeton Bearer peuvent déclencher cette automatisation.",
+        "regenerateToken": "La régénération invalidera immédiatement l’ancien jeton et peut interrompre les intégrations existantes."
       },
       "placeholders": {
         "select": "Sélectionnez...",
@@ -1060,7 +1076,9 @@
         "search": "Rechercher...",
         "inputOrSelectVariable": "Saisir / sélectionner une variable",
         "searchFields": "Champs de recherche...",
-        "inputDescription": "Entrez la description"
+        "inputDescription": "Entrez la description",
+        "inputKey": "Saisir une clé",
+        "inputValue": "Saisir une valeur"
       },
       "empty": {
         "noResults": "Aucun résultat trouvé",
@@ -1133,7 +1151,8 @@
         "insertFromField": "Insérer à partir du champ",
         "searchResults": "Résultats de la recherche",
         "metadata": "Métadonnées",
-        "insertMetadata": "Insérer des métadonnées"
+        "insertMetadata": "Insérer des métadonnées",
+        "typeMismatch": "Le type de variable ne correspond pas"
       },
       "toast": {
         "copySuccess": "Copié avec succès",
@@ -1161,13 +1180,17 @@
         "nodeDescriptions": {
           "recordCreatedWithTable": "Lorsqu'un enregistrement est créé dans {{table}}",
           "recordUpdatedWithTable": "Lorsqu'un enregistrement dans {{table}} est mis à jour",
-          "recordCreatedOrUpdatedWithTable": "Lorsqu'un enregistrement dans {{table}} est créé ou mis à jour",
           "recordMatchesConditionsWithTable": "Lorsqu'un enregistrement dans {{table}} correspond aux conditions",
           "buttonClickWithTable": "Lorsqu'un bouton dans {{table}} est cliqué",
           "formSubmittedWithTable": "Lorsqu'un formulaire dans {{table}} est soumis",
           "createRecordWithTable": "Créez un nouvel enregistrement dans {{table}}.",
+          "getRecordsFromView": "Obtenir des enregistrements depuis la vue {{view}}",
+          "updateRecordFields": "Mettre à jour {{fields}}",
+          "sendEmailTo": "Envoyer un e-mail à {{recipient}}",
+          "fieldListSeparator": ", ",
           "updateRecordWithTable": "Mettre à jour un enregistrement dans {{table}}.",
-          "getRecordsWithTable": "Obtenez des enregistrements de {{table}}."
+          "getRecordsWithTable": "Obtenez des enregistrements de {{table}}.",
+          "webhook": "Exécuter l’automatisation à la réception d’un Webhook"
         }
       },
       "states": {
@@ -1187,6 +1210,12 @@
         "dateRangePlaceholder": "Sélectionnez une plage de dates",
         "overview": "Aperçu",
         "averageRunTime": "Temps d’exécution moyen"
+      },
+      "httpBody": {
+        "mixedMode": "Mode mixte",
+        "mixedModeDescription": "Utiliser les variables et valeurs statiques du flux d’automatisation actuel",
+        "attachmentMode": "Pièce jointe",
+        "attachmentModeDescription": "Seules les variables de type pièce jointe peuvent être sélectionnées"
       }
     }
   },

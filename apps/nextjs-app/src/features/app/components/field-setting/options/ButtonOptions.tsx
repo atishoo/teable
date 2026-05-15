@@ -1,8 +1,11 @@
+import { useQuery } from '@tanstack/react-query';
 import { Colors, ColorUtils, FieldType } from '@teable/core';
 import type { IButtonFieldOptions } from '@teable/core';
 import { Plus } from '@teable/icons';
+import { BaseNodeResourceType, getBaseNodeTree } from '@teable/openapi';
 import { FieldSelector } from '@teable/sdk/components';
-import { useFields } from '@teable/sdk/hooks';
+import { ReactQueryKeys } from '@teable/sdk/config';
+import { useBaseId, useFields } from '@teable/sdk/hooks';
 import {
   Button,
   Input,
@@ -156,6 +159,20 @@ const WorkflowAction = (props: { options?: Partial<IButtonFieldOptions>; onSave?
   const workflow = options?.workflow;
   const { setModal } = useWorkFlowPanelStore();
   const { t } = useTranslation(tableConfig.i18nNamespaces);
+  const baseId = useBaseId();
+  const { data: baseNodeTree } = useQuery({
+    queryKey: baseId ? ReactQueryKeys.baseNodeTree(baseId) : ['base-node-tree', 'empty'],
+    queryFn: () => getBaseNodeTree(baseId!).then((res) => res.data),
+    enabled: Boolean(baseId && workflow?.id),
+  });
+  const workflowNode = baseNodeTree?.nodes.find(
+    (node) =>
+      node.resourceType === BaseNodeResourceType.Workflow && node.resourceId === workflow?.id
+  );
+  const workflowName =
+    workflowNode?.resourceMeta.name ||
+    workflow?.name ||
+    t('table:field.default.button.customAutomation');
 
   return (
     <div className="flex flex-col gap-2">
@@ -169,9 +186,7 @@ const WorkflowAction = (props: { options?: Partial<IButtonFieldOptions>; onSave?
         }}
       >
         {workflow?.id ? <PencilIcon className="size-4" /> : <PlusIcon className="size-4" />}
-        <span className="flex-1 text-left">
-          {workflow?.name || t('table:field.default.button.customAutomation')}
-        </span>
+        <span className="flex-1 text-left">{workflowName}</span>
       </Button>
     </div>
   );

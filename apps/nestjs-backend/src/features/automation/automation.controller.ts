@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
+import {
+  All,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  Param,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import {
   activeWorkflowRoSchema,
   createWorkflowNodeRoSchema,
@@ -17,6 +28,7 @@ import { EmitControllerEvent } from '../../event-emitter/decorators/emit-control
 import { Events } from '../../event-emitter/events';
 import { ZodValidationPipe } from '../../zod.validation.pipe';
 import { Permissions } from '../auth/decorators/permissions.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { AutomationService } from './automation.service';
 
 const baseIdParam = 'baseId';
@@ -31,6 +43,7 @@ const workflowTriggerRoute = `${workflowIdRoute}/trigger`;
 const workflowActionRoute = `${workflowIdRoute}/action`;
 const workflowLogicRoute = `${workflowIdRoute}/logic`;
 const workflowNodeRoute = `${workflowIdRoute}/:${categoryParam}/:${nodeIdParam}`;
+const workflowWebhookTokenRoute = `${workflowIdRoute}/trigger/:${nodeIdParam}/generate-webhook-token`;
 const workflowTestRoute = `${workflowIdRoute}/test`;
 const workflowTestNodeRoute = `${workflowTestRoute}/:${nodeIdParam}`;
 const workflowRunRoute = `${workflowIdRoute}/run`;
@@ -136,6 +149,16 @@ export class AutomationController {
   }
 
   @Permissions(automationUpdatePermission)
+  @Post(workflowWebhookTokenRoute)
+  async generateWebhookToken(
+    @Param(baseIdParam) baseId: string,
+    @Param(workflowIdParam) workflowId: string,
+    @Param(nodeIdParam) nodeId: string
+  ) {
+    return this.automationService.generateWebhookToken(baseId, workflowId, nodeId);
+  }
+
+  @Permissions(automationUpdatePermission)
   @Put(workflowNodeRoute)
   async updateNode(
     @Param(baseIdParam) baseId: string,
@@ -188,5 +211,21 @@ export class AutomationController {
   @Get(workflowRunSummaryRoute)
   async runSummary(@Param(baseIdParam) baseId: string, @Param(workflowIdParam) workflowId: string) {
     return this.automationService.getRunSummary(baseId, workflowId);
+  }
+}
+
+@Public()
+@Controller('api/webhook/base/:baseId/workflow')
+export class AutomationWebhookController {
+  constructor(private readonly automationService: AutomationService) {}
+
+  @All(workflowIdRoute)
+  async receiveWebhook(
+    @Param(baseIdParam) baseId: string,
+    @Param(workflowIdParam) workflowId: string,
+    @Body() body: unknown,
+    @Headers('authorization') authorization?: string
+  ) {
+    return this.automationService.receiveWebhook(baseId, workflowId, { body, authorization });
   }
 }

@@ -729,10 +729,6 @@
           "label": "Kayıt güncellendiğinde",
           "description": "Belirli kayıtlar değiştiğinde otomasyonu çalıştır"
         },
-        "recordCreatedOrUpdated": {
-          "label": "Kayıt oluşturulduğunda veya güncellendiğinde",
-          "description": "Bir kayıt oluşturulduğunda veya güncellendiğinde otomasyonu çalıştır"
-        },
         "recordMatchesConditions": {
           "label": "Kayıt koşullarla eşleştiğinde",
           "description": "Bir kayıt koşullarla eşleşmeye başladığında otomasyonu çalıştırın"
@@ -758,16 +754,20 @@
           "description": "Özel bir e-posta gönder"
         },
         "httpRequest": {
-          "label": "HTTP request",
+          "label": "HTTP isteği",
           "description": "API'ler aracılığıyla harici hizmetlere bağlanın ve veri alışverişinde bulunun"
         },
         "condition": {
           "label": "Koşullar eşleştiğinde...",
-          "description": "Koşula göre devam edip etmeyeceğinize karar verin"
+          "description": "Belirli koşullara göre farklı işlemler çalıştır"
         },
         "unknown": {
           "label": "Bilinmeyen düğüm",
           "description": "Bilinmeyen düğüm"
+        },
+        "webhook": {
+          "label": "Webhook alındığında",
+          "description": "Harici bir HTTP isteğiyle otomasyonu tetikle"
         }
       },
       "nodeGroups": {
@@ -896,7 +896,8 @@
         "input": "Giriş",
         "output": "Çıkış",
         "callDetails": "Arama ayrıntıları",
-        "ranAt": "koştu"
+        "ranAt": "koştu",
+        "authorization": "yetkilendirme"
       },
       "validation": {
         "needTrigger": "En az bir tetikleyici gerekli",
@@ -937,7 +938,8 @@
         "httpStatus": "HTTP durum kodu",
         "httpBody": "HTTP yanıt gövdesi",
         "httpOk": "HTTP başarısı",
-        "emailSentResult": "E-posta gönderildi sonucu"
+        "emailSentResult": "E-posta gönderildi sonucu",
+        "webhookBody": "Gövde"
       },
       "actions": {
         "loop": "Döngü",
@@ -949,6 +951,8 @@
         "selectVariable": "Değişken seç",
         "add": "Ekle",
         "addField": "Alan ekle",
+        "watchAllFields": "Tümünü dinle",
+        "unwatchAllFields": "Tümünü dinlemeyi bırak",
         "addConfig": "Yapılandırma ekle",
         "send": "Gönder",
         "confirm": "Onayla",
@@ -968,7 +972,13 @@
         "enableNow": "Şimdi etkinleştir",
         "resetViewport": "Sıfırla",
         "copyNodeId": "Düğüm kimliğini kopyalamak için tıklayın",
-        "deleteNode": "Düğümü sil"
+        "deleteNode": "Düğümü sil",
+        "select": "Seç",
+        "nextStep": "Sonraki",
+        "return": "Geri",
+        "enableAuthorization": "Yetkilendirmeyi aç",
+        "regenerate": "Yeniden oluştur",
+        "regenerateToken": "Token yeniden oluşturulsun mu?"
       },
       "fields": {
         "database": "Veritabanı",
@@ -995,7 +1005,10 @@
         "requestUrl": "URL'yi talep et",
         "requestHeaders": "Başlıkları iste",
         "requestBody": "Talep gövdesi",
-        "unsubscribeList": "Abonelikten çıkma listesi"
+        "unsubscribeList": "Abonelikten çıkma listesi",
+        "webhookUrl": "Webhook URL’si",
+        "authorizationBearerToken": "Yetkilendirme (Bearer token)",
+        "callExample": "Çağrı örneği"
       },
       "descriptions": {
         "crossDatabaseAccess": "Harici veritabanına otomasyon yapılandırıcısının izinleri ve kimliğiyle erişilecektir. Yapılandırıcı hedef veritabanına erişimi kaybederse otomasyon başarısız olur.",
@@ -1005,7 +1018,10 @@
         "watchFields": "Seçilen alanlardaki güncellemeler otomasyonu tetikleyecektir. Tüm alanlar izlendiğinde yeni oluşturulan alanlar da izlenecektir.",
         "queryLimit": "Her sorgu en fazla 1000 kayıt döndürür.",
         "recordId": "Güncellenecek kaydın kimliği. Önceki adımdaki bir kaydı güncellemek için adımı ve kayıt kimliğini seçmek üzere + menüsünü kullanın.",
-        "testStep": "Yapılandırmasının doğru olduğunu doğrulamak için bu adımı test edin. Başarılı bir testin ardından bu adım otomasyonu etkinleştirebilir."
+        "testStep": "Yapılandırmasının doğru olduğunu doğrulamak için bu adımı test edin. Başarılı bir testin ardından bu adım otomasyonu etkinleştirebilir.",
+        "webhookUrlPublic": "Bu URL’ye sahip herkes otomasyonunuzu tetikleyebilir. Nerede paylaştığınıza dikkat edin.",
+        "webhookAuthorizationEnabled": "Yetkilendirme açık. Yalnızca doğru Bearer token taşıyan istekler bu otomasyonu tetikleyebilir.",
+        "regenerateToken": "Yeniden oluşturma eski tokenı hemen geçersiz kılar ve mevcut entegrasyonları bozabilir."
       },
       "placeholders": {
         "select": "Seç...",
@@ -1019,7 +1035,9 @@
         "search": "Ara...",
         "inputOrSelectVariable": "Giriş / değişken seç",
         "searchFields": "Arama alanları...",
-        "inputDescription": "Açıklamayı girin"
+        "inputDescription": "Açıklamayı girin",
+        "inputKey": "Anahtar girin",
+        "inputValue": "Değer girin"
       },
       "empty": {
         "noResults": "Sonuç bulunamadı",
@@ -1092,7 +1110,8 @@
         "insertFromField": "Alandan ekle",
         "searchResults": "Arama sonuçları",
         "metadata": "Meta veriler",
-        "insertMetadata": "Meta veri ekle"
+        "insertMetadata": "Meta veri ekle",
+        "typeMismatch": "Değişken türü eşleşmiyor"
       },
       "toast": {
         "copySuccess": "Başarıyla kopyalandı",
@@ -1120,13 +1139,17 @@
         "nodeDescriptions": {
           "recordCreatedWithTable": "{{table}}'da bir kayıt oluşturulduğunda",
           "recordUpdatedWithTable": "{{table}}'daki bir kayıt güncellendiğinde",
-          "recordCreatedOrUpdatedWithTable": "{{table}}'da bir kayıt oluşturulduğunda veya güncellendiğinde",
           "recordMatchesConditionsWithTable": "{{table}} içindeki bir kayıt koşullarla eşleştiğinde",
           "buttonClickWithTable": "{{table}}'daki bir düğmeye tıklandığında",
           "formSubmittedWithTable": "{{table}}'da bir form gönderildiğinde",
           "createRecordWithTable": "{{table}}'da yeni bir kayıt oluşturun.",
+          "getRecordsFromView": "{{view}} görünümünden kayıtları al",
+          "updateRecordFields": "{{fields}} güncelle",
+          "sendEmailTo": "{{recipient}} adresine e-posta gönder",
+          "fieldListSeparator": ", ",
           "updateRecordWithTable": "{{table}}'daki bir kaydı güncelleyin.",
-          "getRecordsWithTable": "{{table}}'dan kayıtları alın."
+          "getRecordsWithTable": "{{table}}'dan kayıtları alın.",
+          "webhook": "Webhook alındığında otomasyonu çalıştır"
         }
       },
       "states": {
@@ -1146,6 +1169,12 @@
         "dateRangePlaceholder": "Tarih aralığını seçin",
         "overview": "Genel Bakış",
         "averageRunTime": "Ortalama çalışma süresi"
+      },
+      "httpBody": {
+        "mixedMode": "Karma mod",
+        "mixedModeDescription": "Geçerli otomasyon akışındaki değişkenleri ve statik değerleri kullan",
+        "attachmentMode": "Ek",
+        "attachmentModeDescription": "Yalnızca ek türündeki değişkenler seçilebilir"
       }
     }
   },

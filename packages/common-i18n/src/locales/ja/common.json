@@ -772,10 +772,6 @@
           "label": "記録が更新されたとき",
           "description": "特定のレコードが変更されたときに自動化を実行する"
         },
-        "recordCreatedOrUpdated": {
-          "label": "レコードが作成または更新されたとき",
-          "description": "レコードの作成または更新時に自動化を実行する"
-        },
         "recordMatchesConditions": {
           "label": "レコードが条件に一致した場合",
           "description": "レコードが条件に一致し始めたときに自動化を実行する"
@@ -801,16 +797,20 @@
           "description": "カスタムメールを送信する"
         },
         "httpRequest": {
-          "label": "HTTP request",
+          "label": "HTTP リクエスト",
           "description": "APIを介して外部サービスに接続し、データを交換する"
         },
         "condition": {
           "label": "条件が合えば…",
-          "description": "条件によって続行するかどうかを決定する"
+          "description": "特定の条件に基づいて異なる操作を実行"
         },
         "unknown": {
           "label": "不明なノード",
           "description": "不明なノード"
+        },
+        "webhook": {
+          "label": "Webhook 受信時",
+          "description": "外部 HTTP リクエストで自動化をトリガーします"
         }
       },
       "nodeGroups": {
@@ -939,7 +939,8 @@
         "input": "入力",
         "output": "出力",
         "callDetails": "通話詳細",
-        "ranAt": "で走った"
+        "ranAt": "で走った",
+        "authorization": "authorization"
       },
       "validation": {
         "needTrigger": "少なくとも 1 つのトリガーが必要です",
@@ -980,7 +981,8 @@
         "httpStatus": "HTTPステータスコード",
         "httpBody": "HTTPレスポンスボディ",
         "httpOk": "HTTP 成功",
-        "emailSentResult": "メール送信結果"
+        "emailSentResult": "メール送信結果",
+        "webhookBody": "本文"
       },
       "actions": {
         "loop": "ループ",
@@ -992,6 +994,8 @@
         "selectVariable": "変数の選択",
         "add": "追加",
         "addField": "フィールドの追加",
+        "watchAllFields": "すべてを監視",
+        "unwatchAllFields": "すべての監視を解除",
         "addConfig": "構成の追加",
         "send": "送信",
         "confirm": "確認する",
@@ -1011,7 +1015,13 @@
         "enableNow": "今すぐ有効にする",
         "resetViewport": "リセット",
         "copyNodeId": "クリックしてノード ID をコピーします",
-        "deleteNode": "ノードの削除"
+        "deleteNode": "ノードの削除",
+        "select": "選択",
+        "nextStep": "次へ",
+        "return": "戻る",
+        "enableAuthorization": "認証を有効化",
+        "regenerate": "再生成",
+        "regenerateToken": "token を再生成しますか？"
       },
       "fields": {
         "database": "データベース",
@@ -1038,7 +1048,10 @@
         "requestUrl": "リクエストURL",
         "requestHeaders": "リクエストヘッダー",
         "requestBody": "リクエストボディ",
-        "unsubscribeList": "購読解除リスト"
+        "unsubscribeList": "購読解除リスト",
+        "webhookUrl": "Webhook URL",
+        "authorizationBearerToken": "認証 (Bearer token)",
+        "callExample": "呼び出し例"
       },
       "descriptions": {
         "crossDatabaseAccess": "外部データベースには、自動化コンフィギュレーターの権限と ID を使用してアクセスします。コンフィギュレータがターゲット データベースにアクセスできなくなると、自動化は失敗します。",
@@ -1048,7 +1061,10 @@
         "watchFields": "選択したフィールドを更新すると、自動化がトリガーされます。すべてのフィールドが監視されると、新しく作成されたフィールドも監視されます。",
         "queryLimit": "各クエリは最大 1000 件のレコードを返します。",
         "recordId": "更新するレコードの ID。前のステップからレコードを更新するには、+ メニューを使用してステップとそのレコード ID を選択します。",
-        "testStep": "このステップをテストして、構成が正しいことを確認します。テストが成功した後、このステップで自動化を有効にすることができます。"
+        "testStep": "このステップをテストして、構成が正しいことを確認します。テストが成功した後、このステップで自動化を有効にすることができます。",
+        "webhookUrlPublic": "この URL を知っている人は誰でも自動化をトリガーできます。共有先に注意してください。",
+        "webhookAuthorizationEnabled": "認証が有効です。正しい Bearer token を含むリクエストのみがこの自動化をトリガーできます。",
+        "regenerateToken": "再生成すると古い token はただちに無効になり、既存の連携が動作しなくなる可能性があります。"
       },
       "placeholders": {
         "select": "選択してください...",
@@ -1062,7 +1078,9 @@
         "search": "検索...",
         "inputOrSelectVariable": "変数の入力・選択",
         "searchFields": "検索フィールド...",
-        "inputDescription": "説明を入力してください"
+        "inputDescription": "説明を入力してください",
+        "inputKey": "キーを入力",
+        "inputValue": "値を入力"
       },
       "empty": {
         "noResults": "結果が見つかりませんでした",
@@ -1135,7 +1153,8 @@
         "insertFromField": "フィールドから挿入",
         "searchResults": "検索結果",
         "metadata": "メタデータ",
-        "insertMetadata": "メタデータの挿入"
+        "insertMetadata": "メタデータの挿入",
+        "typeMismatch": "変数の型が一致しません"
       },
       "toast": {
         "copySuccess": "正常にコピーされました",
@@ -1163,13 +1182,17 @@
         "nodeDescriptions": {
           "recordCreatedWithTable": "{{table}} にレコードが作成されたとき",
           "recordUpdatedWithTable": "{{table}} のレコードが更新されたとき",
-          "recordCreatedOrUpdatedWithTable": "{{table}} 内のレコードが作成または更新されたとき",
           "recordMatchesConditionsWithTable": "{{table}} のレコードが条件に一致する場合",
           "buttonClickWithTable": "{{table}}のボタンがクリックされたとき",
           "formSubmittedWithTable": "{{table}} のフォームが送信されたとき",
           "createRecordWithTable": "{{table}} に新しいレコードを作成します。",
+          "getRecordsFromView": "{{view}}ビューからレコードを取得",
+          "updateRecordFields": "{{fields}}を更新",
+          "sendEmailTo": "{{recipient}} にメールを送信",
+          "fieldListSeparator": "、",
           "updateRecordWithTable": "{{table}} のレコードを更新します。",
-          "getRecordsWithTable": "{{table}} からレコードを取得します。"
+          "getRecordsWithTable": "{{table}} からレコードを取得します。",
+          "webhook": "Webhook を受信したときに自動化を実行"
         }
       },
       "states": {
@@ -1189,6 +1212,12 @@
         "dateRangePlaceholder": "日付範囲を選択してください",
         "overview": "概要",
         "averageRunTime": "平均実行時間"
+      },
+      "httpBody": {
+        "mixedMode": "混合モード",
+        "mixedModeDescription": "現在の自動化フローの変数と静的値を使用します",
+        "attachmentMode": "添付ファイル",
+        "attachmentModeDescription": "添付ファイル型の変数のみ選択できます"
       }
     }
   },

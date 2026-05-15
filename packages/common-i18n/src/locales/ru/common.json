@@ -728,10 +728,6 @@
           "label": "Когда запись обновляется",
           "description": "Запускайте автоматизацию при изменении определенных записей"
         },
-        "recordCreatedOrUpdated": {
-          "label": "Когда запись создана или обновлена",
-          "description": "Запускайте автоматизацию при создании или обновлении записи."
-        },
         "recordMatchesConditions": {
           "label": "Когда запись соответствует условиям",
           "description": "Запускайте автоматизацию, когда запись начинает соответствовать условиям"
@@ -757,16 +753,20 @@
           "description": "Отправить индивидуальное электронное письмо"
         },
         "httpRequest": {
-          "label": "HTTP request",
+          "label": "HTTP-запрос",
           "description": "Подключайтесь к внешним сервисам через API и обменивайтесь данными"
         },
         "condition": {
           "label": "Когда условия совпадают...",
-          "description": "Решите, продолжать ли по условию"
+          "description": "Выполнять разные действия на основе заданных условий"
         },
         "unknown": {
           "label": "Неизвестный узел",
           "description": "Неизвестный узел"
+        },
+        "webhook": {
+          "label": "При получении Webhook",
+          "description": "Запускать автоматизацию внешним HTTP-запросом"
         }
       },
       "nodeGroups": {
@@ -895,7 +895,8 @@
         "input": "Ввод",
         "output": "Выход",
         "callDetails": "Детали звонка",
-        "ranAt": "Побежал в"
+        "ranAt": "Побежал в",
+        "authorization": "авторизация"
       },
       "validation": {
         "needTrigger": "Требуется хотя бы один триггер.",
@@ -936,7 +937,8 @@
         "httpStatus": "Код статуса HTTP",
         "httpBody": "Тело ответа HTTP",
         "httpOk": "HTTP-успех",
-        "emailSentResult": "Результат отправлен по электронной почте"
+        "emailSentResult": "Результат отправлен по электронной почте",
+        "webhookBody": "Тело"
       },
       "actions": {
         "loop": "Петля",
@@ -948,6 +950,8 @@
         "selectVariable": "Выберите переменную",
         "add": "Добавить",
         "addField": "Добавить поле",
+        "watchAllFields": "Отслеживать все",
+        "unwatchAllFields": "Не отслеживать все",
         "addConfig": "Добавить конфигурацию",
         "send": "Отправить",
         "confirm": "Подтвердить",
@@ -967,7 +971,13 @@
         "enableNow": "Включить сейчас",
         "resetViewport": "Сброс",
         "copyNodeId": "Нажмите, чтобы скопировать идентификатор узла",
-        "deleteNode": "Удалить узел"
+        "deleteNode": "Удалить узел",
+        "select": "Выбрать",
+        "nextStep": "Далее",
+        "return": "Назад",
+        "enableAuthorization": "Включить авторизацию",
+        "regenerate": "Создать заново",
+        "regenerateToken": "Создать token заново?"
       },
       "fields": {
         "database": "База данных",
@@ -994,7 +1004,10 @@
         "requestUrl": "URL-адрес запроса",
         "requestHeaders": "Заголовки запросов",
         "requestBody": "Тело запроса",
-        "unsubscribeList": "Список отказа от подписки"
+        "unsubscribeList": "Список отказа от подписки",
+        "webhookUrl": "URL Webhook",
+        "authorizationBearerToken": "Авторизация (Bearer token)",
+        "callExample": "Пример вызова"
       },
       "descriptions": {
         "crossDatabaseAccess": "Доступ к внешней базе данных будет осуществляться с разрешениями и идентификаторами конфигуратора автоматизации. Если конфигуратор потеряет доступ к целевой базе данных, автоматизация не удастся.",
@@ -1004,7 +1017,10 @@
         "watchFields": "Обновления выбранных полей вызовут автоматизацию. При просмотре всех полей также будут отслеживаться вновь созданные поля.",
         "queryLimit": "Каждый запрос возвращает до 1000 записей.",
         "recordId": "Идентификатор записи, которую необходимо обновить. Чтобы обновить запись предыдущего шага, используйте меню +, чтобы выбрать шаг и его идентификатор записи.",
-        "testStep": "Проверьте этот шаг, чтобы убедиться в правильности конфигурации. После успешного тестирования на этом этапе можно включить автоматизацию."
+        "testStep": "Проверьте этот шаг, чтобы убедиться в правильности конфигурации. После успешного тестирования на этом этапе можно включить автоматизацию.",
+        "webhookUrlPublic": "Любой, у кого есть этот URL, может запустить автоматизацию. Делитесь ссылкой осторожно.",
+        "webhookAuthorizationEnabled": "Авторизация включена. Только запросы с правильным Bearer token могут запустить эту автоматизацию.",
+        "regenerateToken": "При повторном создании старый token сразу станет недействительным, и существующие интеграции могут перестать работать."
       },
       "placeholders": {
         "select": "Выберите...",
@@ -1018,7 +1034,9 @@
         "search": "Искать...",
         "inputOrSelectVariable": "Ввод/выбор переменной",
         "searchFields": "Поля поиска...",
-        "inputDescription": "Введите описание"
+        "inputDescription": "Введите описание",
+        "inputKey": "Введите ключ",
+        "inputValue": "Введите значение"
       },
       "empty": {
         "noResults": "Результаты не найдены",
@@ -1091,7 +1109,8 @@
         "insertFromField": "Вставить из поля",
         "searchResults": "Результаты поиска",
         "metadata": "Метаданные",
-        "insertMetadata": "Вставить метаданные"
+        "insertMetadata": "Вставить метаданные",
+        "typeMismatch": "Тип переменной не совпадает"
       },
       "toast": {
         "copySuccess": "Скопировано успешно",
@@ -1119,13 +1138,17 @@
         "nodeDescriptions": {
           "recordCreatedWithTable": "Когда запись создается в {{table}}",
           "recordUpdatedWithTable": "Когда запись в {{table}} обновляется",
-          "recordCreatedOrUpdatedWithTable": "Когда запись в {{table}} создается или обновляется",
           "recordMatchesConditionsWithTable": "Когда запись в {{table}} соответствует условиям",
           "buttonClickWithTable": "При нажатии кнопки в {{table}}",
           "formSubmittedWithTable": "При отправке формы в {{table}}",
           "createRecordWithTable": "Создайте новую запись в {{table}}.",
+          "getRecordsFromView": "Получить записи из представления {{view}}",
+          "updateRecordFields": "Обновить {{fields}}",
+          "sendEmailTo": "Отправить письмо на {{recipient}}",
+          "fieldListSeparator": ", ",
           "updateRecordWithTable": "Обновите запись в {{table}}.",
-          "getRecordsWithTable": "Получить записи из {{table}}."
+          "getRecordsWithTable": "Получить записи из {{table}}.",
+          "webhook": "Запускать автоматизацию при получении Webhook"
         }
       },
       "states": {
@@ -1145,6 +1168,12 @@
         "dateRangePlaceholder": "Выберите диапазон дат",
         "overview": "Обзор",
         "averageRunTime": "Среднее время выполнения"
+      },
+      "httpBody": {
+        "mixedMode": "Смешанный режим",
+        "mixedModeDescription": "Использовать переменные и статические значения из текущего сценария автоматизации",
+        "attachmentMode": "Вложение",
+        "attachmentModeDescription": "Можно выбрать только переменные типа вложения"
       }
     }
   },

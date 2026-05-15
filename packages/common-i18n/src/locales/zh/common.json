@@ -1080,10 +1080,6 @@
           "label": "当记录更新时",
           "description": "当特定记录发生更改时运行自动化"
         },
-        "recordCreatedOrUpdated": {
-          "label": "当记录创建或更新时",
-          "description": "当记录创建或更新时运行自动化"
-        },
         "recordMatchesConditions": {
           "label": "当记录满足条件时",
           "description": "当记录进入满足条件的状态时运行自动化"
@@ -1106,7 +1102,7 @@
         },
         "sendEmail": {
           "label": "发送邮件",
-          "description": "发送自定义电子邮件"
+          "description": "发送自定电子邮件"
         },
         "httpRequest": {
           "label": "HTTP 请求",
@@ -1114,11 +1110,15 @@
         },
         "condition": {
           "label": "当条件满足...",
-          "description": "按条件决定是否继续"
+          "description": "根据特定条件运行不同的操作"
         },
         "unknown": {
           "label": "未知节点",
           "description": "未知节点"
+        },
+        "webhook": {
+          "label": "当接收 Webhook 时",
+          "description": "通过外部 HTTP 请求触发自动化"
         }
       },
       "nodeGroups": {
@@ -1247,7 +1247,8 @@
         "input": "输入",
         "output": "输出",
         "callDetails": "调用细节",
-        "ranAt": "运行于"
+        "ranAt": "运行于",
+        "authorization": "authorization"
       },
       "validation": {
         "needTrigger": "至少需要一个触发器",
@@ -1288,7 +1289,8 @@
         "httpStatus": "HTTP 状态码",
         "httpBody": "HTTP 响应体",
         "httpOk": "HTTP 是否成功",
-        "emailSentResult": "邮件发送结果"
+        "emailSentResult": "邮件发送结果",
+        "webhookBody": "正文"
       },
       "actions": {
         "loop": "循环执行",
@@ -1300,6 +1302,8 @@
         "selectVariable": "选择变量",
         "add": "添加",
         "addField": "添加字段",
+        "watchAllFields": "监听所有",
+        "unwatchAllFields": "取消监听所有",
         "addConfig": "添加配置",
         "send": "发送",
         "confirm": "确认",
@@ -1319,7 +1323,13 @@
         "enableNow": "立即启用",
         "resetViewport": "复位",
         "copyNodeId": "点击复制节点 ID",
-        "deleteNode": "删除节点"
+        "deleteNode": "删除节点",
+        "select": "选择",
+        "nextStep": "下一步",
+        "return": "返回",
+        "enableAuthorization": "开启授权",
+        "regenerate": "重新生成",
+        "regenerateToken": "重新生成 token？"
       },
       "fields": {
         "database": "数据库",
@@ -1346,7 +1356,10 @@
         "requestUrl": "请求 URL",
         "requestHeaders": "请求头",
         "requestBody": "请求体",
-        "unsubscribeList": "取消订阅列表"
+        "unsubscribeList": "取消订阅列表",
+        "webhookUrl": "Webhook 地址",
+        "authorizationBearerToken": "授权 (Bearer token)",
+        "callExample": "调用示例"
       },
       "descriptions": {
         "crossDatabaseAccess": "外部数据库将通过自动化配置人员的权限和身份进行访问。若配置人员失去目标数据库的访问权限，则自动化将执行失败。",
@@ -1356,7 +1369,10 @@
         "watchFields": "对选定字段的更新将触发触发器。监听所有字段时，新创建的字段也会被监听。",
         "queryLimit": "每次查询最多返回1000条记录。",
         "recordId": "要更新的记录的 ID。要更新前一个步骤中的记录，请使用 + 菜单选择步骤及其记录 ID。",
-        "testStep": "测试此步骤以确认其配置正确。测试成功后，此步骤才允许启用自动化。"
+        "testStep": "测试此步骤以确认其配置正确。测试成功后，此步骤才允许启用自动化。",
+        "webhookUrlPublic": "任何拥有此 URL 的人都可以触发您的自动化。请谨慎考虑在哪里分享此 URL。",
+        "webhookAuthorizationEnabled": "已开启授权。只有携带正确 Bearer token 的请求才能触发此自动化。",
+        "regenerateToken": "重新生成后旧 token 将立即失效，可能导致现有集成调用失败。"
       },
       "placeholders": {
         "select": "请选择...",
@@ -1370,7 +1386,9 @@
         "search": "搜索...",
         "inputOrSelectVariable": "输入 / 选择变量",
         "searchFields": "搜索字段...",
-        "inputDescription": "输入描述"
+        "inputDescription": "输入描述",
+        "inputKey": "输入键值",
+        "inputValue": "输入值"
       },
       "empty": {
         "noResults": "未找到结果",
@@ -1443,7 +1461,8 @@
         "insertFromField": "从字段插入值",
         "searchResults": "搜索结果",
         "metadata": "元数据",
-        "insertMetadata": "插入元数据"
+        "insertMetadata": "插入元数据",
+        "typeMismatch": "变量类型不匹配"
       },
       "toast": {
         "copySuccess": "复制成功",
@@ -1471,13 +1490,17 @@
         "nodeDescriptions": {
           "recordCreatedWithTable": "当在 {{table}} 表格中新建记录时",
           "recordUpdatedWithTable": "当 {{table}} 表格中的记录更新时",
-          "recordCreatedOrUpdatedWithTable": "当 {{table}} 表格中的记录创建或更新时",
           "recordMatchesConditionsWithTable": "当 {{table}} 表格中的记录满足条件时",
           "buttonClickWithTable": "当点击 {{table}} 表格中的按钮时",
           "formSubmittedWithTable": "当 {{table}} 表格中的表单提交时",
           "createRecordWithTable": "在 {{table}} 表格中创建新记录。",
+          "getRecordsFromView": "从 {{view}} 视图中获取记录",
+          "updateRecordFields": "更新 {{fields}}",
+          "sendEmailTo": "给 {{recipient}} 发送邮件",
+          "fieldListSeparator": "、",
           "updateRecordWithTable": "更新 {{table}} 表格中的记录。",
-          "getRecordsWithTable": "从 {{table}} 表格中获取记录。"
+          "getRecordsWithTable": "从 {{table}} 表格中获取记录。",
+          "webhook": "当接收 Webhook 时运行自动化"
         }
       },
       "states": {
@@ -1497,6 +1520,12 @@
         "dateRangePlaceholder": "选择日期范围",
         "overview": "概览",
         "averageRunTime": "平均运行时间"
+      },
+      "httpBody": {
+        "mixedMode": "混合模式",
+        "mixedModeDescription": "使用当前自动化流程步骤中的变量和静态值",
+        "attachmentMode": "附件",
+        "attachmentModeDescription": "仅能选择附件类型的变量"
       }
     }
   },

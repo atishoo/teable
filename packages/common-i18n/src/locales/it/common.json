@@ -770,10 +770,6 @@
           "label": "Quando il record viene aggiornato",
           "description": "Esegui l'automazione quando cambiano record specifici"
         },
-        "recordCreatedOrUpdated": {
-          "label": "Quando il record viene creato o aggiornato",
-          "description": "Esegui l'automazione quando un record viene creato o aggiornato"
-        },
         "recordMatchesConditions": {
           "label": "Quando il record corrisponde alle condizioni",
           "description": "Esegui l'automazione quando un record inizia a soddisfare le condizioni"
@@ -799,16 +795,20 @@
           "description": "Invia un'e-mail personalizzata"
         },
         "httpRequest": {
-          "label": "HTTP request",
+          "label": "Richiesta HTTP",
           "description": "Connettiti a servizi esterni tramite API e scambia dati"
         },
         "condition": {
           "label": "Quando le condizioni corrispondono...",
-          "description": "Decidere se continuare in base alla condizione"
+          "description": "Esegui azioni diverse in base a condizioni specifiche"
         },
         "unknown": {
           "label": "Nodo sconosciuto",
           "description": "Nodo sconosciuto"
+        },
+        "webhook": {
+          "label": "Quando viene ricevuto un Webhook",
+          "description": "Attiva l’automazione tramite una richiesta HTTP esterna"
         }
       },
       "nodeGroups": {
@@ -937,7 +937,8 @@
         "input": "Ingresso",
         "output": "Uscita",
         "callDetails": "Dettagli della chiamata",
-        "ranAt": "Ho corso a"
+        "ranAt": "Ho corso a",
+        "authorization": "autorizzazione"
       },
       "validation": {
         "needTrigger": "È richiesto almeno un trigger",
@@ -978,7 +979,8 @@
         "httpStatus": "Codice di stato HTTP",
         "httpBody": "Corpo della risposta HTTP",
         "httpOk": "Successo HTTP",
-        "emailSentResult": "Risultato inviato via e-mail"
+        "emailSentResult": "Risultato inviato via e-mail",
+        "webhookBody": "Corpo"
       },
       "actions": {
         "loop": "Ciclo",
@@ -990,6 +992,8 @@
         "selectVariable": "Seleziona variabile",
         "add": "Aggiungi",
         "addField": "Aggiungi campo",
+        "watchAllFields": "Ascolta tutti",
+        "unwatchAllFields": "Annulla ascolto di tutti",
         "addConfig": "Aggiungi configurazione",
         "send": "Invia",
         "confirm": "Conferma",
@@ -1009,7 +1013,13 @@
         "enableNow": "Abilita ora",
         "resetViewport": "Ripristina",
         "copyNodeId": "Fare clic per copiare l'ID del nodo",
-        "deleteNode": "Elimina nodo"
+        "deleteNode": "Elimina nodo",
+        "select": "Seleziona",
+        "nextStep": "Avanti",
+        "return": "Indietro",
+        "enableAuthorization": "Attiva autorizzazione",
+        "regenerate": "Rigenera",
+        "regenerateToken": "Rigenerare il token?"
       },
       "fields": {
         "database": "Banca dati",
@@ -1036,7 +1046,10 @@
         "requestUrl": "Richiedi URL",
         "requestHeaders": "Richiedi intestazioni",
         "requestBody": "Richiedi corpo",
-        "unsubscribeList": "Lista cancellazioni"
+        "unsubscribeList": "Lista cancellazioni",
+        "webhookUrl": "URL Webhook",
+        "authorizationBearerToken": "Autorizzazione (token Bearer)",
+        "callExample": "Esempio di chiamata"
       },
       "descriptions": {
         "crossDatabaseAccess": "Si accederà al database esterno con i permessi e l'identità del configuratore di automazione. Se il configuratore perde l'accesso al database di destinazione, l'automazione fallirà.",
@@ -1046,7 +1059,10 @@
         "watchFields": "Gli aggiornamenti ai campi selezionati attiveranno l'automazione. Una volta controllati tutti i campi, verranno controllati anche i campi appena creati.",
         "queryLimit": "Ogni query restituisce fino a 1000 record.",
         "recordId": "L'ID del record da aggiornare. Per aggiornare un record da un passaggio precedente, utilizzare il menu + per selezionare il passaggio e il relativo ID record.",
-        "testStep": "Testare questo passaggio per verificare che la configurazione sia corretta. Dopo un test riuscito, questo passaggio può abilitare l'automazione."
+        "testStep": "Testare questo passaggio per verificare che la configurazione sia corretta. Dopo un test riuscito, questo passaggio può abilitare l'automazione.",
+        "webhookUrlPublic": "Chiunque abbia questo URL può attivare la tua automazione. Condividilo con attenzione.",
+        "webhookAuthorizationEnabled": "L’autorizzazione è attiva. Solo le richieste con il token Bearer corretto possono attivare questa automazione.",
+        "regenerateToken": "La rigenerazione invaliderà immediatamente il vecchio token e potrebbe interrompere le integrazioni esistenti."
       },
       "placeholders": {
         "select": "Seleziona...",
@@ -1060,7 +1076,9 @@
         "search": "Cerca...",
         "inputOrSelectVariable": "Immettere/selezionare variabile",
         "searchFields": "Cerca campi...",
-        "inputDescription": "Inserisci la descrizione"
+        "inputDescription": "Inserisci la descrizione",
+        "inputKey": "Inserisci chiave",
+        "inputValue": "Inserisci valore"
       },
       "empty": {
         "noResults": "Nessun risultato trovato",
@@ -1133,7 +1151,8 @@
         "insertFromField": "Inserisci dal campo",
         "searchResults": "Risultati della ricerca",
         "metadata": "Metadati",
-        "insertMetadata": "Inserisci metadati"
+        "insertMetadata": "Inserisci metadati",
+        "typeMismatch": "Il tipo di variabile non corrisponde"
       },
       "toast": {
         "copySuccess": "Copiato con successo",
@@ -1161,13 +1180,17 @@
         "nodeDescriptions": {
           "recordCreatedWithTable": "Quando viene creato un record in {{table}}",
           "recordUpdatedWithTable": "Quando un record in {{table}} viene aggiornato",
-          "recordCreatedOrUpdatedWithTable": "Quando un record in {{table}} viene creato o aggiornato",
           "recordMatchesConditionsWithTable": "Quando un record in {{table}} soddisfa le condizioni",
           "buttonClickWithTable": "Quando si fa clic su un pulsante in {{table}}",
           "formSubmittedWithTable": "Quando viene inviato un modulo in {{table}}",
           "createRecordWithTable": "Crea un nuovo record in {{table}}.",
+          "getRecordsFromView": "Ottieni record dalla vista {{view}}",
+          "updateRecordFields": "Aggiorna {{fields}}",
+          "sendEmailTo": "Invia email a {{recipient}}",
+          "fieldListSeparator": ", ",
           "updateRecordWithTable": "Aggiorna un record in {{table}}.",
-          "getRecordsWithTable": "Ottieni record da {{table}}."
+          "getRecordsWithTable": "Ottieni record da {{table}}.",
+          "webhook": "Esegui l’automazione alla ricezione di un Webhook"
         }
       },
       "states": {
@@ -1187,6 +1210,12 @@
         "dateRangePlaceholder": "Seleziona l'intervallo di date",
         "overview": "Panoramica",
         "averageRunTime": "Tempo medio di esecuzione"
+      },
+      "httpBody": {
+        "mixedMode": "Modalità mista",
+        "mixedModeDescription": "Usa variabili e valori statici dal flusso di automazione corrente",
+        "attachmentMode": "Allegato",
+        "attachmentModeDescription": "È possibile selezionare solo variabili di tipo allegato"
       }
     }
   },
