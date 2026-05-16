@@ -782,6 +782,7 @@
       "nodeStatus": {
         "incomplete": "Gerekli alanlar eksik",
         "testSucceeded": "Test çalıştırması başarılı oldu",
+        "testFailed": "Test çalıştırması başarısız",
         "testExpired": "Test sonucunun süresi doldu. Test adımını yeniden çalıştırın.",
         "untested": "Tamamlandı ancak test edilmedi"
       },
@@ -869,6 +870,8 @@
         "recordUrl": "URL'yi kaydet",
         "recordName": "Kayıt adı",
         "record": "Kayıt",
+        "recordList": "Kayıt listesi",
+        "error": "Hata",
         "returnValue": "Dönüş değeri",
         "nodeId": "Düğüm kimliği",
         "nodeType": "Düğüm türü",
@@ -885,6 +888,15 @@
         "fields": "Alanlar",
         "requestHeaders": "Başlıkları iste",
         "requestBody": "Talep gövdesi",
+        "requestContentType": "İçerik türü",
+        "formDataBody": "Form verileri",
+        "urlencodedBody": "URL kodlu gövde",
+        "jsonBody": "JSON gövdesi",
+        "rawTextBody": "Düz metin gövdesi",
+        "responseBody": "Yanıt gövdesi",
+        "responseHeaders": "Yanıt başlıkları",
+        "responseStatusCode": "Yanıt durum kodu",
+        "finalRequestUrl": "Son URL",
         "source": "Kaynak",
         "currentUser": "Geçerli kullanıcı",
         "step": "Adım",
@@ -966,6 +978,7 @@
         "generatePreview": "Önizleme oluştur",
         "runWithConfig": "Yapılandırmayla çalıştır",
         "runTest": "Testi çalıştır",
+        "testWithRecord": "Kayıtla test et",
         "runHistory": "Çalıştırma geçmişi",
         "more": "Daha Fazla",
         "update": "Güncelleme",
@@ -1018,7 +1031,8 @@
         "watchFields": "Seçilen alanlardaki güncellemeler otomasyonu tetikleyecektir. Tüm alanlar izlendiğinde yeni oluşturulan alanlar da izlenecektir.",
         "queryLimit": "Her sorgu en fazla 1000 kayıt döndürür.",
         "recordId": "Güncellenecek kaydın kimliği. Önceki adımdaki bir kaydı güncellemek için adımı ve kayıt kimliğini seçmek üzere + menüsünü kullanın.",
-        "testStep": "Yapılandırmasının doğru olduğunu doğrulamak için bu adımı test edin. Başarılı bir testin ardından bu adım otomasyonu etkinleştirebilir.",
+        "testStep": "Yapılandırmasının doğru olduğunu onaylamak için bu adımı test edin. Bu test verileri sonraki adımlarda kullanılabilir.",
+        "testWithRecord": "Bu adım için test verisi olarak bir kayıt seçin.",
         "webhookUrlPublic": "Bu URL’ye sahip herkes otomasyonunuzu tetikleyebilir. Nerede paylaştığınıza dikkat edin.",
         "webhookAuthorizationEnabled": "Yetkilendirme açık. Yalnızca doğru Bearer token taşıyan istekler bu otomasyonu tetikleyebilir.",
         "regenerateToken": "Yeniden oluşturma eski tokenı hemen geçersiz kılar ve mevcut entegrasyonları bozabilir."
@@ -1064,6 +1078,7 @@
         "hostPlaceholder": "Sunucu adresini girin",
         "port": "Liman",
         "portPlaceholder": "Bağlantı noktasını girin",
+        "auth": "Kimlik doğrulama",
         "username": "Kullanıcı adı",
         "usernamePlaceholder": "Kullanıcı adını girin",
         "password": "Şifre",
@@ -1175,6 +1190,13 @@
         "mixedModeDescription": "Geçerli otomasyon akışındaki değişkenleri ve statik değerleri kullan",
         "attachmentMode": "Ek",
         "attachmentModeDescription": "Yalnızca ek türündeki değişkenler seçilebilir"
+      },
+      "httpBodyTypes": {
+        "none": "Yok",
+        "formData": "form-data",
+        "urlencoded": "x-www-form-urlencoded",
+        "rawText": "raw text",
+        "json": "JSON"
       }
     }
   },

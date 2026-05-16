@@ -825,6 +825,7 @@
       "nodeStatus": {
         "incomplete": "必須フィールドが不完全です",
         "testSucceeded": "テスト実行に成功しました",
+        "testFailed": "テスト実行に失敗しました",
         "testExpired": "テスト結果の有効期限が切れています。テストステップを再度実行します。",
         "untested": "完成しているがテストされていない"
       },
@@ -912,6 +913,8 @@
         "recordUrl": "レコードURL",
         "recordName": "レコード名",
         "record": "記録",
+        "recordList": "レコードリスト",
+        "error": "エラー",
         "returnValue": "戻り値",
         "nodeId": "ノードID",
         "nodeType": "ノードの種類",
@@ -928,6 +931,15 @@
         "fields": "フィールド",
         "requestHeaders": "リクエストヘッダー",
         "requestBody": "リクエストボディ",
+        "requestContentType": "コンテンツタイプ",
+        "formDataBody": "フォームデータ",
+        "urlencodedBody": "URL エンコード本文",
+        "jsonBody": "JSON 本文",
+        "rawTextBody": "プレーンテキスト本文",
+        "responseBody": "レスポンス本文",
+        "responseHeaders": "レスポンスヘッダー",
+        "responseStatusCode": "レスポンスステータスコード",
+        "finalRequestUrl": "最終 URL",
         "source": "ソース",
         "currentUser": "現在のユーザー",
         "step": "ステップ",
@@ -1009,6 +1021,7 @@
         "generatePreview": "プレビューの生成",
         "runWithConfig": "設定を使用して実行する",
         "runTest": "テスト実行",
+        "testWithRecord": "レコードでテスト",
         "runHistory": "実行履歴",
         "more": "もっと見る",
         "update": "アップデート",
@@ -1061,7 +1074,8 @@
         "watchFields": "選択したフィールドを更新すると、自動化がトリガーされます。すべてのフィールドが監視されると、新しく作成されたフィールドも監視されます。",
         "queryLimit": "各クエリは最大 1000 件のレコードを返します。",
         "recordId": "更新するレコードの ID。前のステップからレコードを更新するには、+ メニューを使用してステップとそのレコード ID を選択します。",
-        "testStep": "このステップをテストして、構成が正しいことを確認します。テストが成功した後、このステップで自動化を有効にすることができます。",
+        "testStep": "このステップをテストして、設定が正しいことを確認します。このテストデータは後続のステップで使用できます。",
+        "testWithRecord": "このステップのテストデータとしてレコードを選択します。",
         "webhookUrlPublic": "この URL を知っている人は誰でも自動化をトリガーできます。共有先に注意してください。",
         "webhookAuthorizationEnabled": "認証が有効です。正しい Bearer token を含むリクエストのみがこの自動化をトリガーできます。",
         "regenerateToken": "再生成すると古い token はただちに無効になり、既存の連携が動作しなくなる可能性があります。"
@@ -1107,6 +1121,7 @@
         "hostPlaceholder": "サーバーアドレスを入力してください",
         "port": "港",
         "portPlaceholder": "ポートを入力してください",
+        "auth": "認証",
         "username": "ユーザー名",
         "usernamePlaceholder": "ユーザー名を入力してください",
         "password": "パスワード",
@@ -1218,6 +1233,13 @@
         "mixedModeDescription": "現在の自動化フローの変数と静的値を使用します",
         "attachmentMode": "添付ファイル",
         "attachmentModeDescription": "添付ファイル型の変数のみ選択できます"
+      },
+      "httpBodyTypes": {
+        "none": "なし",
+        "formData": "form-data",
+        "urlencoded": "x-www-form-urlencoded",
+        "rawText": "raw text",
+        "json": "JSON"
       }
     }
   },

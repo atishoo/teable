@@ -1346,9 +1346,9 @@ export type I18nTranslations = {
                 "nodeStatus": {
                     "incomplete": string;
                     "testSucceeded": string;
+                    "testFailed": string;
                     "testExpired": string;
                     "untested": string;
-                    "testFailed": string;
                 };
                 "operators": {
                     "notEmpty": string;
@@ -1434,6 +1434,8 @@ export type I18nTranslations = {
                     "recordUrl": string;
                     "recordName": string;
                     "record": string;
+                    "recordList": string;
+                    "error": string;
                     "returnValue": string;
                     "nodeId": string;
                     "nodeType": string;
@@ -1450,6 +1452,15 @@ export type I18nTranslations = {
                     "fields": string;
                     "requestHeaders": string;
                     "requestBody": string;
+                    "requestContentType": string;
+                    "formDataBody": string;
+                    "urlencodedBody": string;
+                    "jsonBody": string;
+                    "rawTextBody": string;
+                    "responseBody": string;
+                    "responseHeaders": string;
+                    "responseStatusCode": string;
+                    "finalRequestUrl": string;
                     "source": string;
                     "currentUser": string;
                     "step": string;
@@ -1463,17 +1474,6 @@ export type I18nTranslations = {
                     "callDetails": string;
                     "ranAt": string;
                     "authorization": string;
-                    "recordList": string;
-                    "error": string;
-                    "requestContentType": string;
-                    "formDataBody": string;
-                    "urlencodedBody": string;
-                    "jsonBody": string;
-                    "rawTextBody": string;
-                    "responseBody": string;
-                    "responseHeaders": string;
-                    "responseStatusCode": string;
-                    "finalRequestUrl": string;
                 };
                 "validation": {
                     "needTrigger": string;
@@ -1542,6 +1542,7 @@ export type I18nTranslations = {
                     "generatePreview": string;
                     "runWithConfig": string;
                     "runTest": string;
+                    "testWithRecord": string;
                     "runHistory": string;
                     "more": string;
                     "update": string;
@@ -1555,7 +1556,6 @@ export type I18nTranslations = {
                     "enableAuthorization": string;
                     "regenerate": string;
                     "regenerateToken": string;
-                    "testWithRecord": string;
                 };
                 "fields": {
                     "database": string;
@@ -1596,10 +1596,10 @@ export type I18nTranslations = {
                     "queryLimit": string;
                     "recordId": string;
                     "testStep": string;
+                    "testWithRecord": string;
                     "webhookUrlPublic": string;
                     "webhookAuthorizationEnabled": string;
                     "regenerateToken": string;
-                    "testWithRecord": string;
                 };
                 "placeholders": {
                     "select": string;
@@ -1642,6 +1642,7 @@ export type I18nTranslations = {
                     "hostPlaceholder": string;
                     "port": string;
                     "portPlaceholder": string;
+                    "auth": string;
                     "username": string;
                     "usernamePlaceholder": string;
                     "password": string;
@@ -1651,7 +1652,6 @@ export type I18nTranslations = {
                     "senderName": string;
                     "senderNamePlaceholder": string;
                     "testEmailPlaceholder": string;
-                    "auth": string;
                 };
                 "conditions": {
                     "matchAll": string;

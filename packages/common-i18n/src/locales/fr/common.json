@@ -823,6 +823,7 @@
       "nodeStatus": {
         "incomplete": "Les champs obligatoires sont incomplets",
         "testSucceeded": "Le test a réussi",
+        "testFailed": "Échec de l’exécution du test",
         "testExpired": "Le résultat du test a expiré. Exécutez à nouveau l’étape de test.",
         "untested": "Complet mais non testé"
       },
@@ -910,6 +911,8 @@
         "recordUrl": "Enregistrer l'URL",
         "recordName": "Nom de l'enregistrement",
         "record": "Enregistrer",
+        "recordList": "Liste d’enregistrements",
+        "error": "Erreur",
         "returnValue": "Valeur de retour",
         "nodeId": "ID du nœud",
         "nodeType": "Type de nœud",
@@ -926,6 +929,15 @@
         "fields": "Champs",
         "requestHeaders": "En-têtes de requête",
         "requestBody": "Corps de la demande",
+        "requestContentType": "Type de contenu",
+        "formDataBody": "Données de formulaire",
+        "urlencodedBody": "Corps encodé URL",
+        "jsonBody": "Corps JSON",
+        "rawTextBody": "Texte brut",
+        "responseBody": "Corps de réponse",
+        "responseHeaders": "En-têtes de réponse",
+        "responseStatusCode": "Code d’état de réponse",
+        "finalRequestUrl": "URL finale",
         "source": "Source",
         "currentUser": "Utilisateur actuel",
         "step": "Étape",
@@ -1007,6 +1019,7 @@
         "generatePreview": "Générer un aperçu",
         "runWithConfig": "Exécuter avec la configuration",
         "runTest": "Lancer le test",
+        "testWithRecord": "Tester avec un enregistrement",
         "runHistory": "Historique des exécutions",
         "more": "Plus",
         "update": "Mise à jour",
@@ -1059,7 +1072,8 @@
         "watchFields": "Les mises à jour des champs sélectionnés déclencheront l’automatisation. Lorsque tous les champs sont surveillés, les champs nouvellement créés le seront également.",
         "queryLimit": "Chaque requête renvoie jusqu'à 1 000 enregistrements.",
         "recordId": "L’ID de l’enregistrement à mettre à jour. Pour mettre à jour un enregistrement d'une étape précédente, utilisez le menu + pour sélectionner l'étape et son ID d'enregistrement.",
-        "testStep": "Testez cette étape pour confirmer que sa configuration est correcte. Après un test réussi, cette étape peut permettre l'automatisation.",
+        "testStep": "Testez cette étape pour confirmer que sa configuration est correcte. Ces données de test peuvent être utilisées dans les étapes suivantes.",
+        "testWithRecord": "Sélectionnez un enregistrement comme données de test pour cette étape.",
         "webhookUrlPublic": "Toute personne disposant de cette URL peut déclencher votre automatisation. Partagez-la avec prudence.",
         "webhookAuthorizationEnabled": "L’autorisation est activée. Seules les requêtes avec le bon jeton Bearer peuvent déclencher cette automatisation.",
         "regenerateToken": "La régénération invalidera immédiatement l’ancien jeton et peut interrompre les intégrations existantes."
@@ -1105,6 +1119,7 @@
         "hostPlaceholder": "Entrez l'adresse du serveur",
         "port": "Port",
         "portPlaceholder": "Entrez le port",
+        "auth": "Authentification",
         "username": "Nom d'utilisateur",
         "usernamePlaceholder": "Entrez le nom d'utilisateur",
         "password": "Mot de passe",
@@ -1216,6 +1231,13 @@
         "mixedModeDescription": "Utiliser les variables et valeurs statiques du flux d’automatisation actuel",
         "attachmentMode": "Pièce jointe",
         "attachmentModeDescription": "Seules les variables de type pièce jointe peuvent être sélectionnées"
+      },
+      "httpBodyTypes": {
+        "none": "Aucun",
+        "formData": "form-data",
+        "urlencoded": "x-www-form-urlencoded",
+        "rawText": "raw text",
+        "json": "JSON"
       }
     }
   },

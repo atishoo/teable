@@ -818,6 +818,7 @@
       "nodeStatus": {
         "incomplete": "Erforderliche Felder sind unvollständig",
         "testSucceeded": "Testlauf erfolgreich",
+        "testFailed": "Testlauf fehlgeschlagen",
         "testExpired": "Das Testergebnis ist abgelaufen. Führen Sie den Testschritt erneut aus.",
         "untested": "Vollständig, aber nicht getestet"
       },
@@ -905,6 +906,8 @@
         "recordUrl": "URL aufzeichnen",
         "recordName": "Namen aufzeichnen",
         "record": "Aufnahme",
+        "recordList": "Datensatzliste",
+        "error": "Fehler",
         "returnValue": "Rückgabewert",
         "nodeId": "Knoten-ID",
         "nodeType": "Knotentyp",
@@ -921,6 +924,15 @@
         "fields": "Felder",
         "requestHeaders": "Header anfordern",
         "requestBody": "Anforderungstext",
+        "requestContentType": "Inhaltstyp",
+        "formDataBody": "Formulardaten",
+        "urlencodedBody": "URL-codierter Body",
+        "jsonBody": "JSON-Body",
+        "rawTextBody": "Rohtext-Body",
+        "responseBody": "Antworttext",
+        "responseHeaders": "Antwortheader",
+        "responseStatusCode": "Antwortstatuscode",
+        "finalRequestUrl": "Endgültige URL",
         "source": "Quelle",
         "currentUser": "Aktueller Benutzer",
         "step": "Schritt",
@@ -1002,6 +1014,7 @@
         "generatePreview": "Vorschau generieren",
         "runWithConfig": "Mit config ausführen",
         "runTest": "Test ausführen",
+        "testWithRecord": "Mit Datensatz testen",
         "runHistory": "Ausführungsverlauf",
         "more": "Mehr",
         "update": "Aktualisieren",
@@ -1054,7 +1067,8 @@
         "watchFields": "Aktualisierungen ausgewählter Felder lösen die Automatisierung aus. Wenn alle Felder überwacht werden, werden auch neu erstellte Felder überwacht.",
         "queryLimit": "Jede Abfrage gibt bis zu 1000 Datensätze zurück.",
         "recordId": "Die ID des zu aktualisierenden Datensatzes. Um einen Datensatz aus einem vorherigen Schritt zu aktualisieren, verwenden Sie das Menü „+“, um den Schritt und seine Datensatz-ID auszuwählen.",
-        "testStep": "Testen Sie diesen Schritt, um sicherzustellen, dass die Konfiguration korrekt ist. Nach einem erfolgreichen Test kann dieser Schritt eine Automatisierung ermöglichen.",
+        "testStep": "Testen Sie diesen Schritt, um zu bestätigen, dass seine Konfiguration korrekt ist. Diese Testdaten können in nachfolgenden Schritten verwendet werden.",
+        "testWithRecord": "Wählen Sie einen Datensatz als Testdaten für diesen Schritt aus.",
         "webhookUrlPublic": "Jede Person mit dieser URL kann Ihre Automatisierung auslösen. Teilen Sie diese URL vorsichtig.",
         "webhookAuthorizationEnabled": "Autorisierung ist aktiviert. Nur Anfragen mit dem richtigen Bearer-Token können diese Automatisierung auslösen.",
         "regenerateToken": "Durch die Neugenerierung wird das alte Token sofort ungültig und bestehende Integrationen können unterbrochen werden."
@@ -1100,6 +1114,7 @@
         "hostPlaceholder": "Geben Sie die Serveradresse ein",
         "port": "Hafen",
         "portPlaceholder": "Geben Sie den Port ein",
+        "auth": "Authentifizierung",
         "username": "Benutzername",
         "usernamePlaceholder": "Geben Sie den Benutzernamen ein",
         "password": "Passwort",
@@ -1211,6 +1226,13 @@
         "mixedModeDescription": "Variablen und statische Werte aus dem aktuellen Automatisierungsablauf verwenden",
         "attachmentMode": "Anhang",
         "attachmentModeDescription": "Es können nur Variablen vom Typ Anhang ausgewählt werden"
+      },
+      "httpBodyTypes": {
+        "none": "Keine",
+        "formData": "form-data",
+        "urlencoded": "x-www-form-urlencoded",
+        "rawText": "raw text",
+        "json": "JSON"
       }
     }
   },

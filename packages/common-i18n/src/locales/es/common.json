@@ -821,6 +821,7 @@
       "nodeStatus": {
         "incomplete": "Los campos obligatorios están incompletos",
         "testSucceeded": "La prueba se realizó correctamente",
+        "testFailed": "La ejecución de prueba falló",
         "testExpired": "El resultado de la prueba ha caducado. Ejecute el paso de prueba nuevamente.",
         "untested": "Completo pero no probado"
       },
@@ -908,6 +909,8 @@
         "recordUrl": "URL de registro",
         "recordName": "Nombre del registro",
         "record": "Registro",
+        "recordList": "Lista de registros",
+        "error": "Error",
         "returnValue": "Valor de retorno",
         "nodeId": "ID de nodo",
         "nodeType": "Tipo de nodo",
@@ -924,6 +927,15 @@
         "fields": "Campos",
         "requestHeaders": "Solicitar encabezados",
         "requestBody": "Cuerpo de la solicitud",
+        "requestContentType": "Tipo de contenido",
+        "formDataBody": "Datos de formulario",
+        "urlencodedBody": "Cuerpo codificado URL",
+        "jsonBody": "Cuerpo JSON",
+        "rawTextBody": "Texto sin formato",
+        "responseBody": "Cuerpo de respuesta",
+        "responseHeaders": "Encabezados de respuesta",
+        "responseStatusCode": "Código de estado de respuesta",
+        "finalRequestUrl": "URL final",
         "source": "Fuente",
         "currentUser": "Usuario actual",
         "step": "paso",
@@ -1005,6 +1017,7 @@
         "generatePreview": "Generar vista previa",
         "runWithConfig": "Ejecutar con configuración",
         "runTest": "Ejecutar prueba",
+        "testWithRecord": "Probar con registro",
         "runHistory": "Historial de ejecuciones",
         "more": "Más",
         "update": "Actualizar",
@@ -1057,7 +1070,8 @@
         "watchFields": "Las actualizaciones de los campos seleccionados activarán la automatización. Cuando se observen todos los campos, también se observarán los campos recién creados.",
         "queryLimit": "Cada consulta devuelve hasta 1000 registros.",
         "recordId": "El ID del registro a actualizar. Para actualizar un registro de un paso anterior, use el menú + para seleccionar el paso y su ID de registro.",
-        "testStep": "Pruebe este paso para confirmar que su configuración es correcta. Después de una prueba exitosa, este paso puede permitir la automatización.",
+        "testStep": "Prueba este paso para confirmar que su configuración es correcta. Estos datos de prueba se pueden usar en pasos posteriores.",
+        "testWithRecord": "Selecciona un registro como datos de prueba para este paso.",
         "webhookUrlPublic": "Cualquier persona con esta URL puede activar su automatización. Tenga cuidado al compartirla.",
         "webhookAuthorizationEnabled": "La autorización está activada. Solo las solicitudes con el token Bearer correcto pueden activar esta automatización.",
         "regenerateToken": "Al regenerarlo, el token anterior dejará de ser válido de inmediato y las integraciones existentes podrían dejar de funcionar."
@@ -1103,6 +1117,7 @@
         "hostPlaceholder": "Introduzca la dirección del servidor",
         "port": "Puerto",
         "portPlaceholder": "Introducir puerto",
+        "auth": "Autenticación",
         "username": "Nombre de usuario",
         "usernamePlaceholder": "Ingrese el nombre de usuario",
         "password": "Contraseña",
@@ -1214,6 +1229,13 @@
         "mixedModeDescription": "Usa variables y valores estáticos del flujo de automatización actual",
         "attachmentMode": "Adjunto",
         "attachmentModeDescription": "Solo se pueden seleccionar variables de tipo adjunto"
+      },
+      "httpBodyTypes": {
+        "none": "Ninguno",
+        "formData": "form-data",
+        "urlencoded": "x-www-form-urlencoded",
+        "rawText": "raw text",
+        "json": "JSON"
       }
     }
   },

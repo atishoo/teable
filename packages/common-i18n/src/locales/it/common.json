@@ -823,6 +823,7 @@
       "nodeStatus": {
         "incomplete": "I campi obbligatori sono incompleti",
         "testSucceeded": "L'esecuzione del test è riuscita",
+        "testFailed": "Esecuzione di test non riuscita",
         "testExpired": "Il risultato del test è scaduto. Eseguire nuovamente la fase di test.",
         "untested": "Completo ma non testato"
       },
@@ -910,6 +911,8 @@
         "recordUrl": "Registra l'URL",
         "recordName": "Registra il nome",
         "record": "Registra",
+        "recordList": "Elenco record",
+        "error": "Errore",
         "returnValue": "Valore restituito",
         "nodeId": "ID del nodo",
         "nodeType": "Tipo di nodo",
@@ -926,6 +929,15 @@
         "fields": "Campi",
         "requestHeaders": "Richiedi intestazioni",
         "requestBody": "Richiedi corpo",
+        "requestContentType": "Tipo di contenuto",
+        "formDataBody": "Dati del modulo",
+        "urlencodedBody": "Corpo codificato URL",
+        "jsonBody": "Corpo JSON",
+        "rawTextBody": "Testo grezzo",
+        "responseBody": "Corpo della risposta",
+        "responseHeaders": "Intestazioni della risposta",
+        "responseStatusCode": "Codice di stato della risposta",
+        "finalRequestUrl": "URL finale",
         "source": "Fonte",
         "currentUser": "Utente attuale",
         "step": "Passo",
@@ -1007,6 +1019,7 @@
         "generatePreview": "Genera anteprima",
         "runWithConfig": "Esegui con config",
         "runTest": "Esegui test",
+        "testWithRecord": "Testa con record",
         "runHistory": "Cronologia esecuzioni",
         "more": "Di più",
         "update": "Aggiorna",
@@ -1059,7 +1072,8 @@
         "watchFields": "Gli aggiornamenti ai campi selezionati attiveranno l'automazione. Una volta controllati tutti i campi, verranno controllati anche i campi appena creati.",
         "queryLimit": "Ogni query restituisce fino a 1000 record.",
         "recordId": "L'ID del record da aggiornare. Per aggiornare un record da un passaggio precedente, utilizzare il menu + per selezionare il passaggio e il relativo ID record.",
-        "testStep": "Testare questo passaggio per verificare che la configurazione sia corretta. Dopo un test riuscito, questo passaggio può abilitare l'automazione.",
+        "testStep": "Testa questo passaggio per confermare che la configurazione sia corretta. Questi dati di test possono essere usati nei passaggi successivi.",
+        "testWithRecord": "Seleziona un record come dati di test per questo passaggio.",
         "webhookUrlPublic": "Chiunque abbia questo URL può attivare la tua automazione. Condividilo con attenzione.",
         "webhookAuthorizationEnabled": "L’autorizzazione è attiva. Solo le richieste con il token Bearer corretto possono attivare questa automazione.",
         "regenerateToken": "La rigenerazione invaliderà immediatamente il vecchio token e potrebbe interrompere le integrazioni esistenti."
@@ -1105,6 +1119,7 @@
         "hostPlaceholder": "Inserisci l'indirizzo del server",
         "port": "Porto",
         "portPlaceholder": "Entra nel porto",
+        "auth": "Autenticazione",
         "username": "Nome utente",
         "usernamePlaceholder": "Inserisci il nome utente",
         "password": "Parola d'ordine",
@@ -1216,6 +1231,13 @@
         "mixedModeDescription": "Usa variabili e valori statici dal flusso di automazione corrente",
         "attachmentMode": "Allegato",
         "attachmentModeDescription": "È possibile selezionare solo variabili di tipo allegato"
+      },
+      "httpBodyTypes": {
+        "none": "Nessuno",
+        "formData": "form-data",
+        "urlencoded": "x-www-form-urlencoded",
+        "rawText": "raw text",
+        "json": "JSON"
       }
     }
   },
