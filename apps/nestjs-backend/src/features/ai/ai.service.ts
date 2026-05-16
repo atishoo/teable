@@ -96,6 +96,12 @@ export class AiService {
   // modelKey-> type@model@name
   async getModelConfig(modelKey: string, llmProviders: LLMProvider[] = []) {
     const { type, model, name } = this.parseModelKey(modelKey);
+    if (!type || !model || !name) {
+      throw new CustomHttpException(
+        'AI model config invalid. Select a valid AI model before running.',
+        HttpErrorCode.VALIDATION_ERROR
+      );
+    }
 
     // Special handling for AI Gateway models
     if (this.isGatewayModel(modelKey)) {
@@ -388,13 +394,33 @@ export class AiService {
   }
 
   private async getGenerationModelInstance(baseId: string, aiGenerateRo: IAiGenerateRo) {
+    const { modelInstance } = await this.getGenerationModelContext(baseId, aiGenerateRo);
+    return modelInstance;
+  }
+
+  private async getGenerationModelContext(baseId: string, aiGenerateRo: IAiGenerateRo) {
     const { modelKey: _modelKey, task = Task.Coding } = aiGenerateRo;
     const config = await this.getAIConfig(baseId);
     const modelKey = _modelKey ?? getTaskModelKey(config, task);
     if (!modelKey) {
       throw new Error('Model key is not set');
     }
-    return await this.getModelInstance(modelKey, config.llmProviders);
+    const { type } = this.parseModelKey(modelKey);
+    return {
+      modelInstance: await this.getModelInstance(modelKey, config.llmProviders),
+      providerType: type,
+    };
+  }
+
+  private getGenerateTextProviderOptions(providerType: string) {
+    if (providerType.toLowerCase() !== LLMProviderType.OPENAI_COMPATIBLE.toLowerCase()) {
+      return undefined;
+    }
+    return {
+      openaiCompatible: {
+        reasoningEffort: 'high',
+      },
+    };
   }
 
   async generateStream(
@@ -424,6 +450,22 @@ export class AiService {
       temperature,
     });
     return text;
+  }
+
+  async generateTextResult(baseId: string, aiGenerateRo: IAiGenerateRo) {
+    const { prompt, temperature } = aiGenerateRo;
+    const { modelInstance, providerType } = await this.getGenerationModelContext(
+      baseId,
+      aiGenerateRo
+    );
+    const providerOptions = this.getGenerateTextProviderOptions(providerType);
+
+    return generateText({
+      model: modelInstance,
+      prompt: prompt,
+      temperature,
+      ...(providerOptions && { providerOptions }),
+    });
   }
 
   async getInstanceAIConfig() {

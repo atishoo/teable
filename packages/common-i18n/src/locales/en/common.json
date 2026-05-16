@@ -1136,6 +1136,7 @@
       "nodeStatus": {
         "incomplete": "Required fields are incomplete",
         "testSucceeded": "Test run succeeded",
+        "testFailed": "Test run failed",
         "testExpired": "The test result has expired. Run the test step again.",
         "untested": "Complete but not tested"
       },
@@ -1223,6 +1224,8 @@
         "recordUrl": "Record URL",
         "recordName": "Record name",
         "record": "Record",
+        "recordList": "Record list",
+        "error": "Error",
         "returnValue": "Return value",
         "nodeId": "Node ID",
         "nodeType": "Node type",
@@ -1239,6 +1242,15 @@
         "fields": "Fields",
         "requestHeaders": "Request headers",
         "requestBody": "Request body",
+        "requestContentType": "Content type",
+        "formDataBody": "Form data",
+        "urlencodedBody": "URL encoded body",
+        "jsonBody": "JSON body",
+        "rawTextBody": "Raw text body",
+        "responseBody": "Response body",
+        "responseHeaders": "Response headers",
+        "responseStatusCode": "Response status code",
+        "finalRequestUrl": "Final URL",
         "source": "Source",
         "currentUser": "Current user",
         "step": "Step",
@@ -1252,6 +1264,13 @@
         "callDetails": "Call details",
         "ranAt": "Ran at",
         "authorization": "authorization"
+      },
+      "httpBodyTypes": {
+        "none": "None",
+        "formData": "form-data",
+        "urlencoded": "x-www-form-urlencoded",
+        "rawText": "raw text",
+        "json": "JSON"
       },
       "validation": {
         "needTrigger": "At least one trigger is required",
@@ -1320,6 +1339,7 @@
         "generatePreview": "Generate preview",
         "runWithConfig": "Run with config",
         "runTest": "Run test",
+        "testWithRecord": "Use record for test",
         "runHistory": "Run history",
         "more": "More",
         "update": "Update",
@@ -1372,7 +1392,8 @@
         "watchFields": "Updates to selected fields will trigger the automation. When all fields are watched, newly created fields will also be watched.",
         "queryLimit": "Each query returns up to 1000 records.",
         "recordId": "The ID of the record to update. To update a record from a previous step, use the + menu to select the step and its record ID.",
-        "testStep": "Test this step to confirm its configuration is correct. After a successful test, this step can enable automation.",
+        "testStep": "Test this step to confirm its configuration is correct. This test data can be used in later steps.",
+        "testWithRecord": "Select a record as the test data for this step.",
         "webhookUrlPublic": "Anyone with this URL can trigger your automation. Be careful where you share it.",
         "webhookAuthorizationEnabled": "Authorization is enabled. Only requests with the correct Bearer token can trigger this automation.",
         "regenerateToken": "Regenerating will immediately invalidate the old token and may break existing integrations."
@@ -1418,6 +1439,7 @@
         "hostPlaceholder": "Enter server address",
         "port": "Port",
         "portPlaceholder": "Enter port",
+        "auth": "Authentication",
         "username": "Username",
         "usernamePlaceholder": "Enter username",
         "password": "Password",

@@ -15,6 +15,7 @@ import {
   createWorkflowNodeRoSchema,
   updateWorkflowNodeRoSchema,
   updateWorkflowRoSchema,
+  workflowManualTestRoSchema,
   workflowRoSchema,
 } from '@teable/openapi';
 import type {
@@ -22,6 +23,7 @@ import type {
   ICreateWorkflowGraphNodeRo,
   IUpdateWorkflowGraphNodeRo,
   IUpdateWorkflowRo,
+  IWorkflowManualTestRo,
   IWorkflowRo,
 } from '@teable/openapi';
 import { EmitControllerEvent } from '../../event-emitter/decorators/emit-controller-event.decorator';
@@ -183,8 +185,12 @@ export class AutomationController {
 
   @Permissions(automationUpdatePermission)
   @Post(workflowTestRoute)
-  async test(@Param(baseIdParam) baseId: string, @Param(workflowIdParam) workflowId: string) {
-    return this.automationService.runManualTest(baseId, workflowId);
+  async test(
+    @Param(baseIdParam) baseId: string,
+    @Param(workflowIdParam) workflowId: string,
+    @Body(new ZodValidationPipe(workflowManualTestRoSchema)) ro?: IWorkflowManualTestRo
+  ) {
+    return this.automationService.runManualTest(baseId, workflowId, undefined, ro);
   }
 
   @Permissions(automationUpdatePermission)
@@ -192,9 +198,10 @@ export class AutomationController {
   async testNode(
     @Param(baseIdParam) baseId: string,
     @Param(workflowIdParam) workflowId: string,
-    @Param(nodeIdParam) nodeId: string
+    @Param(nodeIdParam) nodeId: string,
+    @Body(new ZodValidationPipe(workflowManualTestRoSchema)) ro?: IWorkflowManualTestRo
   ) {
-    return this.automationService.runManualTest(baseId, workflowId, nodeId);
+    return this.automationService.runManualTest(baseId, workflowId, nodeId, ro);
   }
 
   @Permissions(automationReadPermission)

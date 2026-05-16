@@ -81,6 +81,13 @@ export const workflowRunVoSchema = z.object({
   createdBy: z.string().optional().nullable(),
 });
 
+export const workflowManualTestRoSchema = z
+  .object({
+    recordId: z.string().optional(),
+    preview: z.boolean().optional(),
+  })
+  .optional();
+
 export const workflowWebhookTokenVoSchema = z.object({
   token: z.string(),
   secret: z.string(),
@@ -109,6 +116,7 @@ export type IWorkflowNode = z.infer<typeof workflowNodeSchema>;
 export type IWorkflowEdge = z.infer<typeof workflowEdgeSchema>;
 export type IWorkflowVo = z.infer<typeof workflowVoSchema>;
 export type IWorkflowRunVo = z.infer<typeof workflowRunVoSchema>;
+export type IWorkflowManualTestRo = z.infer<typeof workflowManualTestRoSchema>;
 export type IWorkflowWebhookTokenVo = z.infer<typeof workflowWebhookTokenVoSchema>;
 
 const WORKFLOW_BASE = '/base/{baseId}/workflow';
@@ -289,12 +297,24 @@ export const deleteWorkflowNode = async (
   return axios.delete(urlBuilder(WORKFLOW_NODE, { baseId, workflowId, category, nodeId }));
 };
 
-export const testWorkflow = async (baseId: string, workflowId: string) => {
-  return axios.post<IWorkflowRunVo>(urlBuilder(WORKFLOW_TEST, { baseId, workflowId }));
+export const testWorkflow = async (
+  baseId: string,
+  workflowId: string,
+  ro?: IWorkflowManualTestRo
+) => {
+  return axios.post<IWorkflowRunVo>(urlBuilder(WORKFLOW_TEST, { baseId, workflowId }), ro);
 };
 
-export const testWorkflowNode = async (baseId: string, workflowId: string, nodeId: string) => {
-  return axios.post<IWorkflowRunVo>(urlBuilder(WORKFLOW_TEST_NODE, { baseId, workflowId, nodeId }));
+export const testWorkflowNode = async (
+  baseId: string,
+  workflowId: string,
+  nodeId: string,
+  ro?: IWorkflowManualTestRo
+) => {
+  return axios.post<IWorkflowRunVo>(
+    urlBuilder(WORKFLOW_TEST_NODE, { baseId, workflowId, nodeId }),
+    ro
+  );
 };
 
 export const listWorkflowRuns = async (

@@ -209,6 +209,7 @@ export class MailSenderService {
     }
   ): Promise<boolean> {
     const { type, transportConfig, transporterName } = extra || {};
+    this.assertMailSendReady(extra, transportConfig, transporterName);
 
     let sender: Promise<boolean>;
     if (transportConfig) {
@@ -242,7 +243,9 @@ export class MailSenderService {
     }
 
     if (extra?.shouldThrow) {
-      return sender;
+      return sender.catch((reason) => {
+        throw new Error(this.getMailSendErrorMessage(reason));
+      });
     }
 
     return sender.catch((reason) => {
@@ -252,6 +255,48 @@ export class MailSenderService {
       }
       return false;
     });
+  }
+
+  private getMailSendErrorMessage(reason: unknown) {
+    const error =
+      typeof reason === 'object' && reason
+        ? (reason as { code?: unknown; responseCode?: unknown; command?: unknown })
+        : {};
+    const message = reason instanceof Error ? reason.message : String(reason ?? '');
+    const code = typeof error.code === 'string' ? error.code : '';
+    const responseCode = typeof error.responseCode === 'number' ? error.responseCode : undefined;
+    const command = typeof error.command === 'string' ? error.command : '';
+    const isAuthError =
+      code === 'EAUTH' ||
+      responseCode === 535 ||
+      command.toUpperCase() === 'AUTH' ||
+      /Invalid login|Authentication failure/i.test(message);
+    if (isAuthError) {
+      return 'SMTP authentication failed. Check the sender email account, SMTP authorization code or password, and whether SMTP service is enabled by the email provider.';
+    }
+    return message || 'Mail sending failed';
+  }
+
+  private assertMailSendReady(
+    extra:
+      | {
+          shouldThrow?: boolean;
+        }
+      | undefined,
+    transportConfig?: IMailTransportConfig,
+    transporterName?: MailTransporterType
+  ) {
+    if (!extra?.shouldThrow) return;
+    if (transportConfig && !this.isTransportConfigValid(transportConfig)) {
+      throw new Error(
+        'SMTP configuration is invalid. Fill in the mail server address, sender email account, and SMTP authorization code or password.'
+      );
+    }
+    if (!transportConfig && !transporterName && !this.isMailConfigured) {
+      throw new Error(
+        'SMTP configuration is missing. Configure a mail server before sending email.'
+      );
+    }
   }
 
   async inviteEmailOptions(info: {

@@ -61,3 +61,13 @@ describe('AiService.getModelTags', () => {
     expect(tags).toEqual([]);
   });
 });
+
+describe('AiService.getModelConfig', () => {
+  const service = Object.create(AiService.prototype) as AiService;
+
+  it('returns a readable error for malformed model keys', async () => {
+    await expect(service.getModelConfig('doubao-seed-2.0-pro', [])).rejects.toThrow(
+      'AI model config invalid. Select a valid AI model before running.'
+    );
+  });
+});

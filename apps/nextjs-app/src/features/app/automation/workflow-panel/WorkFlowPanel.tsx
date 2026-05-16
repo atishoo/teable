@@ -65,6 +65,7 @@ import {
   getViewList,
   listWorkflowRuns,
   testWorkflow,
+  testWorkflowNode,
   updateWorkflow,
   updateWorkflowActive,
   updateWorkflowNode,
@@ -152,6 +153,7 @@ import {
   EyeOff,
   Hash,
   Link2,
+  Loader2,
   Maximize2,
   Minus,
   MoreHorizontal,
@@ -189,6 +191,7 @@ import { AIModelSelect } from '@/features/app/blocks/admin/setting/components/ai
 import {
   generateGatewayModelKeyList,
   generateModelKeyList,
+  parseModelKey,
 } from '@/features/app/blocks/admin/setting/components/ai-config/utils';
 import { BaseNodeMore } from '@/features/app/blocks/base/base-side-bar/BaseNodeMore';
 import { useDisableAIAction } from '@/features/app/hooks/useDisableAIAction';
@@ -240,11 +243,14 @@ interface IVariableOption {
   groupNodeStatus?: 'incomplete' | 'success' | 'untested' | 'expired';
   groupNodeStatusLabel?: string;
   groupNodeDescription?: string;
+  groupNodeIndex?: number;
   field?: TableField;
   parentFieldId?: string;
   parentObjectKey?: string;
   objectKey?: string;
   objectValue?: boolean;
+  recordObject?: boolean;
+  recordFieldsObject?: boolean;
   sourceOnly?: boolean;
   valueKind?: FieldValueKind;
   icon?: IconComponent;
@@ -306,6 +312,7 @@ type NodeTestResult = {
   signature: string;
   testedAt: string;
   node: IWorkflowNode;
+  step?: WorkflowRunStep;
 };
 
 type WorkflowRunStep = NonNullable<IWorkflowRunVo['steps']>[number];
@@ -316,6 +323,23 @@ type TestResultRow = {
   children?: TestResultRow[];
   raw?: unknown;
   defaultOpen?: boolean;
+};
+
+type TestResultInputContext = {
+  rows: TestResultRow[];
+  input: Record<string, unknown>;
+  tables: { id: string; name: string }[];
+  fields: TableField[];
+  tr?: PanelTranslate;
+};
+
+type WorkflowOutputVariable = {
+  key: string;
+  name: string;
+  type?: string;
+  isArray?: boolean;
+  extra?: Record<string, unknown>;
+  children?: WorkflowOutputVariable[];
 };
 
 type PanelTranslate = (
@@ -966,33 +990,6 @@ const formatTime = (value?: string | null) => {
   return value ? value.replace('T', ' ').slice(0, 19) : '-';
 };
 
-const formatRelativeTime = (value?: string | null, tr?: PanelTranslate) => {
-  if (!value) return '-';
-  const timestamp = new Date(value).getTime();
-  if (!Number.isFinite(timestamp)) return formatTime(value);
-  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
-  if (seconds < 60) return panelText(tr, 'relativeTime.justNow', 'Just now');
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) {
-    return tr
-      ? tr('relativeTime.minutesAgo', '{{count}} minutes ago', { count: minutes })
-      : `${minutes} minutes ago`;
-  }
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) {
-    return tr
-      ? tr('relativeTime.hoursAgo', '{{count}} hours ago', { count: hours })
-      : `${hours} hours ago`;
-  }
-  const days = Math.floor(hours / 24);
-  if (days < 30) {
-    return tr
-      ? tr('relativeTime.daysAgo', '{{count}} days ago', { count: days })
-      : `${days} days ago`;
-  }
-  return formatTime(value);
-};
-
 const formatDuration = (ms?: number) => {
   if (!Number.isFinite(ms)) return '-';
   const value = Number(ms);
@@ -1085,9 +1082,276 @@ const getRunDateRangeParams = (range: IDateRangeValue | null) => {
   };
 };
 
+const appendRunStepGeneralInputRows = ({
+  rows,
+  input,
+  tables,
+  fields,
+  tr,
+}: TestResultInputContext) => {
+  const tableId = typeof input.tableId === 'string' ? input.tableId : undefined;
+  if (typeof tableId === 'string') {
+    rows.push({
+      label: panelText(tr, 'resultLabels.table', 'Table'),
+      value: getTableLabel(tables, tableId) || tableId,
+    });
+  }
+  if ('watchFieldIds' in input) {
+    rows.push({
+      label: panelText(tr, 'resultLabels.watchFields', 'Watch fields'),
+      value: getFieldListLabel(fields, input.watchFieldIds),
+    });
+  }
+  if (hasText(input.viewId)) {
+    rows.push({
+      label: panelText(tr, 'resultLabels.view', 'View'),
+      value: String(input.viewId),
+    });
+  }
+  if (hasText(input.recordId)) {
+    rows.push({
+      label: panelText(tr, 'resultLabels.recordId', 'Record ID'),
+      value: String(input.recordId),
+    });
+  }
+};
+
+const appendRunStepRequestInputRows = ({ rows, input, tr }: TestResultInputContext) => {
+  const method = hasText(input.method) ? String(input.method) : '';
+  const bodyType = getHttpRequestBodyType(input);
+  if (hasText(input.method)) {
+    rows.push({
+      label: panelText(tr, 'resultLabels.requestMethod', 'Request method'),
+      value: method,
+    });
+  }
+  if (hasText(input.url)) {
+    rows.push({
+      label: panelText(tr, 'resultLabels.requestUrl', 'Request URL'),
+      value: String(input.url),
+    });
+  }
+  const headerRows = getHttpKeyValueRows(input.headers);
+  if (headerRows.length) {
+    rows.push({
+      label: panelText(tr, 'resultLabels.requestHeaders', 'Request headers'),
+      children: headerRows,
+    });
+  }
+  if (methodSupportsHttpBody(method) && bodyType !== 'none') {
+    rows.push({
+      label: panelText(tr, 'resultLabels.requestContentType', 'Content type'),
+      value: getHttpRequestBodyTypeLabel(bodyType, tr),
+    });
+    const bodyRow = getHttpRequestBodyRow(bodyType, input.body, tr);
+    if (bodyRow) rows.push(bodyRow);
+  }
+};
+
+const HTTP_BODY_TYPE_LABELS = {
+  none: { key: 'httpBodyTypes.none', fallback: 'None' },
+  formData: { key: 'httpBodyTypes.formData', fallback: 'form-data' },
+  urlencoded: { key: 'httpBodyTypes.urlencoded', fallback: 'x-www-form-urlencoded' },
+  rawText: { key: 'httpBodyTypes.rawText', fallback: 'raw text' },
+  json: { key: 'httpBodyTypes.json', fallback: 'JSON' },
+};
+
+type HttpBodyType = keyof typeof HTTP_BODY_TYPE_LABELS;
+
+const getHttpRequestBodyType = (input: Record<string, unknown>): HttpBodyType => {
+  const bodyType = String(input.bodyType ?? '');
+  if (bodyType in HTTP_BODY_TYPE_LABELS) return bodyType as HttpBodyType;
+  switch (String(input.contentType ?? '').toLowerCase()) {
+    case 'multipart/form-data':
+      return 'formData';
+    case 'application/x-www-form-urlencoded':
+      return 'urlencoded';
+    case 'application/json':
+      return 'json';
+    case 'text/plain':
+      return 'rawText';
+    default:
+      return 'none';
+  }
+};
+
+const getHttpRequestBodyTypeLabel = (bodyType: HttpBodyType, tr?: PanelTranslate) => {
+  const label = HTTP_BODY_TYPE_LABELS[bodyType];
+  return panelText(tr, label.key, label.fallback);
+};
+
+const methodSupportsHttpBody = (method: string) => !['GET', 'HEAD'].includes(method.toUpperCase());
+
+const getHttpKeyValueRows = (value: unknown): TestResultRow[] => {
+  if (Array.isArray(value)) {
+    return value.filter(isPlainRecord).reduce<TestResultRow[]>((rows, item) => {
+      const key = formatCellValue(item.key);
+      if (key) rows.push({ label: key, value: formatCellValue(item.value) });
+      return rows;
+    }, []);
+  }
+  if (!isPlainRecord(value)) return [];
+  return Object.entries(value).map(([key, item]) => ({ label: key, value: formatCellValue(item) }));
+};
+
+const parseJsonLikeValue = (value: unknown) => {
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+};
+
+const getHttpRequestBodyRow = (
+  bodyType: HttpBodyType,
+  body: unknown,
+  tr?: PanelTranslate
+): TestResultRow | undefined => {
+  if (body === undefined || body === null) return;
+
+  if (bodyType === 'formData' || bodyType === 'urlencoded') {
+    const children = getHttpKeyValueRows(body);
+    return {
+      label:
+        bodyType === 'formData'
+          ? panelText(tr, 'resultLabels.formDataBody', 'Form data')
+          : panelText(tr, 'resultLabels.urlencodedBody', 'URL encoded body'),
+      ...(children.length ? { children } : { value: formatCellValue(body), raw: body }),
+    };
+  }
+
+  if (bodyType === 'json') {
+    const parsed = parseJsonLikeValue(body);
+    return {
+      label: panelText(tr, 'resultLabels.jsonBody', 'JSON body'),
+      ...(isPlainRecord(parsed) || Array.isArray(parsed)
+        ? { raw: parsed, defaultOpen: true }
+        : { value: formatCellValue(parsed) }),
+    };
+  }
+
+  return {
+    label: panelText(tr, 'resultLabels.rawTextBody', 'Raw text body'),
+    value: formatCellValue(body),
+  };
+};
+
+const configuredRow = (label: string, value: unknown, force = false): TestResultRow | undefined => {
+  if (!force && !hasText(value)) return;
+  return { label, value: String(value) };
+};
+
+const getMailTransportConfigRows = (
+  transportConfig: Record<string, unknown>,
+  tr?: PanelTranslate
+): TestResultRow[] => {
+  const auth = isPlainRecord(transportConfig.auth) ? transportConfig.auth : undefined;
+  const authChildren = [
+    configuredRow(
+      panelText(tr, 'mailConfig.password', 'Password'),
+      '********',
+      hasText(auth?.pass)
+    ),
+    configuredRow(panelText(tr, 'mailConfig.username', 'Username'), auth?.user),
+  ].filter((row): row is TestResultRow => Boolean(row));
+  return [
+    authChildren.length
+      ? {
+          label: panelText(tr, 'mailConfig.auth', 'Authentication'),
+          children: authChildren,
+        }
+      : undefined,
+    configuredRow(panelText(tr, 'mailConfig.host', 'Server address'), transportConfig.host),
+    configuredRow(
+      panelText(tr, 'mailConfig.port', 'Port'),
+      transportConfig.port,
+      typeof transportConfig.port === 'number'
+    ),
+    configuredRow(
+      panelText(tr, 'mailConfig.secure', 'SSL/TLS'),
+      transportConfig.secure,
+      typeof transportConfig.secure === 'boolean'
+    ),
+    configuredRow(
+      panelText(tr, 'mailConfig.senderAddress', 'Sender address'),
+      transportConfig.sender
+    ),
+    configuredRow(
+      panelText(tr, 'mailConfig.senderName', 'Sender name'),
+      transportConfig.senderName
+    ),
+  ].filter((row): row is TestResultRow => Boolean(row));
+};
+
+const appendRunStepMailInputRows = ({ rows, input, tr }: TestResultInputContext) => {
+  if (hasText(input.cc)) {
+    rows.push({
+      label: panelText(tr, 'fields.cc', 'Cc'),
+      value: String(input.cc),
+    });
+  }
+  if (hasText(input.to)) {
+    rows.push({
+      label: panelText(tr, 'resultLabels.recipients', 'Recipients'),
+      value: String(input.to),
+    });
+  }
+  if (hasText(input.bcc)) {
+    rows.push({
+      label: panelText(tr, 'fields.bcc', 'Bcc'),
+      value: String(input.bcc),
+    });
+  }
+  if (hasText(input.body)) {
+    rows.push({
+      label: panelText(tr, 'fields.body', 'Body'),
+      value: String(input.body),
+    });
+  }
+  if (hasText(input.replyTo)) {
+    rows.push({
+      label: panelText(tr, 'fields.replyTo', 'Reply-to email'),
+      value: String(input.replyTo),
+    });
+  }
+  if (hasText(input.subject)) {
+    rows.push({
+      label: panelText(tr, 'resultLabels.subject', 'Subject'),
+      value: String(input.subject),
+    });
+  }
+  if (hasText(input.senderName)) {
+    rows.push({
+      label: panelText(tr, 'fields.senderName', 'Sender name'),
+      value: String(input.senderName),
+    });
+  }
+  const transportConfig = isPlainRecord(input.mailTransportConfig)
+    ? input.mailTransportConfig
+    : isPlainRecord(input.transportConfig)
+      ? input.transportConfig
+      : undefined;
+  if (transportConfig && hasText(transportConfig.host)) {
+    rows.push({
+      label: panelText(tr, 'fields.customMailServer', 'Custom mail server'),
+      value: String(transportConfig.host),
+      children: getMailTransportConfigRows(transportConfig, tr),
+    });
+  }
+};
+
+const appendRunStepConditionInputRows = ({ rows, input, fields, tr }: TestResultInputContext) => {
+  if (!hasConditionItems(input.filter)) return;
+  rows.push({
+    label: panelText(tr, 'resultLabels.condition', 'Condition'),
+    value: getConditionSummary(input.filter, fields, tr),
+    raw: input.filter,
+  });
+};
+
 const getRunStepInputRows = (
   step: WorkflowRunStep,
-  node: IWorkflowNode | undefined,
   tables: { id: string; name: string }[],
   fields: TableField[],
   tr?: PanelTranslate
@@ -1095,7 +1359,7 @@ const getRunStepInputRows = (
   const input = isPlainRecord(step.input) ? step.input : {};
   const rows: TestResultRow[] = [];
   const inputFields = isPlainRecord(input.fields) ? input.fields : undefined;
-  const tableId = typeof input.tableId === 'string' ? input.tableId : node?.config?.tableId;
+  const context = { rows, input, tables, fields, tr };
 
   if (inputFields) {
     rows.push({
@@ -1106,12 +1370,11 @@ const getRunStepInputRows = (
       })),
     });
   }
-  if (typeof tableId === 'string') {
-    rows.push({
-      label: panelText(tr, 'resultLabels.table', 'Table'),
-      value: getTableLabel(tables, tableId) || tableId,
-    });
-  }
+  appendRunStepGeneralInputRows(context);
+  if (step.type === 'httpRequest') appendRunStepRequestInputRows(context);
+  if (step.type === 'sendEmail') appendRunStepMailInputRows(context);
+  rows.push(...buildAIGenerateTestInputRows(input, tr));
+  appendRunStepConditionInputRows(context);
   rows.push({
     label: panelText(tr, 'resultLabels.rawData', 'Raw data'),
     raw: step.input ?? {},
@@ -1119,11 +1382,14 @@ const getRunStepInputRows = (
   return rows;
 };
 
+const isRecordLikeOutput = (output: unknown): output is Record<string, unknown> =>
+  isPlainRecord(output) && (hasText(output.id) || isPlainRecord(output.fields));
+
 const getRecordLikeOutput = (output: unknown) => {
-  if (Array.isArray(output)) return output.find(isPlainRecord);
+  if (Array.isArray(output)) return output.find(isRecordLikeOutput);
   if (!isPlainRecord(output)) return undefined;
-  if (Array.isArray(output.records)) return output.records.find(isPlainRecord);
-  return output;
+  if (Array.isArray(output.records)) return output.records.find(isRecordLikeOutput);
+  return isRecordLikeOutput(output) ? output : undefined;
 };
 
 const getFieldValueRows = (
@@ -1134,6 +1400,45 @@ const getFieldValueRows = (
     label: getFieldLabel(fields, fieldId),
     value: formatCellValue(value),
   }));
+
+const getOutputValueRow = (label: string, value: unknown): TestResultRow => {
+  if (isPlainRecord(value)) {
+    return { label, children: getObjectValueRows(value) };
+  }
+  if (Array.isArray(value)) {
+    return { label, raw: value };
+  }
+  return { label, value: formatCellValue(value) };
+};
+
+const getObjectValueRows = (values: Record<string, unknown>): TestResultRow[] =>
+  Object.entries(values).map(([key, value]) => getOutputValueRow(key, value));
+
+const HTTP_OUTPUT_LABELS: Record<string, { key: string; fallback: string }> = {
+  body: { key: 'resultLabels.responseBody', fallback: 'Response body' },
+  headers: { key: 'resultLabels.responseHeaders', fallback: 'Response headers' },
+  status: { key: 'resultLabels.responseStatusCode', fallback: 'Response status code' },
+  url: { key: 'resultLabels.finalRequestUrl', fallback: 'Final URL' },
+  error: { key: 'resultLabels.error', fallback: 'Error' },
+};
+
+const HTTP_OUTPUT_ORDER = ['body', 'status', 'url', 'headers', 'error'];
+
+const getHttpOutputLabel = (key: string, tr?: PanelTranslate) => {
+  const label = HTTP_OUTPUT_LABELS[key];
+  return label ? panelText(tr, label.key, label.fallback) : key;
+};
+
+const getHttpOutputRows = (
+  output: Record<string, unknown>,
+  tr?: PanelTranslate
+): TestResultRow[] => {
+  const keys = [
+    ...HTTP_OUTPUT_ORDER.filter((key) => key in output),
+    ...Object.keys(output).filter((key) => !HTTP_OUTPUT_ORDER.includes(key)),
+  ];
+  return keys.map((key) => getOutputValueRow(getHttpOutputLabel(key, tr), output[key]));
+};
 
 const getTriggerUserRows = (user: unknown, tr?: PanelTranslate): TestResultRow[] => {
   if (!isPlainRecord(user)) return [];
@@ -1224,6 +1529,24 @@ const getOutputRecordRows = (
   return rows;
 };
 
+const appendRunStepMetaRows = (
+  rows: TestResultRow[],
+  step: WorkflowRunStep,
+  tr?: PanelTranslate
+) => {
+  if (step.error) {
+    rows.push({
+      label: panelText(tr, 'resultLabels.error', 'Error'),
+      value: step.error,
+    });
+  }
+  rows.push({
+    label: panelText(tr, 'resultLabels.rawData', 'Raw data'),
+    raw: step.output ?? {},
+  });
+  return rows;
+};
+
 const getRunStepOutputRows = (
   step: WorkflowRunStep,
   node: IWorkflowNode | undefined,
@@ -1237,47 +1560,27 @@ const getRunStepOutputRows = (
       ? [...getTriggerUserRows(output.user, tr), ...getTriggerRecordRows(output.record, fields, tr)]
       : [];
   if (triggerRows.length) {
-    return [
-      ...triggerRows,
-      { label: panelText(tr, 'resultLabels.rawData', 'Raw data'), raw: step.output ?? {} },
-    ];
+    return appendRunStepMetaRows(triggerRows, step, tr);
+  }
+
+  if (step.type === 'httpRequest' && output) {
+    return appendRunStepMetaRows(getHttpOutputRows(output, tr), step, tr);
   }
 
   const outputRecord = getRecordLikeOutput(step.output) as Record<string, unknown> | undefined;
   const rows = getOutputRecordRows(outputRecord, getOutputTableId(step, node), baseId, fields, tr);
   if (!rows.length && step.output !== undefined) {
-    rows.push({
-      label: panelText(tr, 'resultLabels.returnValue', 'Return value'),
-      value: formatCellValue(step.output),
-    });
+    if (isPlainRecord(step.output)) {
+      rows.push(...getObjectValueRows(step.output));
+    } else {
+      rows.push({
+        label: panelText(tr, 'resultLabels.returnValue', 'Return value'),
+        value: formatCellValue(step.output),
+      });
+    }
   }
-  rows.push({
-    label: panelText(tr, 'resultLabels.rawData', 'Raw data'),
-    raw: step.output ?? {},
-  });
-  return rows;
+  return appendRunStepMetaRows(rows, step, tr);
 };
-
-const getRunStepCallRows = (
-  step: WorkflowRunStep,
-  node?: IWorkflowNode,
-  tr?: PanelTranslate
-): TestResultRow[] => [
-  { label: panelText(tr, 'resultLabels.nodeId', 'Node ID'), value: step.nodeId },
-  { label: panelText(tr, 'resultLabels.nodeType', 'Node type'), value: step.type },
-  {
-    label: panelText(tr, 'resultLabels.nodeName', 'Node name'),
-    value: node ? getNodeLabel(node, tr) : step.type,
-  },
-  {
-    label: panelText(tr, 'resultLabels.executionStatus', 'Execution status'),
-    value: getRunStatusMeta(step.status, tr).label,
-  },
-  {
-    label: panelText(tr, 'resultLabels.duration', 'Duration'),
-    value: formatDuration(step.spent),
-  },
-];
 
 const cloneWorkflowNode = (node: IWorkflowNode): IWorkflowNode => {
   const cloned = JSON.parse(JSON.stringify(node)) as IWorkflowNode;
@@ -1285,12 +1588,27 @@ const cloneWorkflowNode = (node: IWorkflowNode): IWorkflowNode => {
   return cloned;
 };
 
+const isStableRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && Object.prototype.toString.call(value) === '[object Object]';
+
+const stableJsonValue = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(stableJsonValue);
+  if (!isStableRecord(value)) return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, stableJsonValue(value[key])])
+  );
+};
+
 const getNodeSignature = (node: IWorkflowNode) =>
-  JSON.stringify({
-    type: node.type,
-    category: node.category,
-    config: node.config ?? {},
-  });
+  JSON.stringify(
+    stableJsonValue({
+      type: node.type,
+      category: node.category,
+      config: node.config ?? {},
+    })
+  );
 
 const isNodeTestResult = (value: unknown): value is NodeTestResult => {
   if (!isPlainRecord(value)) return false;
@@ -1310,6 +1628,22 @@ const getValidNodeTestResult = (
   if (localResult?.signature === currentSignature) return localResult;
   const persistedResult = isNodeTestResult(node.testResult) ? node.testResult : undefined;
   return persistedResult?.signature === currentSignature ? persistedResult : undefined;
+};
+
+const getSuccessfulNodeTestResult = (
+  node: IWorkflowNode,
+  nodeTestResults: Record<string, NodeTestResult>
+) => {
+  const result = getValidNodeTestResult(node, nodeTestResults);
+  return result?.step?.status === 'failed' ? undefined : result;
+};
+
+const getFailedNodeTestResult = (
+  node: IWorkflowNode,
+  nodeTestResults: Record<string, NodeTestResult>
+) => {
+  const result = getValidNodeTestResult(node, nodeTestResults);
+  return result?.step?.status === 'failed' ? result : undefined;
 };
 
 const getAnyNodeTestResult = (
@@ -1438,6 +1772,18 @@ const getNodeTestResultState = (
   return result.signature === getNodeSignature(node) ? ('current' as const) : ('expired' as const);
 };
 
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (isPlainRecord(error)) {
+    const response = error.response;
+    if (isPlainRecord(response)) {
+      const data = response.data;
+      if (isPlainRecord(data) && typeof data.message === 'string') return data.message;
+      if (isPlainRecord(data) && typeof data.error === 'string') return data.error;
+    }
+  }
+  return error instanceof Error ? error.message : fallback;
+};
+
 const clampZoom = (value: number) => {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(value.toFixed(2))));
 };
@@ -1471,6 +1817,24 @@ const operatorNeedsValue = (operator?: string) => !EMPTY_FILTER_OPERATORS.has(op
 
 const hasRecordKeys = (value: unknown): value is Record<string, unknown> => {
   return isPlainRecord(value) && Object.keys(value).length > 0;
+};
+
+const getWorkflowOutputVariables = (value: unknown): WorkflowOutputVariable[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item): WorkflowOutputVariable | undefined => {
+      if (!isPlainRecord(item) || typeof item.key !== 'string') return;
+      const children = getWorkflowOutputVariables(item.children);
+      return {
+        key: item.key,
+        name: typeof item.name === 'string' ? item.name : item.key,
+        type: typeof item.type === 'string' ? item.type : undefined,
+        isArray: Boolean(item.isArray),
+        extra: isPlainRecord(item.extra) ? item.extra : undefined,
+        ...(children.length ? { children } : {}),
+      };
+    })
+    .filter((item): item is WorkflowOutputVariable => Boolean(item));
 };
 
 const edgeMatchesHandle = (edge: IWorkflowEdge, handle?: string) => {
@@ -1563,12 +1927,20 @@ const getWorkflowNodeEditStatus = (
       Icon: TriangleAlert,
     };
   }
-  if (getValidNodeTestResult(node, nodeTestResults)) {
+  if (getSuccessfulNodeTestResult(node, nodeTestResults)) {
     return {
       type: 'success' as const,
       label: panelText(tr, 'nodeStatus.testSucceeded', 'Test run succeeded'),
       iconClassName: 'text-emerald-600',
       Icon: CheckCircle2,
+    };
+  }
+  if (getFailedNodeTestResult(node, nodeTestResults)) {
+    return {
+      type: 'failed' as const,
+      label: panelText(tr, 'nodeStatus.testFailed', 'Test run failed'),
+      iconClassName: 'text-destructive',
+      Icon: X,
     };
   }
   if (getNodeTestResultState(node, nodeTestResults) === 'expired') {
@@ -1767,6 +2139,13 @@ const AIGenerateOutputTypeSelect = (props: {
 const fromOptionValue = (value: string) => (value === EMPTY_SELECT_VALUE ? '' : value);
 
 const recordToRows = (value: unknown) => {
+  if (Array.isArray(value)) {
+    return value.filter(isPlainRecord).reduce<{ key: string; value: string }[]>((rows, item) => {
+      const key = formatCellValue(item.key);
+      if (key) rows.push({ key, value: formatCellValue(item.value) });
+      return rows;
+    }, []);
+  }
   if (!isPlainRecord(value)) return [];
   return Object.entries(value).map(([key, item]) => ({
     key,
@@ -2206,6 +2585,11 @@ const buildAIGenerateDefaultOutputRows = (
       ]
     : [];
 
+const getAIModelDisplayName = (modelKey: unknown) => {
+  if (!hasText(modelKey)) return '';
+  return parseModelKey(String(modelKey)).model ?? String(modelKey);
+};
+
 const buildAIGenerateTestInputRows = (
   config: Record<string, unknown>,
   tr?: PanelTranslate
@@ -2220,16 +2604,15 @@ const buildAIGenerateTestInputRows = (
   if (hasText(config.model)) {
     rows.push({
       label: panelText(tr, 'nodes.aiGenerate.fields.model.title', '模型'),
-      value: String(config.model),
+      value: getAIModelDisplayName(config.model),
     });
   }
   if (hasText(config.outputType)) {
     rows.push({
       label: panelText(tr, 'nodes.aiGenerate.fields.outputType.title', '输出类型'),
-      value:
-        config.outputType === 'json'
-          ? panelText(tr, 'nodes.aiGenerate.outputTypes.json.label', 'JSON')
-          : panelText(tr, 'nodes.aiGenerate.outputTypes.string.label', '文本'),
+      value: ['json', 'object'].includes(String(config.outputType))
+        ? panelText(tr, 'nodes.aiGenerate.outputTypes.json.label', 'JSON')
+        : panelText(tr, 'nodes.aiGenerate.outputTypes.string.label', '文本'),
     });
   }
   if ('temperature' in config) {
@@ -2371,30 +2754,9 @@ const buildTestInputRows = (
       value: String(config.recordId),
     });
   }
-  if (hasText(config.method)) {
-    rows.push({
-      label: panelText(tr, 'resultLabels.requestMethod', 'Request method'),
-      value: String(config.method),
-    });
-  }
-  if (hasText(config.url)) {
-    rows.push({
-      label: panelText(tr, 'resultLabels.requestUrl', 'Request URL'),
-      value: String(config.url),
-    });
-  }
-  if (hasText(config.to)) {
-    rows.push({
-      label: panelText(tr, 'resultLabels.recipients', 'Recipients'),
-      value: String(config.to),
-    });
-  }
-  if (hasText(config.subject)) {
-    rows.push({
-      label: panelText(tr, 'resultLabels.subject', 'Subject'),
-      value: String(config.subject),
-    });
-  }
+  const context = { rows, input: config, tables, fields, tr };
+  if (node.type === 'httpRequest') appendRunStepRequestInputRows(context);
+  if (node.type === 'sendEmail') appendRunStepMailInputRows(context);
   rows.push(...buildAIGenerateTestInputRows(config, tr));
   if (hasConditionItems(config.filter)) {
     rows.push({
@@ -2405,18 +2767,6 @@ const buildTestInputRows = (
   }
   if (hasRecordKeys(config.fields)) {
     rows.push({ label: panelText(tr, 'resultLabels.fields', 'Fields'), raw: config.fields });
-  }
-  if (hasRecordKeys(config.headers)) {
-    rows.push({
-      label: panelText(tr, 'resultLabels.requestHeaders', 'Request headers'),
-      raw: config.headers,
-    });
-  }
-  if (hasText(config.body)) {
-    rows.push({
-      label: panelText(tr, 'resultLabels.requestBody', 'Request body'),
-      value: String(config.body),
-    });
   }
 
   rows.push({
@@ -2478,16 +2828,56 @@ const getUpstreamNodes = (
   graphNodeOrder: IWorkflowNode[]
 ) => {
   if (!selectedNodeId) return [];
+  const nodeById = new Map(graphNodeOrder.map((node) => [node.id, node]));
   const ancestorIds = new Set<string>();
-  const stack = edges.filter((edge) => edge.target === selectedNodeId).map((edge) => edge.source);
+  const expandedConditionMergeIds = new Set<string>();
+  const stack = edges.filter((edge) => edge.target === selectedNodeId);
+  const getConditionBranchNodeIds = (conditionNodeId: string, stopNodeId: string) => {
+    const branchNodeIds = new Set<string>();
+    const branchStack = edges
+      .filter((edge) => edge.source === conditionNodeId && edge.sourceHandle)
+      .map((edge) => edge.target);
+
+    while (branchStack.length) {
+      const nodeId = branchStack.pop()!;
+      if (nodeId === stopNodeId || branchNodeIds.has(nodeId)) continue;
+      branchNodeIds.add(nodeId);
+      edges
+        .filter((edge) => edge.source === nodeId)
+        .forEach((edge) => {
+          branchStack.push(edge.target);
+        });
+    }
+
+    return branchNodeIds;
+  };
+
   while (stack.length) {
-    const nodeId = stack.pop()!;
-    if (ancestorIds.has(nodeId)) continue;
-    ancestorIds.add(nodeId);
+    const edge = stack.pop()!;
+    const nodeId = edge.source;
+    const isVisited = ancestorIds.has(nodeId);
+    if (!isVisited) ancestorIds.add(nodeId);
+
+    const node = nodeById.get(nodeId);
+    const conditionMergeId = `${nodeId}:${edge.target}`;
+    if (
+      node?.type === 'condition' &&
+      !edge.sourceHandle &&
+      !expandedConditionMergeIds.has(conditionMergeId)
+    ) {
+      expandedConditionMergeIds.add(conditionMergeId);
+      getConditionBranchNodeIds(nodeId, edge.target).forEach((branchNodeId) => {
+        if (!ancestorIds.has(branchNodeId)) {
+          stack.push({ source: branchNodeId, target: edge.target });
+        }
+      });
+    }
+
+    if (isVisited) continue;
     edges
       .filter((edge) => edge.target === nodeId)
       .forEach((edge) => {
-        stack.push(edge.source);
+        stack.push(edge);
       });
   }
 
@@ -2521,6 +2911,7 @@ const getObjectFieldVariableChildren = (
     groupNodeStatus: meta.groupNodeStatus,
     groupNodeStatusLabel: meta.groupNodeStatusLabel,
     groupNodeDescription: meta.groupNodeDescription,
+    groupNodeIndex: meta.groupNodeIndex,
   });
 
   switch (field.type) {
@@ -2541,11 +2932,13 @@ const getObjectFieldVariableChildren = (
         addChild('token', 'token'),
         addChild('size', 'size', 'number', FieldNumberIcon),
         addChild('mimetype', 'mimetype'),
+        addChild('presignedUrl', 'presignedUrl', 'link', FieldLinkIcon),
         addChild('width', 'width', 'number', FieldNumberIcon),
         addChild('height', 'height', 'number', FieldNumberIcon),
       ];
     case FieldType.Link:
       return [
+        addChild(panelText(tr, 'variables.recordUrl', 'Record URL'), 'url', 'link', FieldLinkIcon),
         addChild(panelText(tr, 'variables.recordId', 'Record ID'), 'id'),
         addChild(panelText(tr, 'variables.recordName', 'Record name'), 'title'),
       ];
@@ -2556,6 +2949,7 @@ const getObjectFieldVariableChildren = (
 
 const buildVariableOptions = (
   upstreamNodes: IWorkflowNode[],
+  graphNodeIndexMap: Map<string, number>,
   triggerFields: TableField[],
   nodeTestResults: Record<string, NodeTestResult>,
   fieldsByTableId: Record<string, TableField[]>,
@@ -2574,13 +2968,15 @@ const buildVariableOptions = (
       groupNodeStatus: status.type,
       groupNodeStatusLabel: status.label,
       groupNodeDescription: getNodeDescription(node, tr),
+      groupNodeIndex: graphNodeIndexMap.get(node.id),
       icon: NODE_ICONS[node.type] ?? SquareMousePointer,
       iconClassName: style.iconClassName,
       iconWrapperClassName: style.wrapperClassName,
     };
   };
   const nodeGroup = (node: IWorkflowNode) => {
-    const index = upstreamNodes.findIndex((item) => item.id === node.id);
+    const index =
+      graphNodeIndexMap.get(node.id) ?? upstreamNodes.findIndex((item) => item.id === node.id);
     const label = getNodeLabel(node, tr);
     return `${index + 1}. ${label}`;
   };
@@ -2611,6 +3007,75 @@ const buildVariableOptions = (
     objectKey,
     objectValue: true,
   });
+  const recordObjectMeta = (node: IWorkflowNode, objectKey: string): Partial<IVariableOption> => ({
+    ...objectMeta(node, objectKey),
+    recordObject: true,
+  });
+  const recordFieldsObjectMeta = (
+    node: IWorkflowNode,
+    objectKey: string
+  ): Partial<IVariableOption> => ({
+    ...objectMeta(node, objectKey),
+    recordFieldsObject: true,
+  });
+  const addRecordMetadataVariables = (
+    node: IWorkflowNode,
+    group: string,
+    parentObjectKey: string,
+    recordPath: string,
+    options?: { firstRecord?: boolean }
+  ) => {
+    const recordIdLabel = options?.firstRecord
+      ? panelText(tr, 'variables.firstRecordId', 'First record ID')
+      : panelText(tr, 'variables.recordId', 'Record ID');
+    add(group, recordIdLabel, `${recordPath}.id`, {
+      ...leafMeta(node, 'text', Link2),
+      parentObjectKey,
+    });
+    add(group, panelText(tr, 'variables.recordUrl', 'Record URL'), `${recordPath}.url`, {
+      ...leafMeta(node, 'link', FieldLinkIcon),
+      parentObjectKey,
+    });
+    add(group, panelText(tr, 'variables.recordName', 'Record name'), `${recordPath}.name`, {
+      ...leafMeta(node, 'text', FieldTextIcon),
+      parentObjectKey,
+    });
+    add(group, panelText(tr, 'variables.createdById', 'Created by ID'), `${recordPath}.createdBy`, {
+      ...leafMeta(node, 'text', FieldCreatedByIcon),
+      parentObjectKey,
+    });
+    add(
+      group,
+      panelText(tr, 'variables.lastModifiedById', 'Last modified by ID'),
+      `${recordPath}.lastModifiedBy`,
+      {
+        ...leafMeta(node, 'text', FieldLastModifiedByIcon),
+        parentObjectKey,
+      }
+    );
+    add(
+      group,
+      panelText(tr, 'variables.createdTime', 'Created time'),
+      `${recordPath}.createdTime`,
+      {
+        ...leafMeta(node, 'date', FieldCreatedTimeIcon),
+        parentObjectKey,
+      }
+    );
+    add(
+      group,
+      panelText(tr, 'variables.lastModifiedTime', 'Last modified time'),
+      `${recordPath}.lastModifiedTime`,
+      {
+        ...leafMeta(node, 'date', FieldLastModifiedTimeIcon),
+        parentObjectKey,
+      }
+    );
+    add(group, panelText(tr, 'variables.autoNumber', 'Auto number'), `${recordPath}.autoNumber`, {
+      ...leafMeta(node, 'number', FieldAutoNumberIcon),
+      parentObjectKey,
+    });
+  };
   const getNodeTableFields = (node: IWorkflowNode) => {
     const tableId = typeof node.config?.tableId === 'string' ? node.config.tableId : undefined;
     return tableId ? fieldsByTableId[tableId] ?? [] : [];
@@ -2636,6 +3101,161 @@ const buildVariableOptions = (
         options.push(...children);
       });
   };
+  const addRecordOutputVariables = (
+    node: IWorkflowNode,
+    group: string,
+    outputPath: string,
+    recordPath: string,
+    options?: { list?: boolean }
+  ) => {
+    add(
+      group,
+      options?.list
+        ? panelText(tr, 'resultLabels.recordList', 'Record list')
+        : panelText(tr, 'resultLabels.record', 'Record'),
+      outputPath,
+      {
+        ...recordObjectMeta(node, outputPath),
+      }
+    );
+    if (options?.list) {
+      add(group, panelText(tr, 'modifiers.length', 'Length'), `${outputPath}.length`, {
+        ...leafMeta(node, 'number', Hash),
+        parentObjectKey: outputPath,
+      });
+    }
+    addRecordMetadataVariables(node, group, outputPath, recordPath, {
+      firstRecord: options?.list,
+    });
+    const recordFieldsPath = `${recordPath}.fields`;
+    add(group, panelText(tr, 'resultLabels.fieldValues', 'Field values'), recordFieldsPath, {
+      ...recordFieldsObjectMeta(node, recordFieldsPath),
+      parentObjectKey: outputPath,
+    });
+    addFieldVariables(node, group, recordFieldsPath);
+  };
+  const getOutputVariablePath = (node: IWorkflowNode, key: string) => {
+    const path = key
+      .replace(/^\$\./, '')
+      .replace(/^\$/, '')
+      .replace(/\.\*\./g, '.0.')
+      .replace(/\.\*$/, '.0');
+    const prefix = node.category === 'trigger' ? 'trigger' : `action.${node.id}`;
+    return path ? `${prefix}.${path}` : prefix;
+  };
+  const getOutputVariableField = (variable: WorkflowOutputVariable) => {
+    const field = variable.extra?.field;
+    return isPlainRecord(field) ? (field as TableField) : undefined;
+  };
+  const getOutputVariableLeafMeta = (
+    node: IWorkflowNode,
+    variable: WorkflowOutputVariable
+  ): Partial<IVariableOption> => {
+    const field = getOutputVariableField(variable);
+    if (field) {
+      return {
+        ...leafMeta(node, getFieldValueKind(field), getFieldIcon(field)),
+        field,
+      };
+    }
+    if (variable.extra?.type === 'url') return leafMeta(node, 'link', FieldLinkIcon);
+    if (variable.type === 'number') return leafMeta(node, 'number', Hash);
+    if (variable.type === 'boolean') return leafMeta(node, 'checkbox', CheckCircle2);
+    if (variable.type === 'dateTime') return leafMeta(node, 'date', FieldCalendarIcon);
+    return leafMeta(node, 'text', FieldTextIcon);
+  };
+  const addOutputVariableTree = (
+    node: IWorkflowNode,
+    group: string,
+    variable: WorkflowOutputVariable,
+    parentObjectKey?: string
+  ) => {
+    const path = getOutputVariablePath(node, variable.key);
+    const hasChildren = Boolean(variable.children?.length);
+    add(group, variable.name, path, {
+      ...(hasChildren || variable.type === 'object' || variable.isArray
+        ? objectMeta(node, path)
+        : getOutputVariableLeafMeta(node, variable)),
+      ...(parentObjectKey ? { parentObjectKey } : {}),
+    });
+    variable.children?.forEach((child) => addOutputVariableTree(node, group, child, path));
+  };
+  const addSourceOnlyVariable = (node: IWorkflowNode, group: string) => {
+    options.push({
+      group,
+      label: getNodeLabel(node, tr),
+      value: '',
+      sourceOnly: true,
+      ...nodeMeta(node),
+    });
+  };
+  const inferOutputVariables = (
+    key: string,
+    name: string,
+    value: unknown
+  ): WorkflowOutputVariable => {
+    if (Array.isArray(value)) {
+      const first = value.find((item) => item !== undefined && item !== null);
+      return {
+        key,
+        name,
+        type: isPlainRecord(first) ? 'object' : typeof first,
+        isArray: true,
+        ...(first !== undefined
+          ? {
+              children: [inferOutputVariables(`${key}.*`, name, first)].flatMap(
+                (item) => item.children ?? []
+              ),
+            }
+          : {}),
+      };
+    }
+    if (isPlainRecord(value)) {
+      return {
+        key,
+        name,
+        type: 'object',
+        children: Object.entries(value).map(([childKey, childValue]) =>
+          inferOutputVariables(`${key}.${childKey}`, childKey, childValue)
+        ),
+      };
+    }
+    return { key, name, type: value === null ? 'null' : typeof value };
+  };
+  const getDynamicOutputVariables = (node: IWorkflowNode): WorkflowOutputVariable[] => {
+    const result = getSuccessfulNodeTestResult(node, nodeTestResults);
+    const output = result?.step?.output;
+    if (node.type === 'webhook' && isPlainRecord(output) && 'body' in output) {
+      return [
+        inferOutputVariables('$.body', panelText(tr, 'variables.webhookBody', 'Body'), output.body),
+      ];
+    }
+    if (node.type === 'aiGenerate') {
+      if (isPlainRecord(output)) {
+        return Object.entries(output).map(([key, value]) =>
+          inferOutputVariables(`$.${key}`, key, value)
+        );
+      }
+      return output === undefined ? [] : [inferOutputVariables('$.message', 'message', output)];
+    }
+    if (
+      node.type === 'sendEmail' &&
+      isPlainRecord(output) &&
+      ('totalCount' in output || 'sentCount' in output || 'error' in output)
+    ) {
+      return [
+        { key: '$.totalCount', name: 'totalCount', type: 'number' },
+        { key: '$.sentCount', name: 'sentCount', type: 'number' },
+        { key: '$.error', name: 'error', type: 'string' },
+      ];
+    }
+    if (node.type === 'httpRequest' && isPlainRecord(output)) {
+      return Object.entries(output).map(([key, value]) =>
+        inferOutputVariables(`$.${key}`, getHttpOutputLabel(key, tr), value)
+      );
+    }
+    return [];
+  };
 
   const trigger = upstreamNodes.find((node) => node.category === 'trigger');
   const triggerTableId =
@@ -2644,13 +3264,18 @@ const buildVariableOptions = (
       : undefined;
   if (trigger?.type === 'webhook') {
     const group = nodeGroup(trigger);
-    const bodyPath = 'trigger.body';
-    add(group, panelText(tr, 'variables.webhookBody', 'Body'), bodyPath, {
-      ...objectMeta(trigger, bodyPath),
-      icon: VariableObjectIcon,
-      iconClassName: 'text-muted-foreground',
-      iconWrapperClassName: 'border-0 bg-transparent',
-    });
+    const dynamicOutputVariables = getDynamicOutputVariables(trigger);
+    if (dynamicOutputVariables.length) {
+      dynamicOutputVariables.forEach((variable) => addOutputVariableTree(trigger, group, variable));
+    } else {
+      const bodyPath = 'trigger.body';
+      add(group, panelText(tr, 'variables.webhookBody', 'Body'), bodyPath, {
+        ...objectMeta(trigger, bodyPath),
+        icon: VariableObjectIcon,
+        iconClassName: 'text-muted-foreground',
+        iconWrapperClassName: 'border-0 bg-transparent',
+      });
+    }
   } else if (trigger && !triggerTableId) {
     const group = nodeGroup(trigger);
     const meta = nodeMeta(trigger);
@@ -2667,13 +3292,13 @@ const buildVariableOptions = (
     const triggerRecordPath = 'trigger.record';
     const triggerRecordFieldsPath = `${triggerRecordPath}.fields`;
     add(group, panelText(tr, 'resultLabels.record', 'Record'), triggerRecordPath, {
-      ...objectMeta(trigger, triggerRecordPath),
+      ...recordObjectMeta(trigger, triggerRecordPath),
       icon: VariableObjectIcon,
       iconClassName: 'text-muted-foreground',
       iconWrapperClassName: 'border-0 bg-transparent',
     });
     add(group, panelText(tr, 'resultLabels.fieldValues', 'Field values'), triggerRecordFieldsPath, {
-      ...objectMeta(trigger, triggerRecordFieldsPath),
+      ...recordFieldsObjectMeta(trigger, triggerRecordFieldsPath),
       parentObjectKey: triggerRecordPath,
       icon: VariableObjectIcon,
       iconClassName: 'text-muted-foreground',
@@ -2775,85 +3400,37 @@ const buildVariableOptions = (
   }
 
   upstreamNodes
-    .filter((node) => node.category !== 'trigger')
+    .filter((node) => node.category === 'action')
     .forEach((node) => {
       const group = nodeGroup(node);
-      const fullOutputPath = `nodes.${node.id}`;
-      const fullOutputMeta = objectMeta(node, fullOutputPath);
-      const fullOutputLabel = ['createRecord', 'getRecords', 'updateRecord'].includes(node.type)
-        ? panelText(tr, 'resultLabels.record', 'Record')
-        : panelText(tr, 'variables.fullOutput', 'Full output');
-      add(group, fullOutputLabel, fullOutputPath, fullOutputMeta);
-      if (node.category === 'logic') {
-        add(
-          group,
-          panelText(tr, 'variables.conditionResult', 'Condition result'),
-          `logic.${node.id}.result`,
-          { ...leafMeta(node, 'checkbox', CheckCircle2), parentObjectKey: fullOutputPath }
-        );
+      const declaredOutputVariables = getWorkflowOutputVariables(node.outputVariables);
+      if (declaredOutputVariables.length) {
+        declaredOutputVariables.forEach((variable) => addOutputVariableTree(node, group, variable));
+        return;
       }
-      if (node.category !== 'action') return;
-      if (['createRecord', 'getRecords'].includes(node.type)) {
-        add(
-          group,
-          panelText(tr, 'variables.firstRecordId', 'First record ID'),
-          `action.${node.id}.0.id`,
-          { ...leafMeta(node, 'text', Link2), parentObjectKey: fullOutputPath }
-        );
-        const firstRecordFieldsPath = `action.${node.id}.0.fields`;
-        add(
-          group,
-          tr
-            ? tr('variables.firstRecordFields', 'First record fields object')
-            : 'First record fields object',
-          firstRecordFieldsPath,
-          { ...objectMeta(node, firstRecordFieldsPath), parentObjectKey: fullOutputPath }
-        );
-        addFieldVariables(node, group, firstRecordFieldsPath);
-      } else if (node.type === 'updateRecord') {
-        add(group, panelText(tr, 'variables.recordId', 'Record ID'), `action.${node.id}.id`, {
-          ...leafMeta(node, 'text', Link2),
-          parentObjectKey: fullOutputPath,
-        });
-        const recordFieldsPath = `action.${node.id}.fields`;
-        add(
-          group,
-          panelText(tr, 'variables.recordFields', 'Record fields object'),
-          recordFieldsPath,
-          { ...objectMeta(node, recordFieldsPath), parentObjectKey: fullOutputPath }
-        );
-        addFieldVariables(node, group, recordFieldsPath);
-      } else if (node.type === 'aiGenerate') {
-        add(
-          group,
-          panelText(tr, 'variables.aiGeneratedResult', 'Generated text'),
-          `action.${node.id}.result`,
-          { ...leafMeta(node, 'text', FieldTextIcon), parentObjectKey: fullOutputPath }
-        );
-      } else if (node.type === 'httpRequest') {
-        add(
-          group,
-          panelText(tr, 'variables.httpStatus', 'HTTP status code'),
-          `action.${node.id}.status`,
-          { ...leafMeta(node, 'number', Hash), parentObjectKey: fullOutputPath }
-        );
-        add(
-          group,
-          panelText(tr, 'variables.httpBody', 'HTTP response body'),
-          `action.${node.id}.body`,
-          { ...objectMeta(node, `action.${node.id}.body`), parentObjectKey: fullOutputPath }
-        );
-        add(group, panelText(tr, 'variables.httpOk', 'HTTP success'), `action.${node.id}.ok`, {
-          ...leafMeta(node, 'checkbox', CheckCircle2),
-          parentObjectKey: fullOutputPath,
-        });
-      } else if (node.type === 'sendEmail') {
-        add(
-          group,
-          panelText(tr, 'variables.emailSentResult', 'Email sent result'),
-          `action.${node.id}.sent`,
-          { ...leafMeta(node, 'checkbox', CheckCircle2), parentObjectKey: fullOutputPath }
-        );
+
+      const dynamicOutputVariables = getDynamicOutputVariables(node);
+      if (dynamicOutputVariables.length) {
+        dynamicOutputVariables.forEach((variable) => addOutputVariableTree(node, group, variable));
+        return;
+      }
+
+      if (['aiGenerate', 'sendEmail', 'httpRequest'].includes(node.type)) {
+        addSourceOnlyVariable(node, group);
+        return;
+      }
+
+      const hasTable = Boolean(getNodeTableFields(node).length);
+      if (!hasTable) return;
+
+      if (node.type === 'getRecords') {
+        const recordsPath = `action.${node.id}.records`;
+        addRecordOutputVariables(node, group, recordsPath, `${recordsPath}.0`, { list: true });
+      } else if (['createRecord', 'updateRecord'].includes(node.type)) {
+        const hasLoop = Object.prototype.hasOwnProperty.call(node.config ?? {}, 'loopSource');
+        const recordPath = hasLoop ? `action.${node.id}.records.0` : `action.${node.id}`;
+        const outputPath = hasLoop ? `action.${node.id}.records` : recordPath;
+        addRecordOutputVariables(node, group, outputPath, recordPath, { list: hasLoop });
       }
     });
 
@@ -3556,6 +4133,7 @@ const VariablePicker = (props: {
                 {groupNames.map((group, index) => {
                   const firstOption = getVariableSourceOption(grouped, group);
                   const nodeStyle = getNodeIconStyle(firstOption?.groupNodeType);
+                  const sourceIndex = firstOption?.groupNodeIndex ?? index;
                   const sourceOption = firstOption?.groupNodeType
                     ? {
                         ...firstOption,
@@ -3575,7 +4153,7 @@ const VariablePicker = (props: {
                       onClick={() => setActiveGroup(group)}
                     >
                       <span className="w-4 shrink-0 text-xs text-muted-foreground">
-                        {index + 1}
+                        {sourceIndex + 1}
                       </span>
                       <VariableOptionIcon
                         className="size-4 rounded-none border-0 bg-transparent"
@@ -4123,6 +4701,17 @@ const RuntimeVariablePicker = (props: {
       {!options.length && renderNoResults()}
     </>
   );
+  const renderRecordObjectContent = () => {
+    const fieldValueOptions = objectChildren.filter((item) => item.recordFieldsObject);
+    const metadataOptions = objectChildren.filter((item) => !item.recordFieldsObject);
+    return (
+      <>
+        {renderSection(tr('resultLabels.fields', 'Fields'), fieldValueOptions)}
+        {renderSection(tr('variablePicker.metadata', 'Metadata'), metadataOptions)}
+        {!fieldValueOptions.length && !metadataOptions.length && renderNoResults()}
+      </>
+    );
+  };
   const renderRecordContent = () => (
     <>
       {triggerFields.length > 0 && (
@@ -4202,10 +4791,6 @@ const RuntimeVariablePicker = (props: {
       );
     }
 
-    if (!hasTriggerTree) {
-      return renderSectionWithEmpty(tr('variablePicker.selectData', 'Select data'), rootOptions);
-    }
-
     if (view === 'record') {
       return renderRecordContent();
     }
@@ -4215,10 +4800,20 @@ const RuntimeVariablePicker = (props: {
     }
 
     if (view === 'objectField') {
+      if (activeObjectOption?.recordObject) {
+        return renderRecordObjectContent();
+      }
+      if (activeObjectOption?.recordFieldsObject) {
+        return renderSectionWithEmpty(tr('resultLabels.fields', 'Fields'), objectChildren);
+      }
       return renderSection(
         activeObjectOption?.label ?? tr('resultLabels.fieldValues', 'Field values'),
         objectChildren
       );
+    }
+
+    if (!hasTriggerTree) {
+      return renderSectionWithEmpty(tr('variablePicker.selectData', 'Select data'), rootOptions);
     }
 
     if (view === 'user') {
@@ -4246,6 +4841,7 @@ const RuntimeVariablePicker = (props: {
                 {groupNames.map((group, index) => {
                   const sourceOption = getVariableSourceOption(grouped, group);
                   const nodeStyle = getNodeIconStyle(sourceOption?.groupNodeType);
+                  const sourceIndex = sourceOption?.groupNodeIndex ?? index;
                   const groupLabel = group.replace(/^\d+\.\s*/, '');
                   const sourceDescription = sourceOption?.groupNodeDescription;
                   return (
@@ -4264,7 +4860,7 @@ const RuntimeVariablePicker = (props: {
                       }}
                     >
                       <span className="w-4 shrink-0 text-xs text-muted-foreground">
-                        {index + 1}
+                        {sourceIndex + 1}
                       </span>
                       <VariableOptionIcon
                         className="size-4 rounded-none border-0 bg-transparent"
@@ -4906,6 +5502,91 @@ const SearchableValueSelect = (props: {
         </Command>
       </PopoverContent>
     </Popover>
+  );
+};
+
+const getTestRecordLabel = (record: { id: string; fields?: unknown }, fields: TableField[]) => {
+  const recordFields = isPlainRecord(record.fields) ? record.fields : {};
+  const fieldValueLabel = fields
+    .map((field) => formatCellValue(recordFields[field.id]))
+    .find((value) => Boolean(value));
+  return fieldValueLabel || record.id;
+};
+
+const TestRecordDialog = (props: {
+  tableId: string;
+  fields: TableField[];
+  disabled?: boolean;
+  loading?: boolean;
+  onTest: (recordId: string) => void | Promise<void>;
+}) => {
+  const tr = usePanelTranslate();
+  const [open, setOpen] = useState(false);
+  const [recordId, setRecordId] = useState('');
+  const { data: records = [], isFetching } = useQuery({
+    queryKey: ['workflow-test-records', props.tableId],
+    queryFn: () =>
+      getTableRecords(props.tableId, {
+        fieldKeyType: FieldKeyType.Id,
+        take: 100,
+      }).then((res) => res.data.records),
+    enabled: open,
+  });
+  const options = records.map((record) => ({
+    value: record.id,
+    label: getTestRecordLabel(record, props.fields),
+  }));
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) setRecordId('');
+  };
+  const handleTest = () => {
+    if (!recordId || props.loading) return;
+    void props.onTest(recordId);
+    setOpen(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline" disabled={props.disabled || props.loading}>
+          {props.loading ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Play className="size-4" />
+          )}
+          {tr('actions.testWithRecord', 'Use record for test')}
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogTitle>{tr('actions.testWithRecord', 'Use record for test')}</DialogTitle>
+        <DialogDescription>
+          {tr('descriptions.testWithRecord', 'Select a record as the test data for this step.')}
+        </DialogDescription>
+        <SearchableValueSelect
+          value={recordId}
+          options={options}
+          placeholder={
+            isFetching ? tr('states.loading', 'Loading...') : tr('placeholders.select', 'Select...')
+          }
+          emptyText={
+            isFetching
+              ? tr('states.loading', 'Loading...')
+              : tr('empty.noRecords', 'No records found')
+          }
+          onChange={(value) => setRecordId(typeof value === 'string' ? value : '')}
+        />
+        <DialogFooter>
+          <Button variant="outline" onClick={() => handleOpenChange(false)}>
+            {tr('actions.cancel', 'Cancel')}
+          </Button>
+          <Button disabled={!recordId || props.loading} onClick={handleTest}>
+            {props.loading && <Loader2 className="size-4 animate-spin" />}
+            {tr('actions.confirm', 'Confirm')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 
@@ -5804,6 +6485,17 @@ const HttpBodyFormDataEditor = (props: {
 
 const HTTP_BODY_TYPES_WITH_BODY = new Set(['formData', 'urlencoded', 'rawText', 'json']);
 
+const getHttpBodyInputValue = (bodyType: string, body: unknown) => {
+  if (typeof body === 'string') return body;
+  if (body === undefined || body === null) return '';
+  if (bodyType !== 'json') return '';
+  try {
+    return JSON.stringify(body, null, 2);
+  } catch {
+    return '';
+  }
+};
+
 const HttpRequestBodyEditor = (props: {
   bodyType: string;
   body: unknown;
@@ -5829,7 +6521,7 @@ const HttpRequestBodyEditor = (props: {
       )}
       {bodyType !== 'none' && bodyType !== 'formData' && (
         <VariableInput
-          value={typeof props.body === 'string' ? props.body : ''}
+          value={getHttpBodyInputValue(bodyType, props.body)}
           variables={props.variables}
           multiline
           fixedHeightClassName="h-[128px]"
@@ -7436,7 +8128,6 @@ const WorkflowRunStepDetail = (props: {
   baseId: string;
   fields: TableField[];
   node?: IWorkflowNode;
-  runStartedTime: string;
   step: WorkflowRunStep;
   tables: { id: string; name: string }[];
 }) => {
@@ -7485,14 +8176,6 @@ const WorkflowRunStepDetail = (props: {
                   : statusMeta.label}
               </span>
             </div>
-            <div className="space-x-1 text-xs text-muted-foreground">
-              <span>{tr('resultLabels.ranAt', 'Ran at')}</span>
-              <span>{formatRelativeTime(props.runStartedTime, tr)}</span>
-            </div>
-            <div className="space-x-1 text-xs text-muted-foreground">
-              <span>{tr('resultLabels.duration', 'Duration')}</span>
-              <span>{formatDuration(props.step.spent)}</span>
-            </div>
             {props.step.error && (
               <div className="rounded border border-destructive/30 bg-destructive/5 p-2 text-destructive">
                 {props.step.error}
@@ -7500,15 +8183,11 @@ const WorkflowRunStepDetail = (props: {
             )}
             <ResultSection
               title={tr('resultLabels.input', 'Input')}
-              rows={getRunStepInputRows(props.step, props.node, props.tables, props.fields, tr)}
+              rows={getRunStepInputRows(props.step, props.tables, props.fields, tr)}
             />
             <ResultSection
               title={tr('resultLabels.output', 'Output')}
               rows={getRunStepOutputRows(props.step, props.node, props.baseId, props.fields, tr)}
-            />
-            <ResultSection
-              title={tr('resultLabels.callDetails', 'Call details')}
-              rows={getRunStepCallRows(props.step, props.node, tr)}
             />
           </div>
         </div>
@@ -7596,6 +8275,10 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
   const [selectedNodeId, setSelectedNodeId] = useState<string>();
   const [isSaving, setIsSaving] = useState(false);
   const [nodeTestResults, setNodeTestResults] = useState<Record<string, NodeTestResult>>({});
+  const [nodeTestPending, setNodeTestPending] = useState<{
+    nodeId: string;
+    mode: 'preview' | 'test';
+  } | null>(null);
   const [viewport, setViewport] = useState({ x: 0, y: 0, scale: 1 });
   const [isPanning, setIsPanning] = useState(false);
   const [isRunHistoryOpen, setIsRunHistoryOpen] = useState(false);
@@ -7890,8 +8573,16 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
     [edges, graphNodeOrder, selectedNode?.id]
   );
   const variableOptions = useMemo(
-    () => buildVariableOptions(upstreamNodes, triggerFields, nodeTestResults, fieldsByTableId, tr),
-    [fieldsByTableId, nodeTestResults, tr, triggerFields, upstreamNodes]
+    () =>
+      buildVariableOptions(
+        upstreamNodes,
+        graphNodeIndexMap,
+        triggerFields,
+        nodeTestResults,
+        fieldsByTableId,
+        tr
+      ),
+    [fieldsByTableId, graphNodeIndexMap, nodeTestResults, tr, triggerFields, upstreamNodes]
   );
   const collaboratorById = useMemo(
     () => new Map(collaborators.map((collaborator) => [collaborator.id, collaborator])),
@@ -7922,7 +8613,8 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
   );
   const workflowValidation = useMemo(() => validateWorkflow(nodes, tr), [nodes, tr]);
   const hasPassedAllNodeTests =
-    Boolean(nodes.length) && nodes.every((node) => getValidNodeTestResult(node, nodeTestResults));
+    Boolean(nodes.length) &&
+    nodes.every((node) => getSuccessfulNodeTestResult(node, nodeTestResults));
   const getNodeStatus = useCallback(
     (node: IWorkflowNode) => getWorkflowNodeEditStatus(node, nodeTestResults, tr),
     [nodeTestResults, tr]
@@ -8169,32 +8861,82 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
       return { data, signature };
     },
     onSuccess: ({ data }) => {
-      if (data.status !== 'success') {
-        refetchRuns();
-        refetchRunSummary();
-        sonner.toast(data.error || tr('toast.testRunFailed', 'Test run failed'));
-        return;
-      }
-      const nextResults = Object.fromEntries(
-        nodes.map((node) => [
-          node.id,
-          {
+      const stepByNodeId = new Map((data.steps ?? []).map((step) => [step.nodeId, step]));
+      const nextResults = nodes.reduce<Record<string, NodeTestResult>>((result, node) => {
+        const step = stepByNodeId.get(node.id);
+        if (step) {
+          result[node.id] = {
             signature: getNodeSignature(node),
             testedAt: new Date().toISOString(),
             node: cloneWorkflowNode(node),
+            step,
+          };
+        }
+        return result;
+      }, {});
+      const fallbackNode =
+        data.status === 'failed' && data.error ? selectedNode ?? nodes[0] : undefined;
+      if (fallbackNode && !nextResults[fallbackNode.id]) {
+        nextResults[fallbackNode.id] = {
+          signature: getNodeSignature(fallbackNode),
+          testedAt: new Date().toISOString(),
+          node: cloneWorkflowNode(fallbackNode),
+          step: {
+            nodeId: fallbackNode.id,
+            type: fallbackNode.type,
+            category: fallbackNode.category,
+            status: 'failed',
+            input: fallbackNode.config ?? {},
+            error: data.error ?? tr('toast.testRunFailed', 'Test run failed'),
+            spent: 0,
           },
-        ])
-      );
-      const nextNodes = nodes.map((node) => ({
-        ...node,
-        testResult: nextResults[node.id],
+        };
+      }
+      const nextNodes = nodes.map((node) => {
+        const result = nextResults[node.id];
+        return {
+          ...node,
+          ...(result
+            ? {
+                testResult: result,
+              }
+            : {}),
+        };
+      });
+      setNodeTestResults((current) => ({
+        ...current,
+        ...nextResults,
       }));
-      setNodeTestResults(nextResults);
       setNodes(nextNodes);
       void saveDraft({ silent: true, nodes: nextNodes });
       refetchRuns();
       refetchRunSummary();
-      sonner.toast(tr('toast.testRunCompleted', 'Test run completed'));
+    },
+    onError: (error) => {
+      const nodeAtTest = selectedNode ?? nodes[0];
+      if (!nodeAtTest) return;
+      const result: NodeTestResult = {
+        signature: getNodeSignature(nodeAtTest),
+        testedAt: new Date().toISOString(),
+        node: cloneWorkflowNode(nodeAtTest),
+        step: {
+          nodeId: nodeAtTest.id,
+          type: nodeAtTest.type,
+          category: nodeAtTest.category,
+          status: 'failed',
+          input: nodeAtTest.config ?? {},
+          error: getErrorMessage(error, tr('toast.testRunFailed', 'Test run failed')),
+          spent: 0,
+        },
+      };
+      const nextNodes = nodes.map((node) =>
+        node.id === nodeAtTest.id ? { ...node, testResult: result } : node
+      );
+      setNodeTestResults((current) => ({ ...current, [nodeAtTest.id]: result }));
+      setNodes(nextNodes);
+      void saveDraft({ silent: true, nodes: nextNodes });
+      refetchRuns();
+      refetchRunSummary();
     },
   });
 
@@ -8276,36 +9018,92 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
 
   const handleTest = useCallback(() => {
     if (!workflowValidation.canRun) {
-      sonner.toast(workflowValidation.message);
       return;
     }
     testMutation.mutate();
   }, [testMutation, workflowValidation]);
 
-  const handleTestSelectedNode = useCallback(() => {
-    if (!selectedNode) return;
-    if (!isWorkflowNodeComplete(selectedNode)) {
-      sonner.toast(
-        tr(
-          'validation.completeCurrentNode',
-          'Complete required configuration for the current node first'
-        )
-      );
-      return;
-    }
-    const result = {
-      signature: getNodeSignature(selectedNode),
-      testedAt: new Date().toISOString(),
-      node: cloneWorkflowNode(selectedNode),
-    };
-    const nextNodes = nodes.map((node) =>
-      node.id === selectedNode.id ? { ...node, testResult: result } : node
-    );
-    setNodeTestResults((current) => ({ ...current, [selectedNode.id]: result }));
-    setNodes(nextNodes);
-    void saveDraft({ silent: true, nodes: nextNodes });
-    sonner.toast(tr('toast.testStepCompleted', 'Test step completed'));
-  }, [nodes, saveDraft, selectedNode, tr]);
+  const handleTestSelectedNode = useCallback(
+    async (options?: { recordId?: string; preview?: boolean }) => {
+      if (!selectedNode) return;
+      if (!isWorkflowNodeComplete(selectedNode)) {
+        return;
+      }
+      const nodeAtTest = selectedNode;
+      if (nodeTestPending?.nodeId === nodeAtTest.id) return;
+      const pendingMode = options?.preview ? 'preview' : 'test';
+      setNodeTestPending({ nodeId: nodeAtTest.id, mode: pendingMode });
+      const applyTestStep = (step: WorkflowRunStep) => {
+        const result = {
+          signature: getNodeSignature(nodeAtTest),
+          testedAt: new Date().toISOString(),
+          node: cloneWorkflowNode(nodeAtTest),
+          step,
+        };
+        const nextNodes = nodes.map((node) =>
+          node.id === nodeAtTest.id ? { ...node, testResult: result } : node
+        );
+        setNodeTestResults((current) => ({ ...current, [nodeAtTest.id]: result }));
+        setNodes(nextNodes);
+        void saveDraft({ silent: true, nodes: nextNodes });
+      };
+      try {
+        await saveDraft({ silent: true });
+        const run = await testWorkflowNode(
+          baseId,
+          workflowId,
+          nodeAtTest.id,
+          omitUndefined({
+            recordId: options?.recordId,
+            preview: options?.preview,
+          })
+        ).then((res) => res.data);
+        const step = run.steps?.find((step) => step.nodeId === nodeAtTest.id);
+        const failedStep = run.steps?.find((item) => item.status === 'failed');
+        applyTestStep(
+          step ??
+            failedStep ?? {
+              nodeId: nodeAtTest.id,
+              type: nodeAtTest.type,
+              category: nodeAtTest.category,
+              status: 'failed',
+              input: nodeAtTest.config ?? {},
+              error: run.error || tr('toast.testRunFailed', 'Test run failed'),
+              spent: 0,
+            }
+        );
+        refetchRuns();
+        refetchRunSummary();
+      } catch (error) {
+        applyTestStep({
+          nodeId: nodeAtTest.id,
+          type: nodeAtTest.type,
+          category: nodeAtTest.category,
+          status: 'failed',
+          input: nodeAtTest.config ?? {},
+          error: getErrorMessage(error, tr('toast.testRunFailed', 'Test run failed')),
+          spent: 0,
+        });
+        refetchRuns();
+        refetchRunSummary();
+      } finally {
+        setNodeTestPending((current) =>
+          current?.nodeId === nodeAtTest.id && current.mode === pendingMode ? null : current
+        );
+      }
+    },
+    [
+      baseId,
+      nodeTestPending,
+      nodes,
+      refetchRunSummary,
+      refetchRuns,
+      saveDraft,
+      selectedNode,
+      tr,
+      workflowId,
+    ]
+  );
 
   const copyNodeId = useCallback(
     async (nodeId: string) => {
@@ -8607,6 +9405,9 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
     const selectedNodeResultState = getNodeTestResultState(selectedNode, nodeTestResults);
     const selectedNodeResultIsCurrent = selectedNodeResultState === 'current';
     const resultNode = selectedNodeResult?.node ?? selectedNode;
+    const selectedNodeStepStatus = selectedNodeResult?.step?.status ?? 'success';
+    const selectedNodeStatusMeta = getRunStatusMeta(selectedNodeStepStatus, tr);
+    const SelectedNodeStatusIcon = selectedNodeStatusMeta.Icon;
     const isTableNode = [
       'buttonClick',
       'recordCreated',
@@ -8629,6 +9430,35 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
         : actionNodes;
     const aiAttachments = getStringList(config.attachments);
     const aiTemperature = getAITemperature(config.temperature);
+    const tableTriggerTypes = [
+      'buttonClick',
+      'formSubmitted',
+      'recordCreated',
+      'recordUpdated',
+      'recordMatchesConditions',
+    ];
+    const testRecordTableId =
+      selectedNode.type === 'condition'
+        ? triggerTableId
+        : tableTriggerTypes.includes(selectedNode.type)
+          ? selectedConfigTableId
+          : undefined;
+    const shouldTestWithRecord = Boolean(testRecordTableId);
+    const shouldShowPreviewButton = selectedNode.type === 'sendEmail';
+    const shouldRunWithConfigButton = ['createRecord', 'updateRecord', 'sendEmail'].includes(
+      selectedNode.type
+    );
+    const primaryTestButtonLabel = shouldTestWithRecord
+      ? tr('actions.testWithRecord', 'Use record for test')
+      : shouldRunWithConfigButton
+        ? tr('actions.runWithConfig', 'Run with config')
+        : tr('actions.runTest', 'Run test');
+    const selectedNodePendingMode =
+      nodeTestPending?.nodeId === selectedNode.id ? nodeTestPending.mode : undefined;
+    const isSelectedNodeTestPending = Boolean(selectedNodePendingMode);
+    const isPreviewPending = selectedNodePendingMode === 'preview';
+    const isRunConfigPending = selectedNodePendingMode === 'test';
+    const isSelectedNodeComplete = isWorkflowNodeComplete(selectedNode);
     const aiOutputType = config.outputType === 'json' ? 'json' : 'string';
 
     return (
@@ -9232,39 +10062,48 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
           <div className="text-xs leading-relaxed text-muted-foreground">
             {tr(
               'descriptions.testStep',
-              'Test this step to confirm its configuration is correct. After a successful test, this step can enable automation.'
+              'Test this step to confirm its configuration is correct. This test data can be used in later steps.'
             )}
           </div>
-          {selectedNode.type === 'sendEmail' && (
-            <FieldBlock label={tr('fields.unsubscribeList', 'Unsubscribe list')}>
-              <Input
-                placeholder={tr('placeholders.inputOrSelectVariable', 'Input / select variable')}
-                disabled
-              />
-            </FieldBlock>
-          )}
           <div className="flex justify-end gap-2">
-            {selectedNode.type === 'sendEmail' && (
+            {shouldShowPreviewButton && (
               <Button
                 size="sm"
                 variant="outline"
-                disabled={!isWorkflowNodeComplete(selectedNode)}
-                onClick={handleTestSelectedNode}
+                disabled={!isSelectedNodeComplete || isSelectedNodeTestPending}
+                onClick={() => handleTestSelectedNode({ preview: true })}
               >
+                {isPreviewPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Eye className="size-4" />
+                )}
                 {tr('actions.generatePreview', 'Generate preview')}
               </Button>
             )}
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!isWorkflowNodeComplete(selectedNode)}
-              onClick={handleTestSelectedNode}
-            >
-              <Play className="size-4" />
-              {selectedNode.type === 'sendEmail'
-                ? tr('actions.runWithConfig', 'Run with config')
-                : tr('actions.runTest', 'Run test')}
-            </Button>
+            {shouldTestWithRecord && testRecordTableId ? (
+              <TestRecordDialog
+                tableId={testRecordTableId}
+                fields={testRecordTableId === triggerTableId ? triggerFields : configFields}
+                disabled={!isSelectedNodeComplete || isSelectedNodeTestPending}
+                loading={isRunConfigPending}
+                onTest={(recordId) => handleTestSelectedNode({ recordId })}
+              />
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!isSelectedNodeComplete || isSelectedNodeTestPending}
+                onClick={() => handleTestSelectedNode()}
+              >
+                {isRunConfigPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Play className="size-4" />
+                )}
+                {primaryTestButtonLabel}
+              </Button>
+            )}
           </div>
         </PanelSection>
 
@@ -9279,21 +10118,43 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
                   )}
                 </div>
               )}
-              <div className="flex flex-row items-start gap-2 rounded-md border bg-muted px-4 py-3 text-sm text-emerald-600">
-                <CheckCircle2 className="mt-1 size-4 shrink-0" />
-                {tr('runStatus.runSuccessful', 'Run successful')}
+              <div
+                className={cn(
+                  'flex flex-row items-start gap-2 rounded-md border bg-muted px-4 py-3 text-sm',
+                  selectedNodeStatusMeta.className
+                )}
+              >
+                <SelectedNodeStatusIcon className="mt-1 size-4 shrink-0" />
+                {selectedNodeStepStatus === 'success'
+                  ? tr('runStatus.runSuccessful', 'Run successful')
+                  : selectedNodeStatusMeta.label}
               </div>
-              <div className="space-x-1 text-xs text-muted-foreground">
-                <span>{tr('resultLabels.ranAt', 'Ran at')}</span>
-                <span>{formatRelativeTime(selectedNodeResult.testedAt, tr)}</span>
-              </div>
+              {selectedNodeResult.step?.error && (
+                <div className="rounded border border-destructive/30 bg-destructive/5 p-2 text-destructive">
+                  {selectedNodeResult.step.error}
+                </div>
+              )}
               <ResultSection
                 title={tr('resultLabels.input', 'Input')}
-                rows={buildTestInputRows(resultNode, knownTables, configFields, tr)}
+                rows={
+                  selectedNodeResult.step
+                    ? getRunStepInputRows(selectedNodeResult.step, knownTables, configFields, tr)
+                    : buildTestInputRows(resultNode, knownTables, configFields, tr)
+                }
               />
               <ResultSection
                 title={tr('resultLabels.output', 'Output')}
-                rows={buildTestOutputRows(resultNode, knownTables, configFields, baseId, tr)}
+                rows={
+                  selectedNodeResult.step
+                    ? getRunStepOutputRows(
+                        selectedNodeResult.step,
+                        resultNode,
+                        baseId,
+                        configFields,
+                        tr
+                      )
+                    : buildTestOutputRows(resultNode, knownTables, configFields, baseId, tr)
+                }
               />
             </div>
           </PanelSection>
@@ -9716,7 +10577,11 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
           disabled={!canRunTest || isSaving || testMutation.isPending}
           onClick={handleTest}
         >
-          <Play className="size-4" />
+          {testMutation.isPending ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Play className="size-4" />
+          )}
           {tr('actions.runTest', 'Run test')}
         </Button>
         <Button
@@ -9937,7 +10802,6 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
                                     baseId={baseId}
                                     fields={workflowFields}
                                     node={stepNode}
-                                    runStartedTime={run.startedTime}
                                     step={step}
                                     tables={knownTables}
                                   />

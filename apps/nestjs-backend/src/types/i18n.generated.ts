@@ -1348,6 +1348,7 @@ export type I18nTranslations = {
                     "testSucceeded": string;
                     "testExpired": string;
                     "untested": string;
+                    "testFailed": string;
                 };
                 "operators": {
                     "notEmpty": string;
@@ -1462,6 +1463,17 @@ export type I18nTranslations = {
                     "callDetails": string;
                     "ranAt": string;
                     "authorization": string;
+                    "recordList": string;
+                    "error": string;
+                    "requestContentType": string;
+                    "formDataBody": string;
+                    "urlencodedBody": string;
+                    "jsonBody": string;
+                    "rawTextBody": string;
+                    "responseBody": string;
+                    "responseHeaders": string;
+                    "responseStatusCode": string;
+                    "finalRequestUrl": string;
                 };
                 "validation": {
                     "needTrigger": string;
@@ -1543,6 +1555,7 @@ export type I18nTranslations = {
                     "enableAuthorization": string;
                     "regenerate": string;
                     "regenerateToken": string;
+                    "testWithRecord": string;
                 };
                 "fields": {
                     "database": string;
@@ -1586,6 +1599,7 @@ export type I18nTranslations = {
                     "webhookUrlPublic": string;
                     "webhookAuthorizationEnabled": string;
                     "regenerateToken": string;
+                    "testWithRecord": string;
                 };
                 "placeholders": {
                     "select": string;
@@ -1637,6 +1651,7 @@ export type I18nTranslations = {
                     "senderName": string;
                     "senderNamePlaceholder": string;
                     "testEmailPlaceholder": string;
+                    "auth": string;
                 };
                 "conditions": {
                     "matchAll": string;
@@ -1739,6 +1754,13 @@ export type I18nTranslations = {
                     "mixedModeDescription": string;
                     "attachmentMode": string;
                     "attachmentModeDescription": string;
+                };
+                "httpBodyTypes": {
+                    "none": string;
+                    "formData": string;
+                    "urlencoded": string;
+                    "rawText": string;
+                    "json": string;
                 };
             };
         };

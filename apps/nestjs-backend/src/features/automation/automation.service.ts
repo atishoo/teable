@@ -18,6 +18,8 @@ import {
   type ICreateWorkflowGraphNodeRo,
   type IUpdateWorkflowGraphNodeRo,
   type IUpdateWorkflowRo,
+  type IMailTransportConfig,
+  type IWorkflowManualTestRo,
   type IWorkflowEdge,
   type IWorkflowNode,
   type IWorkflowRo,
@@ -55,6 +57,7 @@ interface IWorkflowSnapshot {
 
 interface IRuntimeContext {
   baseId: string;
+  preview?: boolean;
   trigger: Record<string, unknown>;
   nodes: Record<string, unknown>;
   action: Record<string, unknown>;
@@ -91,6 +94,7 @@ interface IReceiveWebhookPayload {
 
 const webhookTriggerNotFound = 'Webhook trigger not found';
 const webhookTriggerNotFoundI18nKey = 'httpErrors.automation.webhookTriggerNotFound';
+const httpContentTypeHeader = 'content-type';
 
 @Injectable()
 export class AutomationService {
@@ -310,18 +314,178 @@ export class AutomationService {
     return { nodeId };
   }
 
-  async runManualTest(baseId: string, workflowId: string, nodeId?: string) {
+  async runManualTest(
+    baseId: string,
+    workflowId: string,
+    nodeId?: string,
+    ro?: IWorkflowManualTestRo
+  ) {
     const workflow = await this.findWorkflow(baseId, workflowId);
     const snapshot = this.getDraftSnapshot(workflow);
-    const triggerNode = nodeId
-      ? snapshot.nodes.find((node) => node.id === nodeId)
-      : snapshot.nodes.find((node) => node.category === 'trigger');
-    const isWebhookTest = triggerNode?.category === 'trigger' && triggerNode.type === 'webhook';
+    const selectedNode = nodeId ? snapshot.nodes.find((node) => node.id === nodeId) : undefined;
+    if (nodeId && !selectedNode) {
+      throw new CustomHttpException('Workflow node not found', HttpErrorCode.NOT_FOUND);
+    }
+    const triggerNode =
+      selectedNode?.category === 'trigger'
+        ? selectedNode
+        : snapshot.nodes.find((node) => node.category === 'trigger');
+    const trigger = await this.getManualTestTrigger(baseId, workflowId, triggerNode, ro);
     return this.runSnapshot(workflow, snapshot, {
-      triggerType: isWebhookTest ? 'webhook' : 'manual',
-      trigger: isWebhookTest ? { body: {} } : { baseId, workflowId, manual: true },
-      startNodeId: nodeId,
+      triggerType: 'manual',
+      trigger,
+      startNodeId: selectedNode?.id ?? triggerNode?.id,
+      stopNodeId: selectedNode?.id,
+      preview: ro?.preview,
+      runtimeSeed: selectedNode
+        ? this.getManualNodeTestRuntimeSeed(snapshot, selectedNode.id)
+        : undefined,
     });
+  }
+
+  private async getManualTestTrigger(
+    baseId: string,
+    workflowId: string,
+    triggerNode?: IWorkflowNode,
+    ro?: IWorkflowManualTestRo
+  ) {
+    const testedTrigger = this.getNodeTestTrigger(triggerNode);
+    if (testedTrigger && !ro?.recordId) return testedTrigger;
+
+    if (triggerNode?.category === 'trigger' && triggerNode.type === 'webhook') return { body: {} };
+
+    const trigger: Record<string, unknown> = { baseId, workflowId, manual: true };
+    const tableId = this.optionalString(triggerNode?.config?.tableId);
+    if (!tableId || !ro?.recordId) return trigger;
+
+    const record = await this.recordService.getRecord(
+      tableId,
+      ro.recordId,
+      { fieldKeyType: FieldKeyType.Id },
+      true,
+      true
+    );
+    return this.withTriggerMetadata(
+      {
+        ...trigger,
+        tableId,
+        record,
+        user: this.triggerUser(),
+      },
+      baseId
+    );
+  }
+
+  private getNodeTestTrigger(triggerNode?: IWorkflowNode) {
+    const step = this.getValidNodeTestStep(triggerNode);
+    if (!step || !isPlainObject(step.output)) return undefined;
+    return step.output as Record<string, unknown>;
+  }
+
+  private getManualNodeTestRuntimeSeed(snapshot: IWorkflowSnapshot, nodeId: string) {
+    const upstreamNodeIds = this.getUpstreamNodeIds(snapshot, nodeId);
+    const runtimeSeed: Pick<IRuntimeContext, 'nodes' | 'action' | 'logic'> = {
+      nodes: {},
+      action: {},
+      logic: {},
+    };
+
+    for (const node of snapshot.nodes) {
+      if (!upstreamNodeIds.has(node.id)) continue;
+      const output = this.getValidNodeTestStep(node)?.output;
+      if (output === undefined) continue;
+      if (node.category === 'action') {
+        runtimeSeed.nodes[node.id] = output;
+        runtimeSeed.action[node.id] = output;
+      }
+      if (node.category === 'logic') {
+        runtimeSeed.nodes[node.id] = output;
+        runtimeSeed.logic[node.id] = output;
+      }
+    }
+
+    return runtimeSeed;
+  }
+
+  private getUpstreamNodeIds(snapshot: IWorkflowSnapshot, nodeId: string) {
+    const upstreamNodeIds = new Set<string>();
+    const nodeById = new Map(snapshot.nodes.map((node) => [node.id, node]));
+    const expandedConditionMergeIds = new Set<string>();
+    const getConditionBranchNodeIds = (conditionNodeId: string, stopNodeId: string) => {
+      const branchNodeIds = new Set<string>();
+      const stack = snapshot.edges
+        .filter((edge) => edge.source === conditionNodeId && edge.sourceHandle)
+        .map((edge) => edge.target);
+
+      while (stack.length) {
+        const branchNodeId = stack.pop()!;
+        if (branchNodeId === stopNodeId || branchNodeIds.has(branchNodeId)) continue;
+        branchNodeIds.add(branchNodeId);
+        snapshot.edges
+          .filter((edge) => edge.source === branchNodeId)
+          .forEach((edge) => {
+            stack.push(edge.target);
+          });
+      }
+
+      return branchNodeIds;
+    };
+    const visit = (target: string) => {
+      snapshot.edges
+        .filter((edge) => edge.target === target)
+        .forEach((edge) => {
+          const isVisited = upstreamNodeIds.has(edge.source);
+          if (!isVisited) upstreamNodeIds.add(edge.source);
+          const sourceNode = nodeById.get(edge.source);
+          const conditionMergeId = `${edge.source}:${edge.target}`;
+          if (
+            sourceNode?.type === 'condition' &&
+            !edge.sourceHandle &&
+            !expandedConditionMergeIds.has(conditionMergeId)
+          ) {
+            expandedConditionMergeIds.add(conditionMergeId);
+            getConditionBranchNodeIds(edge.source, edge.target).forEach((branchNodeId) => {
+              if (upstreamNodeIds.has(branchNodeId)) return;
+              upstreamNodeIds.add(branchNodeId);
+              visit(branchNodeId);
+            });
+          }
+          if (isVisited) return;
+          visit(edge.source);
+        });
+    };
+    visit(nodeId);
+    return upstreamNodeIds;
+  }
+
+  private getValidNodeTestStep(node?: IWorkflowNode) {
+    if (!node) return;
+    const testResult = isPlainObject(node.testResult)
+      ? (node.testResult as Record<string, unknown>)
+      : undefined;
+    if (testResult?.signature !== this.getNodeSignature(node)) return;
+    return isPlainObject(testResult?.step) ? (testResult.step as Partial<IRuntimeStep>) : undefined;
+  }
+
+  private getNodeSignature(node: IWorkflowNode) {
+    return JSON.stringify(
+      this.stableJsonValue({
+        type: node.type,
+        category: node.category,
+        config: node.config ?? {},
+      })
+    );
+  }
+
+  private stableJsonValue(value: unknown): unknown {
+    if (Array.isArray(value)) return value.map((item) => this.stableJsonValue(item));
+    if (!isPlainObject(value)) return value;
+    const record = value as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.keys(record)
+        .sort()
+        .map((key) => [key, this.stableJsonValue(record[key])])
+    );
   }
 
   async receiveWebhook(baseId: string, workflowId: string, payload: IReceiveWebhookPayload) {
@@ -428,7 +592,9 @@ export class AutomationService {
           )
         )::double precision AS "averageDuration"
       FROM "workflow_run"
-      WHERE "base_id" = ${baseId} AND "workflow_id" = ${workflowId}
+      WHERE "base_id" = ${baseId}
+        AND "workflow_id" = ${workflowId}
+        AND COALESCE("trigger_type", '') <> 'manual'
     `);
     const averageDuration = this.numberValue(summary?.averageDuration);
     return {
@@ -540,7 +706,14 @@ export class AutomationService {
   private async runSnapshot(
     workflow: Awaited<ReturnType<typeof this.findWorkflow>>,
     snapshot: IWorkflowSnapshot,
-    params: { triggerType: string; trigger: Record<string, unknown>; startNodeId?: string }
+    params: {
+      triggerType: string;
+      trigger: Record<string, unknown>;
+      startNodeId?: string;
+      stopNodeId?: string;
+      preview?: boolean;
+      runtimeSeed?: Pick<IRuntimeContext, 'nodes' | 'action' | 'logic'>;
+    }
   ) {
     const runId = `wfr${nanoid(16)}`;
     const startedTime = new Date();
@@ -560,10 +733,11 @@ export class AutomationService {
     const trigger = this.withTriggerMetadata(params.trigger, workflow.baseId);
     const runtime: IRuntimeContext = {
       baseId: workflow.baseId,
+      preview: params.preview,
       trigger,
-      nodes: {},
-      action: {},
-      logic: {},
+      nodes: { ...(params.runtimeSeed?.nodes ?? {}) },
+      action: { ...(params.runtimeSeed?.action ?? {}) },
+      logic: { ...(params.runtimeSeed?.logic ?? {}) },
     };
     const steps: IRuntimeStep[] = [];
 
@@ -589,11 +763,20 @@ export class AutomationService {
           if (!startNode) {
             throw new Error('Workflow trigger is required');
           }
-          await this.runFromNode(startNode, snapshot, runtime, steps);
+          const reachedStopNode = await this.runFromNode(
+            startNode,
+            snapshot,
+            runtime,
+            steps,
+            params.stopNodeId
+          );
+          if (params.stopNodeId && !reachedStopNode) {
+            throw new Error('Workflow test step could not be reached');
+          }
         }
       );
 
-      const output = { trigger: runtime.trigger, action: runtime.action, logic: runtime.logic };
+      const output = this.getRunOutput(runtime, steps);
       const run = await this.prismaService.workflowRun.update({
         where: { id: runId },
         data: {
@@ -631,41 +814,68 @@ export class AutomationService {
     startNode: IWorkflowNode,
     snapshot: IWorkflowSnapshot,
     runtime: IRuntimeContext,
-    steps: IRuntimeStep[]
+    steps: IRuntimeStep[],
+    stopNodeId?: string
   ) {
     const visited = new Map<string, number>();
-    const runNode = async (node: IWorkflowNode): Promise<void> => {
+    type IRunNodeResult = { runtime: IRuntimeContext; stopped: boolean };
+    const runEdges = async (
+      edges: IWorkflowEdge[],
+      runNode: (
+        node: IWorkflowNode,
+        edgeRuntime: IRuntimeContext
+      ) => Promise<IRunNodeResult | null>,
+      edgeRuntime: IRuntimeContext
+    ): Promise<IRunNodeResult | null> => {
+      let lastResult: IRunNodeResult | null = null;
+      for (const edge of edges) {
+        const next = snapshot.nodes.find((item) => item.id === edge.target);
+        if (!next) continue;
+        const result = await runNode(next, this.cloneRuntimeContext(edgeRuntime));
+        if (result?.stopped) return result;
+        lastResult = result;
+      }
+      return lastResult;
+    };
+    const runNode = async (
+      node: IWorkflowNode,
+      currentRuntime: IRuntimeContext
+    ): Promise<IRunNodeResult | null> => {
       const count = visited.get(node.id) ?? 0;
       if (count > 8) {
         throw new Error(`Workflow loop detected at node ${node.id}`);
       }
       visited.set(node.id, count + 1);
 
-      const output = await this.executeNode(node, runtime, steps);
+      const output = await this.executeNode(node, currentRuntime, steps);
+      if (node.id === stopNodeId) return { runtime: currentRuntime, stopped: true };
       if (node.type === 'condition') {
         const branchEdges = this.getConditionBranchEdges(node, snapshot.edges, output);
-        for (const edge of branchEdges) {
-          const next = snapshot.nodes.find((item) => item.id === edge.target);
-          if (next) await runNode(next);
-        }
+        const branchResult = await runEdges(branchEdges, runNode, currentRuntime);
+        if (branchResult?.stopped) return branchResult;
+        const branchRuntime = branchResult?.runtime ?? currentRuntime;
         const mergeEdges = snapshot.edges.filter(
           (edge) => edge.source === node.id && !edge.sourceHandle
         );
-        for (const edge of mergeEdges) {
-          const next = snapshot.nodes.find((item) => item.id === edge.target);
-          if (next) await runNode(next);
-        }
-        return;
+        return (
+          (await runEdges(mergeEdges, runNode, branchRuntime)) ?? {
+            runtime: branchRuntime,
+            stopped: false,
+          }
+        );
       }
 
-      const nextEdges = snapshot.edges.filter((edge) => edge.source === node.id);
-      for (const edge of nextEdges) {
-        const next = snapshot.nodes.find((item) => item.id === edge.target);
-        if (next) await runNode(next);
-      }
+      return (
+        (await runEdges(
+          snapshot.edges.filter((edge) => edge.source === node.id),
+          runNode,
+          currentRuntime
+        )) ?? { runtime: currentRuntime, stopped: false }
+      );
     };
 
-    await runNode(startNode);
+    const result = await runNode(startNode, runtime);
+    return stopNodeId ? Boolean(result?.stopped) : Boolean(result);
   }
 
   private async executeNode(node: IWorkflowNode, runtime: IRuntimeContext, steps: IRuntimeStep[]) {
@@ -716,15 +926,18 @@ export class AutomationService {
       case 'createRecord': {
         const tableId = this.requiredString(config.tableId, 'tableId');
         const fields = this.objectValue(config.fields, 'fields');
+        const outputBaseId = await this.getBaseIdByTableId(tableId);
         const res = await this.recordOpenApiService.createRecords(tableId, {
           fieldKeyType: FieldKeyType.Id,
           typecast: true,
           records: [{ fields }],
         });
-        return res.records;
+        const records = this.withRecordOutputMetadata(res.records, outputBaseId, tableId);
+        return config.loopSource === undefined ? records[0] : { records };
       }
       case 'getRecords': {
         const tableId = this.requiredString(config.tableId, 'tableId');
+        const outputBaseId = await this.getBaseIdByTableId(tableId);
         const res = await this.recordService.getRecords(tableId, {
           fieldKeyType: FieldKeyType.Id,
           viewId: this.optionalString(config.viewId),
@@ -732,62 +945,130 @@ export class AutomationService {
           take: Number(config.take || 100),
           filter: config.filter as never,
         });
-        return res.records;
+        return { records: this.withRecordOutputMetadata(res.records, outputBaseId, tableId) };
       }
       case 'updateRecord': {
-        const tableId = this.requiredString(config.tableId, 'tableId');
-        const recordId =
-          this.optionalString(config.recordId) ??
-          this.optionalString(get(runtime, 'trigger.record.id'));
-        if (!recordId) throw new Error('recordId is required');
-        const fields = this.objectValue(config.fields, 'fields');
-        return this.recordOpenApiService.updateRecord(tableId, recordId, {
-          fieldKeyType: FieldKeyType.Id,
-          typecast: true,
-          record: { fields },
-        });
+        return this.executeUpdateRecordAction(config, runtime);
       }
       case 'sendEmail': {
-        const to = config.to;
-        const subject = this.requiredString(config.subject, 'subject');
-        const body = this.requiredString(config.body, 'body');
-        await this.mailSenderService.sendMail({
-          to: Array.isArray(to) ? to.join(',') : this.requiredString(to, 'to'),
-          subject,
-          html: body,
-          text: body.replace(/<[^>]+>/g, ' '),
-          senderName: this.optionalString(config.senderName),
-          cc: this.optionalString(config.cc),
-          bcc: this.optionalString(config.bcc),
-          replyTo: this.optionalString(config.replyTo),
-        });
-        return { sent: true };
+        return this.executeSendEmailAction(config, runtime);
       }
       case 'aiGenerate': {
         return this.executeAIGenerateAction(config, runtime);
       }
       case 'httpRequest': {
-        const url = this.requiredString(config.url, 'url');
-        const method = this.optionalString(config.method)?.toUpperCase() ?? 'GET';
-        const parsedUrl = new URL(url);
-        if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-          throw new Error('Only HTTP and HTTPS requests are supported');
-        }
-        const response = await fetch(url, {
-          method,
-          headers: this.objectValue(config.headers ?? {}, 'headers') as Record<string, string>,
-          body: method === 'GET' ? undefined : this.bodyValue(config.body),
-        });
-        const text = await response.text();
-        return {
-          status: response.status,
-          ok: response.ok,
-          body: text.slice(0, 10000),
-        };
+        return this.executeHttpRequestAction(config);
       }
       default:
         throw new Error(`Unsupported workflow action: ${node.type}`);
     }
+  }
+
+  private async executeHttpRequestAction(config: Record<string, unknown>) {
+    const url = this.requiredString(config.url, 'url');
+    const method = this.optionalString(config.method)?.toUpperCase() ?? 'GET';
+    const parsedUrl = new URL(url);
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      throw new Error('Only HTTP and HTTPS requests are supported');
+    }
+
+    const headers = this.getHttpRequestHeaders(config.headers);
+    const body = this.getHttpRequestBody(
+      method,
+      this.getHttpBodyType(config),
+      config.body,
+      headers
+    );
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers,
+        body,
+      });
+      const text = await response.text();
+      const responseHeaders = Object.fromEntries(response.headers.entries());
+      return {
+        status: response.status,
+        url: response.url || url,
+        headers: responseHeaders,
+        body: this.parseHttpResponseBody(text, response.headers.get(httpContentTypeHeader)),
+      };
+    } catch (error) {
+      return {
+        status: null,
+        url,
+        headers: {},
+        body: null,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  private async executeSendEmailAction(config: Record<string, unknown>, runtime: IRuntimeContext) {
+    const to = config.to;
+    const body = this.requiredString(config.body, 'body');
+    const toValue = Array.isArray(to) ? to.join(',') : this.requiredString(to, 'to');
+    const totalCount = this.getMailRecipientCount(toValue);
+    const output = {
+      totalCount,
+      sentCount: 0,
+      error: '',
+    };
+    const subject = this.requiredString(config.subject, 'subject');
+    const text = body.replace(/<[^>]+>/g, ' ');
+    if (runtime.preview) return output;
+    try {
+      await this.mailSenderService.sendMail(
+        {
+          to: toValue,
+          subject,
+          html: body,
+          text,
+          senderName: this.optionalString(config.senderName),
+          cc: this.optionalString(config.cc),
+          bcc: this.optionalString(config.bcc),
+          replyTo: this.optionalString(config.replyTo),
+        },
+        { shouldThrow: true, transportConfig: this.getMailTransportConfig(config) }
+      );
+    } catch (error) {
+      return { ...output, error: error instanceof Error ? error.message : String(error) };
+    }
+    return { ...output, sentCount: totalCount };
+  }
+
+  private getMailTransportConfig(config: Record<string, unknown>) {
+    return isPlainObject(config.mailTransportConfig)
+      ? (config.mailTransportConfig as IMailTransportConfig)
+      : undefined;
+  }
+
+  private getMailRecipientCount(to: string) {
+    return to
+      .split(/[,;]/)
+      .map((item) => item.trim())
+      .filter(Boolean).length;
+  }
+
+  private async executeUpdateRecordAction(
+    config: Record<string, unknown>,
+    runtime: IRuntimeContext
+  ) {
+    const tableId = this.requiredString(config.tableId, 'tableId');
+    const outputBaseId = await this.getBaseIdByTableId(tableId);
+    const recordId =
+      this.optionalString(config.recordId) ??
+      this.optionalString(get(runtime, 'trigger.record.id'));
+    if (!recordId) throw new Error('recordId is required');
+    const fields = this.objectValue(config.fields, 'fields');
+    const record = await this.recordOpenApiService.updateRecord(tableId, recordId, {
+      fieldKeyType: FieldKeyType.Id,
+      typecast: true,
+      record: { fields },
+    });
+    const outputRecord = this.withRecordOutputMetadata(record, outputBaseId, tableId);
+    return config.loopSource === undefined ? outputRecord : { records: [outputRecord] };
   }
 
   private async executeAIGenerateAction(config: Record<string, unknown>, runtime: IRuntimeContext) {
@@ -806,16 +1087,79 @@ export class AutomationService {
     const promptWithAttachments = attachments.length
       ? `${prompt}\n\nAttachments:\n${JSON.stringify(attachments)}`
       : prompt;
-    const text = await this.aiService.generateText(runtime.baseId, {
+    const result = await this.aiService.generateTextResult(runtime.baseId, {
       prompt: promptWithAttachments,
       modelKey,
       task: Task.Coding,
       temperature: this.optionalAITemperature(config.temperature),
     });
-    return {
-      result: outputType === 'json' ? this.parseAIJsonOutput(text) : text,
-      outputType,
+    return this.getAIGenerateOutput(result, outputType);
+  }
+
+  private getAIGenerateOutput(
+    result: Awaited<ReturnType<AiService['generateTextResult']>>,
+    outputType: string
+  ) {
+    const output: Record<string, unknown> = {
+      message: ['json', 'object'].includes(outputType)
+        ? this.parseAIJsonOutput(result.text)
+        : result.text,
     };
+    this.addAIGenerateOutputValue(output, 'reasoning', result.reasoning);
+    this.addAIGenerateOutputValue(output, 'reasoningText', result.reasoningText);
+    this.addAIGenerateOutputValue(output, 'finishReason', result.finishReason);
+    this.addAIGenerateOutputValue(output, 'rawFinishReason', result.rawFinishReason);
+    this.addAIGenerateOutputValue(output, 'content', result.content);
+    this.addAIGenerateOutputValue(output, 'sources', result.sources);
+    this.addAIGenerateOutputValue(output, 'files', result.files);
+    this.addAIGenerateOutputValue(output, 'toolCalls', result.toolCalls);
+    this.addAIGenerateOutputValue(output, 'toolResults', result.toolResults);
+    this.addAIGenerateOutputValue(output, 'usage', result.usage);
+    this.addAIGenerateOutputValue(output, 'inputTokens', result.usage.inputTokens);
+    this.addAIGenerateOutputValue(output, 'outputTokens', result.usage.outputTokens);
+    this.addAIGenerateOutputValue(output, 'totalTokens', result.usage.totalTokens);
+    this.addAIGenerateOutputValue(
+      output,
+      'reasoningTokens',
+      result.usage.outputTokenDetails.reasoningTokens ?? result.usage.reasoningTokens
+    );
+    this.addAIGenerateOutputValue(output, 'totalUsage', result.totalUsage);
+    this.addAIGenerateOutputValue(output, 'warnings', result.warnings);
+    this.addAIGenerateOutputValue(output, 'request', {
+      ...result.request,
+      body:
+        result.request.body === undefined
+          ? null
+          : typeof result.request.body === 'string'
+            ? this.parseAIJsonOutput(result.request.body)
+            : result.request.body,
+    });
+    this.addAIGenerateOutputValue(output, 'response', {
+      id: result.response.id,
+      modelId: result.response.modelId,
+      timestamp: result.response.timestamp.toISOString(),
+      messages: result.response.messages,
+      body: result.response.body ?? null,
+    });
+    this.addAIGenerateOutputValue(output, 'providerMetadata', result.providerMetadata);
+    return output;
+  }
+
+  private addAIGenerateOutputValue(output: Record<string, unknown>, key: string, value: unknown) {
+    output[key] = this.normalizeAIGenerateOutputValue(value);
+  }
+
+  private normalizeAIGenerateOutputValue(value: unknown): unknown {
+    if (value === undefined) return null;
+    if (value === null) return null;
+    if (value instanceof Date) return value.toISOString();
+    if (Array.isArray(value)) return value.map((item) => this.normalizeAIGenerateOutputValue(item));
+    if (isPlainObject(value)) {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, item]) => [key, this.normalizeAIGenerateOutputValue(item)])
+      );
+    }
+    return value;
   }
 
   private getConditionBranchEdges(node: IWorkflowNode, edges: IWorkflowEdge[], output: unknown) {
@@ -825,9 +1169,44 @@ export class AutomationService {
   }
 
   private storeNodeOutput(node: IWorkflowNode, output: unknown, runtime: IRuntimeContext) {
+    if (node.category !== 'action') return;
     runtime.nodes[node.id] = output;
-    if (node.category === 'action') runtime.action[node.id] = output;
-    if (node.category === 'logic') runtime.logic[node.id] = output;
+    runtime.action[node.id] = output;
+  }
+
+  private cloneRuntimeContext(runtime: IRuntimeContext): IRuntimeContext {
+    return {
+      baseId: runtime.baseId,
+      preview: runtime.preview,
+      trigger: runtime.trigger,
+      nodes: { ...runtime.nodes },
+      action: { ...runtime.action },
+      logic: { ...runtime.logic },
+    };
+  }
+
+  private getRunOutput(runtime: IRuntimeContext, steps: IRuntimeStep[]) {
+    const action = steps.reduce<Record<string, unknown>>((result, step) => {
+      if (step.category === 'action' && step.status === 'success') {
+        result[step.nodeId] = step.output;
+      }
+      return result;
+    }, {});
+    return { trigger: runtime.trigger, nodes: action, action, logic: {} };
+  }
+
+  private withRecordOutputMetadata<T>(output: T, baseId: string, tableId: string): T {
+    if (Array.isArray(output)) {
+      return output.map((item) => this.withRecordOutputMetadata(item, baseId, tableId)) as T;
+    }
+    if (!isPlainObject(output)) return output;
+    const record = output as Record<string, unknown>;
+    const recordId = this.optionalString(record.id);
+    if (!recordId || record.url) return output;
+    return {
+      ...record,
+      url: `/base/${baseId}/table/${tableId}?recordId=${recordId}`,
+    } as T;
   }
 
   private withTriggerMetadata(trigger: Record<string, unknown>, baseId: string) {
@@ -1058,7 +1437,11 @@ export class AutomationService {
   }
 
   private getRunWhere(baseId: string, workflowId: string, query: IWorkflowRunListQuery) {
-    const where: Prisma.WorkflowRunWhereInput = { baseId, workflowId };
+    const where: Prisma.WorkflowRunWhereInput = {
+      baseId,
+      workflowId,
+      NOT: { triggerType: 'manual' },
+    };
     if (this.isWorkflowRunStatus(query.status)) {
       where.status = query.status;
     }
@@ -1528,5 +1911,93 @@ export class AutomationService {
   private bodyValue(value: unknown) {
     if (value === undefined || value === null) return undefined;
     return typeof value === 'string' ? value : JSON.stringify(value);
+  }
+
+  private getHttpRequestHeaders(value: unknown) {
+    const entries = this.getHttpKeyValueEntries(value);
+    return Object.fromEntries(entries);
+  }
+
+  private getHttpBodyType(config: Record<string, unknown>) {
+    const bodyType = this.optionalString(config.bodyType);
+    if (bodyType) return bodyType;
+    switch (this.optionalString(config.contentType)?.toLowerCase()) {
+      case 'multipart/form-data':
+        return 'formData';
+      case 'application/x-www-form-urlencoded':
+        return 'urlencoded';
+      case 'application/json':
+        return 'json';
+      case 'text/plain':
+        return 'rawText';
+      default:
+        return undefined;
+    }
+  }
+
+  private getHttpKeyValueEntries(value: unknown): [string, string][] {
+    if (Array.isArray(value)) {
+      return value
+        .filter(isPlainObject)
+        .map((item) => {
+          const record = item as Record<string, unknown>;
+          return [this.optionalString(record.key), record.value] as const;
+        })
+        .filter((item): item is readonly [string, unknown] => Boolean(item[0]))
+        .map(([key, item]): [string, string] => [key, item == null ? '' : String(item)]);
+    }
+    if (!isPlainObject(value)) return [];
+    return Object.entries(value as Record<string, unknown>)
+      .filter(([key]) => key.trim())
+      .map(([key, item]): [string, string] => [key, item == null ? '' : String(item)]);
+  }
+
+  private getHttpRequestBody(
+    method: string,
+    bodyType: string | undefined,
+    value: unknown,
+    headers: Record<string, string>
+  ) {
+    if (['GET', 'HEAD'].includes(method) || !bodyType || bodyType === 'none') return undefined;
+
+    if (bodyType === 'json') {
+      this.setHttpHeaderIfMissing(headers, httpContentTypeHeader, 'application/json');
+      return typeof value === 'string' ? value : JSON.stringify(value ?? null);
+    }
+
+    if (bodyType === 'urlencoded') {
+      this.setHttpHeaderIfMissing(
+        headers,
+        httpContentTypeHeader,
+        'application/x-www-form-urlencoded'
+      );
+      if (typeof value === 'string') return value;
+      return new URLSearchParams(this.getHttpKeyValueEntries(value)).toString();
+    }
+
+    if (bodyType === 'formData') {
+      const form = new FormData();
+      this.getHttpKeyValueEntries(value).forEach(([key, item]) => form.append(key, item));
+      return form;
+    }
+
+    if (bodyType === 'rawText') {
+      this.setHttpHeaderIfMissing(headers, httpContentTypeHeader, 'text/plain');
+    }
+
+    return this.bodyValue(value);
+  }
+
+  private setHttpHeaderIfMissing(headers: Record<string, string>, key: string, value: string) {
+    const hasHeader = Object.keys(headers).some((item) => item.toLowerCase() === key.toLowerCase());
+    if (!hasHeader) headers[key] = value;
+  }
+
+  private parseHttpResponseBody(text: string, contentType: string | null) {
+    const value = text.slice(0, 10000);
+    if (contentType?.toLowerCase().includes('application/json'))
+      return this.parseAIJsonOutput(value);
+    const parsed = this.parseAIJsonOutput(value);
+    return parsed === value ? value : parsed;
   }
 }
