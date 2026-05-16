@@ -1,3 +1,4 @@
+import { AIActions } from '@teable/openapi';
 import {
   Card,
   CardContent,
@@ -20,12 +21,7 @@ interface SwitchListProps {
   onChange: (value: { disableActions: string[] }) => void;
 }
 
-export enum AIActions {
-  AIField = 'ai-field',
-  AIChat = 'ai-chat',
-}
-
-const AIFeatureList = [AIActions.AIField, AIActions.AIChat];
+const AIFeatureList = [AIActions.AIField, AIActions.AIChat] as const;
 
 const SwitchableActions = [AIActions.AIField, AIActions.AIChat];
 

@@ -5,6 +5,12 @@ import { registerRoute, urlBuilder } from '../utils';
 
 export const GET_AI_DISABLE_ACTIONS = '/{baseId}/ai/disable-ai-actions';
 
+export enum AIActions {
+  AIField = 'ai-field',
+  AIChat = 'ai-chat',
+  AIAutomation = 'ai-automation',
+}
+
 export const getAIDisableActionsVoSchema = z.object({
   disableActions: z.array(z.string()),
 });

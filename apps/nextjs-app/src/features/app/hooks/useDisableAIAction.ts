@@ -1,8 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { getAIDisableActions } from '@teable/openapi';
+import { AIActions, getAIDisableActions } from '@teable/openapi';
 import { useBaseId, useIsReadOnlyPreview } from '@teable/sdk/hooks';
 import { useMemo } from 'react';
-import { AIActions } from '../blocks/admin/setting/components/ai-config/AIControlCard';
 
 export const useDisableAIAction = () => {
   const baseId = useBaseId();
@@ -18,11 +17,13 @@ export const useDisableAIAction = () => {
       return {
         aiField: !disableActions.includes(AIActions.AIField),
         aiChat: !disableActions.includes(AIActions.AIChat),
+        aiAutomation: !disableActions.includes(AIActions.AIAutomation),
       };
     }
     return {
       aiField: true,
       aiChat: true,
+      aiAutomation: true,
     };
   }, [disableActions]);
 };

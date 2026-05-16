@@ -54,6 +54,7 @@ import {
 } from '@teable/icons';
 import {
   getBaseAll,
+  getAIConfig,
   getFields,
   getRecords as getTableRecords,
   getTableList,
@@ -118,6 +119,7 @@ import {
   SheetContent,
   SheetDescription,
   SheetTitle,
+  Slider,
   sonner,
   Switch,
   Tooltip,
@@ -183,7 +185,13 @@ import {
   useRef,
   useState,
 } from 'react';
+import { AIModelSelect } from '@/features/app/blocks/admin/setting/components/ai-config/AiModelSelect';
+import {
+  generateGatewayModelKeyList,
+  generateModelKeyList,
+} from '@/features/app/blocks/admin/setting/components/ai-config/utils';
 import { BaseNodeMore } from '@/features/app/blocks/base/base-side-bar/BaseNodeMore';
+import { useDisableAIAction } from '@/features/app/hooks/useDisableAIAction';
 
 export interface WorkFlowPanelRef {
   getWorkflow?: () => unknown | undefined;
@@ -421,6 +429,15 @@ const ACTION_NODES: INodeCatalogItem[] = [
     icon: ActionSendEmail,
   },
   {
+    type: 'aiGenerate',
+    category: 'action',
+    labelKey: 'nodes.aiGenerate.label',
+    labelDefault: 'AI 生成',
+    descriptionKey: 'nodes.aiGenerate.description',
+    descriptionDefault: '使用 AI 生成文本。',
+    icon: ActionAI,
+  },
+  {
     type: 'httpRequest',
     category: 'action',
     labelKey: 'nodes.httpRequest.label',
@@ -512,6 +529,10 @@ const NODE_ICON_STYLES: Record<string, typeof DEFAULT_NODE_ICON_STYLE> = {
   sendEmail: {
     iconClassName: 'text-sky-600',
     wrapperClassName: 'border-sky-200 bg-sky-50 dark:border-sky-900 dark:bg-sky-950/40',
+  },
+  aiGenerate: {
+    iconClassName: 'text-pink-600',
+    wrapperClassName: 'border-pink-200 bg-pink-50 dark:border-pink-900 dark:bg-pink-950/40',
   },
   httpRequest: {
     iconClassName: 'text-red-600',
@@ -1516,6 +1537,8 @@ const NODE_COMPLETION_CHECKS: Record<string, (config: Record<string, unknown>) =
     );
   },
   sendEmail: (config) => hasText(config.to) && hasText(config.subject) && hasText(config.body),
+  aiGenerate: (config) =>
+    hasText(config.prompt) && hasText(config.model) && hasText(config.outputType),
   httpRequest: (config) => hasText(config.method) && hasText(config.url),
   condition: (config) => isConditionComplete(config),
 };
@@ -1630,6 +1653,8 @@ const getDefaultConfig = (type: string, tableId?: string): Record<string, unknow
       };
     case 'sendEmail':
       return { to: '', cc: '', bcc: '', senderName: '', replyTo: '', subject: '', body: '' };
+    case 'aiGenerate':
+      return { prompt: '', attachments: [], model: '', temperature: 0.5, outputType: 'string' };
     case 'httpRequest':
       return { method: '', url: '', headers: {}, bodyType: 'none' };
     case 'condition':
@@ -1637,6 +1662,106 @@ const getDefaultConfig = (type: string, tableId?: string): Record<string, unknow
     default:
       return {};
   }
+};
+
+const getStringList = (value: unknown) =>
+  Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
+    : [];
+
+const getAITemperature = (value: unknown) => {
+  const numberValue = typeof value === 'number' ? value : Number(value ?? 0.5);
+  if (Number.isNaN(numberValue)) return 0.5;
+  return Math.min(1, Math.max(0, numberValue));
+};
+
+type AIGenerateOutputType = 'string' | 'json';
+
+const getAIGenerateOutputTypeOptions = (tr: PanelTranslate) => [
+  {
+    value: 'string' as const,
+    label: tr('nodes.aiGenerate.outputTypes.string.label', '文本'),
+    description: tr('nodes.aiGenerate.outputTypes.string.description', '输出为文本'),
+    icon: FieldTextIcon,
+  },
+  {
+    value: 'json' as const,
+    label: tr('nodes.aiGenerate.outputTypes.json.label', 'JSON'),
+    description: tr('nodes.aiGenerate.outputTypes.json.description', '输出为结构化数据'),
+    icon: FieldFormulaIcon,
+  },
+];
+
+const AIGenerateOutputTypeSelect = (props: {
+  value: AIGenerateOutputType;
+  onChange: (value: AIGenerateOutputType) => void;
+}) => {
+  const tr = usePanelTranslate();
+  const [open, setOpen] = useState(false);
+  const options = useMemo(() => getAIGenerateOutputTypeOptions(tr), [tr]);
+  const selectedOption = options.find((option) => option.value === props.value) ?? options[0];
+  const SelectedIcon = selectedOption.icon;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          className="h-9 w-full justify-between px-3 font-normal"
+          role="combobox"
+          variant="outline"
+        >
+          <span className="inline-flex min-w-0 items-center gap-2 text-sm">
+            <SelectedIcon className="size-4 shrink-0 text-muted-foreground" />
+            <span className="truncate">{selectedOption.label}</span>
+          </span>
+          <ChevronDown
+            className={cn('ml-2 size-4 shrink-0 text-muted-foreground', open && 'rotate-180')}
+          />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-[var(--radix-popover-trigger-width)] p-0"
+        data-no-pan="true"
+      >
+        <Command>
+          <CommandList className="max-h-[240px] overflow-y-auto overflow-x-hidden p-1">
+            <CommandGroup>
+              {options.map((option) => {
+                const Icon = option.icon;
+                const selected = option.value === props.value;
+                return (
+                  <CommandItem
+                    key={option.value}
+                    className="items-start gap-2 p-2"
+                    value={option.value}
+                    onSelect={() => {
+                      props.onChange(option.value);
+                      setOpen(false);
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        'mt-0.5 size-4 shrink-0',
+                        selected ? 'opacity-100' : 'opacity-0'
+                      )}
+                    />
+                    <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm leading-5">{option.label}</span>
+                      <span className="block truncate text-xs leading-4 text-muted-foreground">
+                        {option.description}
+                      </span>
+                    </span>
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
 };
 
 const fromOptionValue = (value: string) => (value === EMPTY_SELECT_VALUE ? '' : value);
@@ -2068,6 +2193,61 @@ const buildWebhookTestOutputRows = (tr?: PanelTranslate): TestResultRow[] => [
   },
 ];
 
+const buildAIGenerateDefaultOutputRows = (
+  node: IWorkflowNode,
+  tr?: PanelTranslate
+): TestResultRow[] =>
+  node.type === 'aiGenerate'
+    ? [
+        {
+          label: panelText(tr, 'variables.aiGeneratedResult', 'Generated text'),
+          value: '',
+        },
+      ]
+    : [];
+
+const buildAIGenerateTestInputRows = (
+  config: Record<string, unknown>,
+  tr?: PanelTranslate
+): TestResultRow[] => {
+  const rows: TestResultRow[] = [];
+  if (hasText(config.prompt)) {
+    rows.push({
+      label: panelText(tr, 'nodes.aiGenerate.fields.prompt.title', '提示'),
+      value: String(config.prompt),
+    });
+  }
+  if (hasText(config.model)) {
+    rows.push({
+      label: panelText(tr, 'nodes.aiGenerate.fields.model.title', '模型'),
+      value: String(config.model),
+    });
+  }
+  if (hasText(config.outputType)) {
+    rows.push({
+      label: panelText(tr, 'nodes.aiGenerate.fields.outputType.title', '输出类型'),
+      value:
+        config.outputType === 'json'
+          ? panelText(tr, 'nodes.aiGenerate.outputTypes.json.label', 'JSON')
+          : panelText(tr, 'nodes.aiGenerate.outputTypes.string.label', '文本'),
+    });
+  }
+  if ('temperature' in config) {
+    rows.push({
+      label: panelText(tr, 'nodes.aiGenerate.fields.temperature.title', '随机性'),
+      value: String(getAITemperature(config.temperature)),
+    });
+  }
+  const attachments = getStringList(config.attachments);
+  if (attachments.length) {
+    rows.push({
+      label: panelText(tr, 'nodes.aiGenerate.fields.attachments.title', '附件'),
+      raw: attachments,
+    });
+  }
+  return rows;
+};
+
 const buildDefaultTestOutputRows = (
   node: IWorkflowNode,
   tables: { id: string; name: string }[],
@@ -2135,6 +2315,7 @@ const buildDefaultTestOutputRows = (
         ),
       });
     }
+    rows.push(...buildAIGenerateDefaultOutputRows(node, tr));
   }
 
   rows.push({
@@ -2214,6 +2395,7 @@ const buildTestInputRows = (
       value: String(config.subject),
     });
   }
+  rows.push(...buildAIGenerateTestInputRows(config, tr));
   if (hasConditionItems(config.filter)) {
     rows.push({
       label: panelText(tr, 'resultLabels.condition', 'Condition'),
@@ -2641,6 +2823,13 @@ const buildVariableOptions = (
           { ...objectMeta(node, recordFieldsPath), parentObjectKey: fullOutputPath }
         );
         addFieldVariables(node, group, recordFieldsPath);
+      } else if (node.type === 'aiGenerate') {
+        add(
+          group,
+          panelText(tr, 'variables.aiGeneratedResult', 'Generated text'),
+          `action.${node.id}.result`,
+          { ...leafMeta(node, 'text', FieldTextIcon), parentObjectKey: fullOutputPath }
+        );
       } else if (node.type === 'httpRequest') {
         add(
           group,
@@ -7349,12 +7538,13 @@ const NodePickerButton = (props: { item: INodeCatalogItem; onClick: () => void }
 
 const AddNodePopover = (props: {
   onSelect: (item: INodeCatalogItem) => void;
+  actionNodes: INodeCatalogItem[];
   disabled?: boolean;
 }) => {
   const tr = usePanelTranslate();
   const [open, setOpen] = useState(false);
   const groups = [
-    { title: tr('nodeGroups.actions', 'Actions'), items: ACTION_NODES },
+    { title: tr('nodeGroups.actions', 'Actions'), items: props.actionNodes },
     { title: tr('nodeGroups.logic', 'Logic'), items: LOGIC_NODES },
   ];
 
@@ -7399,6 +7589,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
   const { t } = useTranslation('common');
   const tr = usePanelTranslate();
   const queryClient = useQueryClient();
+  const { aiAutomation: aiAutomationEnabled } = useDisableAIAction();
   const [workflowName, setWorkflowName] = useState('');
   const [nodes, setNodes] = useState<IWorkflowNode[]>([]);
   const [edges, setEdges] = useState<IWorkflowEdge[]>([]);
@@ -7490,6 +7681,29 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
       ),
     enabled: Boolean(baseId),
   });
+
+  const { data: baseAiConfig } = useQuery({
+    queryKey: ['workflow-ai-config', baseId],
+    queryFn: () => getAIConfig(baseId).then((res) => res.data),
+    enabled: Boolean(baseId),
+  });
+
+  const aiModelOptions = useMemo(() => {
+    const providerModels = generateModelKeyList(baseAiConfig?.llmProviders ?? []);
+    const gatewayModels = generateGatewayModelKeyList(baseAiConfig?.gatewayModels);
+    return [...providerModels, ...gatewayModels].filter(
+      (model) => !model.isImageModel && model.modelType !== 'image'
+    );
+  }, [baseAiConfig?.gatewayModels, baseAiConfig?.llmProviders]);
+  const defaultAIModel = baseAiConfig?.chatModel?.lg ?? aiModelOptions[0]?.modelKey ?? '';
+  const aiGenerateAvailable = Boolean(aiAutomationEnabled && defaultAIModel);
+  const actionNodes = useMemo(
+    () =>
+      aiGenerateAvailable
+        ? ACTION_NODES
+        : ACTION_NODES.filter((item) => item.type !== 'aiGenerate'),
+    [aiGenerateAvailable]
+  );
 
   useEffect(() => {
     if (!workflow) return;
@@ -8151,6 +8365,11 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
     });
   };
 
+  const getInitialNodeConfig = (type: string, tableId?: string) => {
+    const config = getDefaultConfig(type, tableId);
+    return type === 'aiGenerate' ? { ...config, model: defaultAIModel } : config;
+  };
+
   const changeSelectedTriggerType = (type: string) => {
     if (!selectedNode || selectedNode.category !== 'trigger') return;
     const item = TRIGGER_NODE_MAP[type];
@@ -8159,7 +8378,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
       type: item.type,
       name: getNodeItemLabel(item, tr),
       description: getNodeItemDescription(item, tr),
-      config: getDefaultConfig(item.type),
+      config: getInitialNodeConfig(item.type),
     });
   };
 
@@ -8173,7 +8392,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
       type: item.type,
       name: getNodeItemLabel(item, tr),
       description: getNodeItemDescription(item, tr),
-      config: getDefaultConfig(item.type, currentTableId),
+      config: getInitialNodeConfig(item.type, currentTableId),
     });
   };
 
@@ -8220,7 +8439,10 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
       type: item.type,
       category: item.category,
       name: getNodeItemLabel(item, tr),
-      config: getDefaultConfig(item.type, item.category === 'trigger' ? undefined : firstTableId),
+      config: getInitialNodeConfig(
+        item.type,
+        item.category === 'trigger' ? undefined : firstTableId
+      ),
       createdTime: new Date().toISOString(),
     };
 
@@ -8401,6 +8623,13 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
       hasLoopConfig &&
       selectedNode.category === 'action' &&
       !['createRecord', 'updateRecord'].includes(selectedNode.type);
+    const selectedActionNodes =
+      selectedNode.type === 'aiGenerate' && !actionNodes.some((item) => item.type === 'aiGenerate')
+        ? [getNodeCatalogItem('aiGenerate'), ...actionNodes]
+        : actionNodes;
+    const aiAttachments = getStringList(config.attachments);
+    const aiTemperature = getAITemperature(config.temperature);
+    const aiOutputType = config.outputType === 'json' ? 'json' : 'string';
 
     return (
       <div className="space-y-4">
@@ -8433,7 +8662,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
                 hideScrollButtons
                 className="max-h-none w-[var(--radix-select-trigger-width)] p-0 [&_[data-radix-select-viewport]]:h-auto [&_[data-radix-select-viewport]]:min-w-0"
               >
-                <NodeTypeSelectGroup items={ACTION_NODES} value={selectedNode.type} />
+                <NodeTypeSelectGroup items={selectedActionNodes} value={selectedNode.type} />
               </SelectContent>
             </Select>
             <div className="text-xs leading-relaxed text-muted-foreground">
@@ -8842,6 +9071,111 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
             </>
           )}
 
+          {selectedNode.type === 'aiGenerate' && (
+            <>
+              <FieldBlock
+                label={tr('nodes.aiGenerate.fields.prompt.title', '提示')}
+                required
+                action={
+                  !hasLoopConfig ? (
+                    <LoopButton onClick={() => updateNodeConfig('loopSource', '')} />
+                  ) : undefined
+                }
+              >
+                <VariableInput
+                  value={String(config.prompt ?? '')}
+                  variables={variableOptions}
+                  multiline
+                  fixedHeightClassName="h-[128px]"
+                  resizable
+                  placeholder={tr('placeholders.inputOrSelectVariable', 'Input / select variable')}
+                  onChange={(value) => updateNodeConfig('prompt', value)}
+                />
+              </FieldBlock>
+              <FieldBlock label={tr('nodes.aiGenerate.fields.attachments.title', '附件')}>
+                <div className="space-y-2">
+                  <RuntimeVariablePicker
+                    variables={variableOptions}
+                    mode="attachment"
+                    onSelect={(value) =>
+                      updateNodeConfig('attachments', [...new Set([...aiAttachments, value])])
+                    }
+                    trigger={
+                      <Button className="h-8 px-2 text-sm font-normal" variant="outline">
+                        <Plus className="size-4" />
+                        {tr('nodes.aiGenerate.fields.attachments.add', '添加附件')}
+                      </Button>
+                    }
+                  />
+                  {aiAttachments.map((attachment) => (
+                    <div
+                      key={attachment}
+                      className="flex min-w-0 items-center gap-2 rounded-md border bg-background px-2 py-1.5 text-xs"
+                    >
+                      <FieldAttachmentIcon className="size-4 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate">
+                        {getVariableLabel(variableOptions, attachment, tr)}
+                      </span>
+                      <Button
+                        className="size-6 shrink-0 text-muted-foreground"
+                        size="icon-xs"
+                        variant="ghost"
+                        onClick={() =>
+                          updateNodeConfig(
+                            'attachments',
+                            aiAttachments.filter((item) => item !== attachment)
+                          )
+                        }
+                      >
+                        <X className="size-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </FieldBlock>
+              <FieldBlock label={tr('nodes.aiGenerate.fields.model.title', '模型')} required>
+                <AIModelSelect
+                  className="w-full"
+                  value={String(config.model ?? '')}
+                  options={aiModelOptions}
+                  modelDefinationMap={baseAiConfig?.modelDefinationMap}
+                  disabled={!aiModelOptions.length}
+                  placeholder={tr('placeholders.select', 'Select...')}
+                  onValueChange={(value) => updateNodeConfig('model', value)}
+                />
+              </FieldBlock>
+              <FieldBlock label={tr('nodes.aiGenerate.fields.temperature.title', '随机性')}>
+                <div className="flex items-center gap-3">
+                  <Slider
+                    className="min-w-0 flex-1"
+                    min={0}
+                    max={1}
+                    step={0.1}
+                    value={[aiTemperature]}
+                    onValueChange={(value) => updateNodeConfig('temperature', value[0] ?? 0.5)}
+                  />
+                  <span className="w-8 shrink-0 text-right text-sm text-muted-foreground">
+                    {aiTemperature.toFixed(1)}
+                  </span>
+                </div>
+              </FieldBlock>
+              <FieldBlock
+                label={tr('nodes.aiGenerate.fields.outputType.title', '输出类型')}
+                required
+              >
+                <AIGenerateOutputTypeSelect
+                  value={aiOutputType}
+                  onChange={(value) => updateNodeConfig('outputType', value)}
+                />
+                <div className="text-xs leading-relaxed text-muted-foreground">
+                  {aiOutputType === 'json'
+                    ? tr('nodes.aiGenerate.outputTypes.json.description', '输出为结构化数据')
+                    : tr('nodes.aiGenerate.outputTypes.string.description', '输出为文本')}
+                </div>
+              </FieldBlock>
+            </>
+          )}
+
           {selectedNode.type === 'httpRequest' && (
             <>
               <FieldBlock
@@ -9046,7 +9380,10 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
   const renderNodeConnector = (node: IWorkflowNode, sourceHandle?: string) => (
     <div className="flex h-16 flex-col items-center">
       <div className="h-5 w-px bg-border" />
-      <AddNodePopover onSelect={(item) => addNode(item, node.id, sourceHandle)} />
+      <AddNodePopover
+        actionNodes={actionNodes}
+        onSelect={(item) => addNode(item, node.id, sourceHandle)}
+      />
       <div className="h-5 w-px bg-border" />
     </div>
   );
@@ -9097,7 +9434,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
           />
           <div className="absolute left-1/2 top-0 h-5 w-px bg-border" />
           <div className="absolute left-1/2 top-5 -translate-x-1/2">
-            <AddNodePopover onSelect={(item) => addNode(item, node.id)} />
+            <AddNodePopover actionNodes={actionNodes} onSelect={(item) => addNode(item, node.id)} />
           </div>
           <div className="absolute left-1/2 top-10 h-6 w-px bg-border" />
         </div>

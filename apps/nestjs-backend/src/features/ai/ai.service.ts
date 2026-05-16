@@ -4,6 +4,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { HttpErrorCode } from '@teable/core';
 import { PrismaService } from '@teable/db-main-prisma';
 import {
+  AIActions,
   IntegrationType,
   LLMProviderType,
   SettingKey,
@@ -347,11 +348,19 @@ export class AiService {
     // get instance ai setting
     const { aiConfig } = await this.settingService.getSetting();
     const disableAIActionsFromInstanceAiSetting = aiConfig?.capabilities?.disableActions ?? [];
+    let aiAutomationDisabledByConfig = true;
+    try {
+      const config = await this.getAIConfig(baseId);
+      aiAutomationDisabledByConfig = !config.chatModel?.lg;
+    } catch {
+      aiAutomationDisabledByConfig = true;
+    }
 
     // merge both: instance-level disableActions should always be respected
     const merged = [
       ...disableAIActionsFromInstanceAiSetting,
       ...disableAIActionsFromSpaceIntegration,
+      ...(aiAutomationDisabledByConfig ? [AIActions.AIAutomation] : []),
     ];
     return {
       disableActions: [...new Set(merged)],
@@ -393,24 +402,26 @@ export class AiService {
     aiGenerateRo: IAiGenerateRo,
     response: Response
   ): Promise<void> {
-    const { prompt } = aiGenerateRo;
+    const { prompt, temperature } = aiGenerateRo;
     const modelInstance = await this.getGenerationModelInstance(baseId, aiGenerateRo);
 
     const result = streamText({
       model: modelInstance,
       prompt: prompt,
+      temperature,
     });
 
     result.pipeTextStreamToResponse(response);
   }
 
   async generateText(baseId: string, aiGenerateRo: IAiGenerateRo) {
-    const { prompt } = aiGenerateRo;
+    const { prompt, temperature } = aiGenerateRo;
     const modelInstance = await this.getGenerationModelInstance(baseId, aiGenerateRo);
 
     const { text } = await generateText({
       model: modelInstance,
       prompt: prompt,
+      temperature,
     });
     return text;
   }

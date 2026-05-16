@@ -20,6 +20,7 @@ export const workflowActionTypeSchema = z.enum([
   'getRecords',
   'updateRecord',
   'sendEmail',
+  'aiGenerate',
   'httpRequest',
 ]);
 

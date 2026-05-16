@@ -19,6 +19,10 @@ export const aiGenerateRoSchema = z.object({
     description: 'Specify an exact model configuration to use',
     example: 'openai@gpt-4o@custom-name',
   }),
+  temperature: z.number().min(0).max(1).optional().meta({
+    description: 'Controls generation randomness',
+    example: 0.5,
+  }),
 });
 
 export type IAiGenerateRo = z.infer<typeof aiGenerateRoSchema>;

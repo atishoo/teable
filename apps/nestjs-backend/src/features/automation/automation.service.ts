@@ -11,14 +11,16 @@ import {
 } from '@teable/core';
 import type { IRecord } from '@teable/core';
 import { Prisma, PrismaService } from '@teable/db-main-prisma';
-import type {
-  IActiveWorkflowRo,
-  ICreateWorkflowGraphNodeRo,
-  IUpdateWorkflowGraphNodeRo,
-  IUpdateWorkflowRo,
-  IWorkflowEdge,
-  IWorkflowNode,
-  IWorkflowRo,
+import {
+  AIActions,
+  Task,
+  type IActiveWorkflowRo,
+  type ICreateWorkflowGraphNodeRo,
+  type IUpdateWorkflowGraphNodeRo,
+  type IUpdateWorkflowRo,
+  type IWorkflowEdge,
+  type IWorkflowNode,
+  type IWorkflowRo,
 } from '@teable/openapi';
 import { isPlainObject } from 'lodash';
 import get from 'lodash/get';
@@ -28,6 +30,7 @@ import { CustomHttpException } from '../../custom.exception';
 import { Events, RecordCreateEvent, RecordUpdateEvent } from '../../event-emitter/events';
 import type { ButtonClickEvent } from '../../event-emitter/events/table/button.event';
 import type { IClsStore } from '../../types/cls';
+import { AiService } from '../ai/ai.service';
 import { MailSenderService } from '../mail-sender/mail-sender.service';
 import { RecordOpenApiService } from '../record/open-api/record-open-api.service';
 import { RecordService } from '../record/record.service';
@@ -51,6 +54,7 @@ interface IWorkflowSnapshot {
 }
 
 interface IRuntimeContext {
+  baseId: string;
   trigger: Record<string, unknown>;
   nodes: Record<string, unknown>;
   action: Record<string, unknown>;
@@ -95,6 +99,7 @@ export class AutomationService {
     private readonly recordOpenApiService: RecordOpenApiService,
     private readonly recordService: RecordService,
     private readonly mailSenderService: MailSenderService,
+    private readonly aiService: AiService,
     private readonly cls: ClsService<IClsStore>
   ) {}
 
@@ -554,6 +559,7 @@ export class AutomationService {
 
     const trigger = this.withTriggerMetadata(params.trigger, workflow.baseId);
     const runtime: IRuntimeContext = {
+      baseId: workflow.baseId,
       trigger,
       nodes: {},
       action: {},
@@ -757,6 +763,9 @@ export class AutomationService {
         });
         return { sent: true };
       }
+      case 'aiGenerate': {
+        return this.executeAIGenerateAction(config, runtime);
+      }
       case 'httpRequest': {
         const url = this.requiredString(config.url, 'url');
         const method = this.optionalString(config.method)?.toUpperCase() ?? 'GET';
@@ -779,6 +788,34 @@ export class AutomationService {
       default:
         throw new Error(`Unsupported workflow action: ${node.type}`);
     }
+  }
+
+  private async executeAIGenerateAction(config: Record<string, unknown>, runtime: IRuntimeContext) {
+    const { disableActions } = await this.aiService.getAIDisableAIActions(runtime.baseId);
+    if (disableActions.includes(AIActions.AIAutomation)) {
+      throw new CustomHttpException(
+        'AI automation is not available',
+        HttpErrorCode.VALIDATION_ERROR
+      );
+    }
+
+    const prompt = this.requiredString(config.prompt, 'prompt');
+    const modelKey = this.optionalString(config.model) ?? this.optionalString(config.modelKey);
+    const outputType = this.optionalString(config.outputType) ?? 'string';
+    const attachments = Array.isArray(config.attachments) ? config.attachments.filter(Boolean) : [];
+    const promptWithAttachments = attachments.length
+      ? `${prompt}\n\nAttachments:\n${JSON.stringify(attachments)}`
+      : prompt;
+    const text = await this.aiService.generateText(runtime.baseId, {
+      prompt: promptWithAttachments,
+      modelKey,
+      task: Task.Coding,
+      temperature: this.optionalAITemperature(config.temperature),
+    });
+    return {
+      result: outputType === 'json' ? this.parseAIJsonOutput(text) : text,
+      outputType,
+    };
   }
 
   private getConditionBranchEdges(node: IWorkflowNode, edges: IWorkflowEdge[], output: unknown) {
@@ -1117,6 +1154,7 @@ export class AutomationService {
     if (node.type === 'recordUpdated' && !this.updateTriggerMatches(config, trigger)) return false;
     if (config.filter) {
       return this.matchSimpleCondition(config.filter, {
+        baseId: '',
         trigger,
         nodes: {},
         action: {},
@@ -1453,6 +1491,27 @@ export class AutomationService {
 
   private optionalString(value: unknown) {
     return typeof value === 'string' && value ? value : undefined;
+  }
+
+  private optionalNumber(value: unknown) {
+    if (typeof value === 'number' && !Number.isNaN(value)) return value;
+    if (typeof value !== 'string' || !value) return undefined;
+    const numberValue = Number(value);
+    return Number.isNaN(numberValue) ? undefined : numberValue;
+  }
+
+  private optionalAITemperature(value: unknown) {
+    const numberValue = this.optionalNumber(value);
+    if (numberValue === undefined) return undefined;
+    return Math.min(1, Math.max(0, numberValue));
+  }
+
+  private parseAIJsonOutput(value: string) {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
   }
 
   private stringArray(value: unknown) {
