@@ -126,7 +126,7 @@ describe('DeleteSelectionProgressDialog', () => {
         mode="progress"
         progress={{
           id: 'progress',
-          phase: 'finalizing',
+          phase: 'deleting',
           batchIndex: 4,
           totalCount: 1000,
           deletedCount: 1000,

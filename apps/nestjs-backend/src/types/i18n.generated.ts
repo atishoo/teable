@@ -1542,6 +1542,8 @@ export type I18nTranslations = {
                     "generatePreview": string;
                     "runWithConfig": string;
                     "runTest": string;
+                    "testTrigger": string;
+                    "selectRecord": string;
                     "testWithRecord": string;
                     "runHistory": string;
                     "more": string;
@@ -1596,6 +1598,7 @@ export type I18nTranslations = {
                     "queryLimit": string;
                     "recordId": string;
                     "testStep": string;
+                    "testTrigger": string;
                     "testWithRecord": string;
                     "webhookUrlPublic": string;
                     "webhookAuthorizationEnabled": string;
@@ -1611,6 +1614,7 @@ export type I18nTranslations = {
                     "input": string;
                     "selectDateRange": string;
                     "search": string;
+                    "searchRecords": string;
                     "inputOrSelectVariable": string;
                     "searchFields": string;
                     "inputDescription": string;

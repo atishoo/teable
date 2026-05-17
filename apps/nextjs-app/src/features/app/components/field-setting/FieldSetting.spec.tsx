@@ -1,4 +1,4 @@
-import { CellValueType, DbFieldType, FieldType } from '@teable/core';
+import { CellValueType, DbFieldType, FieldType, Relationship } from '@teable/core';
 import { render, screen } from '@/test-utils';
 import { FieldSettingBase } from './FieldSetting';
 import { FieldOperator } from './type';
@@ -37,11 +37,14 @@ describe('FieldSettingBase', () => {
       id: 'fldLookup0000000001',
       name: 'Lookup Child Name',
       type: FieldType.SingleLineText,
-      description: null,
       options: {},
       isLookup: true,
       lookupOptions: {
+        relationship: Relationship.ManyMany,
         foreignTableId: 'tblForeign000000001',
+        fkHostTableName: 'foreign',
+        selfKeyName: 'self',
+        foreignKeyName: 'foreign',
         linkFieldId: 'fldLink000000000001',
         lookupFieldId: 'fldTarget0000000001',
       },

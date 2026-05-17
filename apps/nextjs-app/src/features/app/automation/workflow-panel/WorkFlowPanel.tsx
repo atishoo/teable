@@ -3,8 +3,12 @@ import {
   CellValueType,
   ColorUtils,
   DateFormattingPreset,
+  DbFieldType,
   FieldKeyType,
   FieldType,
+  IdPrefix,
+  type IFieldVo,
+  type IRecord,
   type ITimeZoneString,
   TimeFormatting,
   ViewType,
@@ -78,12 +82,39 @@ import {
   type IWorkflowVo,
   type IWorkflowWebhookTokenVo,
 } from '@teable/openapi';
-import { DateEditor, RatingEditor, UserAvatar, ViewSelect } from '@teable/sdk/components';
+import {
+  CellType,
+  CombinedSelection,
+  DateEditor,
+  DraggableType,
+  Grid,
+  RatingEditor,
+  RegionType,
+  RowControlType,
+  SelectableType,
+  SelectionRegionType,
+  UserAvatar,
+  ViewSelect,
+  type ICell,
+  type ICellItem,
+  type IGridRef,
+  useCreateCellValue2GridDisplay,
+  useGridIcons,
+  useGridTheme,
+} from '@teable/sdk/components';
 import {
   DateRangePicker,
   type IDateRangeValue,
 } from '@teable/sdk/components/filter/view-filter/component/filterDatePicker/DateRangePicker';
 import { ReactQueryKeys } from '@teable/sdk/config';
+import { useInstances } from '@teable/sdk/context/use-instances';
+import {
+  createFieldInstance,
+  createRecordInstance,
+  recordInstanceFieldMap,
+  type IFieldInstance,
+  type Record as SdkRecord,
+} from '@teable/sdk/model';
 import {
   Badge,
   Button,
@@ -160,6 +191,7 @@ import {
   Play,
   Plus,
   Pencil,
+  Globe2,
   RefreshCcw,
   RefreshCw,
   Search,
@@ -240,7 +272,7 @@ interface IVariableOption {
   group: string;
   groupNodeId?: string;
   groupNodeType?: string;
-  groupNodeStatus?: 'incomplete' | 'success' | 'untested' | 'expired';
+  groupNodeStatus?: 'incomplete' | 'success' | 'untested' | 'expired' | 'failed';
   groupNodeStatusLabel?: string;
   groupNodeDescription?: string;
   groupNodeIndex?: number;
@@ -271,13 +303,19 @@ type VariableTextToken =
 type TableField = {
   id: string;
   name: string;
+  dbFieldName?: string;
   type?: string;
   options?: unknown;
   cellValueType?: string;
+  dbFieldType?: string;
   isMultipleCellValue?: boolean;
   isLookup?: boolean;
   isConditionalLookup?: boolean;
   isComputed?: boolean;
+  isPrimary?: boolean;
+  unique?: boolean;
+  notNull?: boolean;
+  description?: string;
   recordCreate?: boolean;
   recordRead?: boolean;
 };
@@ -1452,6 +1490,46 @@ const getTriggerUserRows = (user: unknown, tr?: PanelTranslate): TestResultRow[]
     : [];
 };
 
+function formatRecordUrlValue(value: unknown) {
+  const url = formatCellValue(value);
+  if (url.startsWith('/base/') && typeof window !== 'undefined') {
+    return `${window.location.origin}${url}`;
+  }
+  return url;
+}
+
+function getRecordMetaRows(record: Record<string, unknown>, tr?: PanelTranslate): TestResultRow[] {
+  const metaRows = [
+    {
+      key: 'createdBy',
+      label: panelText(tr, 'variables.createdById', 'Created by ID'),
+    },
+    {
+      key: 'autoNumber',
+      label: panelText(tr, 'variables.autoNumber', 'Auto number'),
+    },
+    {
+      key: 'createdTime',
+      label: panelText(tr, 'variables.createdTime', 'Created time'),
+    },
+    {
+      key: 'lastModifiedBy',
+      label: panelText(tr, 'variables.lastModifiedById', 'Last modified by ID'),
+    },
+    {
+      key: 'lastModifiedTime',
+      label: panelText(tr, 'variables.lastModifiedTime', 'Last modified time'),
+    },
+  ];
+
+  return metaRows
+    .filter(({ key }) => key in record)
+    .map(({ key, label }) => ({
+      label,
+      value: formatCellValue(record[key]),
+    }));
+}
+
 const getTriggerRecordRows = (
   recordValue: unknown,
   fields: TableField[],
@@ -1459,26 +1537,32 @@ const getTriggerRecordRows = (
 ): TestResultRow[] => {
   if (!isPlainRecord(recordValue)) return [];
   const record = recordValue as Record<string, unknown>;
-  const children: TestResultRow[] = [
-    {
+  const children: TestResultRow[] = [];
+  if (record.id) {
+    children.push({
       label: panelText(tr, 'resultLabels.recordId', 'Record ID'),
       value: formatCellValue(record.id),
-    },
-    {
+    });
+  }
+  if (record.url) {
+    children.push({
       label: panelText(tr, 'resultLabels.recordUrl', 'Record URL'),
-      value: formatCellValue(record.url),
-    },
-    {
+      value: formatRecordUrlValue(record.url),
+    });
+  }
+  if ('name' in record || 'title' in record) {
+    children.push({
       label: panelText(tr, 'resultLabels.recordName', 'Record name'),
-      value: formatCellValue(record.name),
-    },
-  ].filter((row) => row.value);
+      value: formatCellValue(record.name ?? record.title),
+    });
+  }
   if (isPlainRecord(record.fields)) {
     children.push({
       label: panelText(tr, 'resultLabels.fieldValues', 'Field values'),
       children: getFieldValueRows(record.fields, fields),
     });
   }
+  children.push(...getRecordMetaRows(record, tr));
   return [{ label: panelText(tr, 'resultLabels.record', 'Record'), children }];
 };
 
@@ -1506,18 +1590,20 @@ const getOutputRecordRows = (
   if (outputRecord?.url) {
     rows.push({
       label: panelText(tr, 'resultLabels.recordUrl', 'Record URL'),
-      value: String(outputRecord.url),
+      value: formatRecordUrlValue(outputRecord.url),
     });
   } else if (outputRecord?.id && tableId) {
     rows.push({
       label: panelText(tr, 'resultLabels.recordUrl', 'Record URL'),
-      value: `/base/${baseId}/table/${tableId}?recordId=${String(outputRecord.id)}`,
+      value: formatRecordUrlValue(
+        `/base/${baseId}/table/${tableId}?recordId=${String(outputRecord.id)}`
+      ),
     });
   }
-  if (outputRecord?.name || outputRecord?.title) {
+  if (outputRecord && ('name' in outputRecord || 'title' in outputRecord)) {
     rows.push({
       label: panelText(tr, 'resultLabels.recordName', 'Record name'),
-      value: String(outputRecord.name ?? outputRecord.title),
+      value: formatCellValue(outputRecord.name ?? outputRecord.title),
     });
   }
   if (isPlainRecord(outputRecord?.fields)) {
@@ -1526,6 +1612,7 @@ const getOutputRecordRows = (
       children: getFieldValueRows(outputRecord.fields, fields),
     });
   }
+  if (outputRecord) rows.push(...getRecordMetaRows(outputRecord, tr));
   return rows;
 };
 
@@ -2302,25 +2389,37 @@ const buildRuntimeCondition = (group: RuntimeConditionGroup) => {
 const toTableField = (field: {
   id: string;
   name: string;
+  dbFieldName?: string;
   type?: string;
   options?: unknown;
   cellValueType?: string;
+  dbFieldType?: string;
   isMultipleCellValue?: boolean;
   isLookup?: boolean;
   isConditionalLookup?: boolean;
   isComputed?: boolean;
+  isPrimary?: boolean;
+  unique?: boolean;
+  notNull?: boolean;
+  description?: string;
   recordCreate?: boolean;
   recordRead?: boolean;
 }): TableField => ({
   id: field.id,
   name: field.name,
+  dbFieldName: field.dbFieldName,
   type: field.type,
   options: field.options,
   cellValueType: field.cellValueType,
+  dbFieldType: field.dbFieldType,
   isMultipleCellValue: field.isMultipleCellValue,
   isLookup: field.isLookup,
   isConditionalLookup: field.isConditionalLookup,
   isComputed: field.isComputed,
+  isPrimary: field.isPrimary,
+  unique: field.unique,
+  notNull: field.notNull,
+  description: field.description,
   recordCreate: field.recordCreate,
   recordRead: field.recordRead,
 });
@@ -5505,83 +5604,436 @@ const SearchableValueSelect = (props: {
   );
 };
 
-const getTestRecordLabel = (record: { id: string; fields?: unknown }, fields: TableField[]) => {
-  const recordFields = isPlainRecord(record.fields) ? record.fields : {};
-  const fieldValueLabel = fields
-    .map((field) => formatCellValue(recordFields[field.id]))
-    .find((value) => Boolean(value));
-  return fieldValueLabel || record.id;
+const getFallbackCellValueType = (fieldType?: string) => {
+  if ([FieldType.Number, FieldType.Rating, FieldType.AutoNumber].includes(fieldType as FieldType)) {
+    return CellValueType.Number;
+  }
+  if (fieldType === FieldType.Checkbox) return CellValueType.Boolean;
+  if (
+    [FieldType.Date, FieldType.CreatedTime, FieldType.LastModifiedTime].includes(
+      fieldType as FieldType
+    )
+  ) {
+    return CellValueType.DateTime;
+  }
+  return CellValueType.String;
 };
+
+const getFallbackDbFieldType = (fieldType?: string) => {
+  if (fieldType === FieldType.Checkbox) return DbFieldType.Boolean;
+  if ([FieldType.Number, FieldType.Rating].includes(fieldType as FieldType))
+    return DbFieldType.Real;
+  if (fieldType === FieldType.AutoNumber) return DbFieldType.Integer;
+  if (
+    [FieldType.Date, FieldType.CreatedTime, FieldType.LastModifiedTime].includes(
+      fieldType as FieldType
+    )
+  ) {
+    return DbFieldType.DateTime;
+  }
+  if (
+    [
+      FieldType.Attachment,
+      FieldType.MultipleSelect,
+      FieldType.Link,
+      FieldType.User,
+      FieldType.CreatedBy,
+      FieldType.LastModifiedBy,
+    ].includes(fieldType as FieldType)
+  ) {
+    return DbFieldType.Json;
+  }
+  return DbFieldType.Text;
+};
+
+const getGridColumnIcon = (field: IFieldInstance) => {
+  if (!field.isLookup) return field.type;
+  return field.isConditionalLookup ? `${field.type}_conditional_lookup` : `${field.type}_lookup`;
+};
+
+const toGridFieldInstance = (field: TableField) =>
+  createFieldInstance({
+    ...field,
+    name: field.name || field.id,
+    dbFieldName: field.dbFieldName || field.name || field.id,
+    type: field.type as FieldType,
+    options: field.options ?? {},
+    cellValueType:
+      (field.cellValueType as CellValueType | undefined) ?? getFallbackCellValueType(field.type),
+    dbFieldType:
+      (field.dbFieldType as DbFieldType | undefined) ?? getFallbackDbFieldType(field.type),
+    unique: field.unique ?? false,
+    isMultipleCellValue: Boolean(field.isMultipleCellValue),
+  } as IFieldVo);
 
 const TestRecordDialog = (props: {
   tableId: string;
   fields: TableField[];
+  filter?: unknown;
   disabled?: boolean;
-  loading?: boolean;
   onTest: (recordId: string) => void | Promise<void>;
 }) => {
   const tr = usePanelTranslate();
+  const { t } = useTranslation('common');
+  const gridRef = useRef<IGridRef>(null);
+  const gridTheme = useGridTheme();
+  const customIcons = useGridIcons();
+  const createCellValue2GridDisplay = useCreateCellValue2GridDisplay(undefined, false);
   const [open, setOpen] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [appliedSearchText, setAppliedSearchText] = useState('');
+  const [searchMode, setSearchMode] = useState<'global' | 'field'>('global');
+  const [fieldSearchText, setFieldSearchText] = useState('');
+  const [searchFieldIds, setSearchFieldIds] = useState<string[]>([]);
   const [recordId, setRecordId] = useState('');
-  const { data: records = [], isFetching } = useQuery({
-    queryKey: ['workflow-test-records', props.tableId],
-    queryFn: () =>
-      getTableRecords(props.tableId, {
-        fieldKeyType: FieldKeyType.Id,
-        take: 100,
-      }).then((res) => res.data.records),
-    enabled: open,
+  const visibleFields = useMemo(
+    () => props.fields.filter((field) => field.recordRead !== false),
+    [props.fields]
+  );
+  const primaryFieldId = visibleFields[0]?.id;
+  const querySearchText = appliedSearchText.trim();
+  const querySearchFieldIds = useMemo(
+    () => searchFieldIds.filter((fieldId) => visibleFields.some((field) => field.id === fieldId)),
+    [searchFieldIds, visibleFields]
+  );
+  const searchQuery = useMemo(
+    () =>
+      querySearchText && (searchMode === 'global' || querySearchFieldIds.length)
+        ? ([
+            querySearchText,
+            searchMode === 'global' ? '' : querySearchFieldIds.join(','),
+            true,
+          ] as [string, string, boolean])
+        : undefined,
+    [querySearchFieldIds, querySearchText, searchMode]
+  );
+  const recordQueryParams = useMemo(
+    () => ({
+      fieldKeyType: FieldKeyType.Id,
+      skip: 0,
+      take: 100,
+      type: IdPrefix.Record,
+      ...(props.filter ? { filter: props.filter as never } : {}),
+      ...(searchQuery ? { search: searchQuery } : {}),
+    }),
+    [props.filter, searchQuery]
+  );
+  const gridFields = useMemo(
+    () =>
+      visibleFields
+        .filter((field) => field.type && Object.values(FieldType).includes(field.type as FieldType))
+        .map((field) => toGridFieldInstance(field)),
+    [visibleFields]
+  );
+  const gridFieldMap = useMemo(
+    () =>
+      gridFields.reduce<Record<string, IFieldInstance>>((result, field) => {
+        result[field.id] = field;
+        return result;
+      }, {}),
+    [gridFields]
+  );
+  const { instances: subscribedRecords } = useInstances<IRecord, SdkRecord>({
+    collection: open ? `${IdPrefix.Record}_${props.tableId}` : '',
+    factory: createRecordInstance,
+    queryParams: recordQueryParams,
   });
-  const options = records.map((record) => ({
-    value: record.id,
-    label: getTestRecordLabel(record, props.fields),
-  }));
+  const gridRecords = useMemo(
+    () => subscribedRecords.map((record) => recordInstanceFieldMap(record, gridFieldMap)),
+    [gridFieldMap, subscribedRecords]
+  );
+  const records = gridRecords;
+  const gridColumns = useMemo(
+    () =>
+      gridFields.map((field) => ({
+        id: field.id,
+        name: field.notNull ? `${field.name} *` : field.name,
+        width: 150,
+        icon: getGridColumnIcon(field),
+        hasMenu: false,
+        readonly: true,
+        isPrimary: field.isPrimary,
+        description: field.description,
+      })),
+    [gridFields]
+  );
+  const cellValue2GridDisplay = useMemo(
+    () => createCellValue2GridDisplay(gridFields),
+    [createCellValue2GridDisplay, gridFields]
+  );
+  const getCellContent = useCallback(
+    ([colIndex, rowIndex]: ICellItem): ICell => {
+      const record = gridRecords[rowIndex];
+      if (!record || !gridFields[colIndex]) return { type: CellType.Loading };
+      return cellValue2GridDisplay(record as SdkRecord, colIndex);
+    },
+    [cellValue2GridDisplay, gridFields, gridRecords]
+  );
+  const fieldOptions = useMemo(() => {
+    const query = fieldSearchText.trim().toLowerCase();
+    if (!query) return visibleFields;
+    return visibleFields.filter((field) => (field.name || field.id).toLowerCase().includes(query));
+  }, [fieldSearchText, visibleFields]);
+  const searchScopeLabel =
+    searchMode === 'global'
+      ? String(t('noun.global', { defaultValue: 'Global' }))
+      : searchFieldIds.length <= 1
+        ? visibleFields.find((field) => field.id === searchFieldIds[0])?.name ||
+          String(t('noun.field', { defaultValue: 'Field' }))
+        : String(t('actions.fieldSearch', { defaultValue: 'Field search' }));
+
+  useEffect(() => {
+    if (!open) return;
+    if (recordId && records.some((record) => record.id === recordId)) return;
+    setRecordId('');
+  }, [open, recordId, records]);
+
+  useEffect(() => {
+    if (!open) return;
+    const rowIndex = records.findIndex((record) => record.id === recordId);
+    gridRef.current?.setSelection(
+      rowIndex >= 0
+        ? new CombinedSelection(SelectionRegionType.Rows, [[rowIndex, rowIndex]])
+        : new CombinedSelection()
+    );
+  }, [open, recordId, records]);
+
+  useEffect(() => {
+    if (!open) return;
+    const fieldIds = visibleFields.map((field) => field.id);
+    setSearchFieldIds((current) => {
+      const next = current.filter((fieldId) => fieldIds.includes(fieldId));
+      if (primaryFieldId && !next.includes(primaryFieldId)) {
+        return [primaryFieldId, ...next];
+      }
+      return next;
+    });
+  }, [open, primaryFieldId, visibleFields]);
+
   const handleOpenChange = (nextOpen: boolean) => {
     setOpen(nextOpen);
-    if (!nextOpen) setRecordId('');
+    if (nextOpen) {
+      setSearchText('');
+      setAppliedSearchText('');
+      setFieldSearchText('');
+      setSearchMode('global');
+      setRecordId('');
+    }
   };
-  const handleTest = () => {
-    if (!recordId || props.loading) return;
+  const applySearch = () => setAppliedSearchText(searchText.trim());
+  const clearSearch = () => {
+    setSearchText('');
+    setAppliedSearchText('');
+  };
+  const handleConfirm = () => {
+    if (!recordId) return;
     void props.onTest(recordId);
     setOpen(false);
+  };
+  const toggleSearchField = (fieldId: string) => {
+    if (fieldId === primaryFieldId) return;
+    setSearchFieldIds((current) =>
+      current.includes(fieldId) ? current.filter((item) => item !== fieldId) : [...current, fieldId]
+    );
+  };
+  const toggleRecordSelection = (rowIndex: number) => {
+    const nextRecordId = records[rowIndex]?.id;
+    if (!nextRecordId) return;
+    setRecordId((current) => (current === nextRecordId ? '' : nextRecordId));
+  };
+  const handleRowControlClick = (rowIndex: number, type: RowControlType, checked: boolean) => {
+    if (type !== RowControlType.Checkbox) return;
+    setRecordId(checked ? records[rowIndex]?.id ?? '' : '');
+  };
+  const handleGridSelectionChanged = (selection: CombinedSelection) => {
+    if (!selection.isRowSelection) return setRecordId('');
+    const [rowIndex] = selection.flatten();
+    setRecordId(typeof rowIndex === 'number' ? records[rowIndex]?.id ?? '' : '');
   };
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="outline" disabled={props.disabled || props.loading}>
-          {props.loading ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <Play className="size-4" />
-          )}
-          {tr('actions.testWithRecord', 'Use record for test')}
+        <Button size="sm" variant="outline" disabled={props.disabled}>
+          <Search className="size-4" />
+          {tr('actions.selectRecord', 'Select record')}
         </Button>
       </DialogTrigger>
-      <DialogContent>
-        <DialogTitle>{tr('actions.testWithRecord', 'Use record for test')}</DialogTitle>
-        <DialogDescription>
-          {tr('descriptions.testWithRecord', 'Select a record as the test data for this step.')}
-        </DialogDescription>
-        <SearchableValueSelect
-          value={recordId}
-          options={options}
-          placeholder={
-            isFetching ? tr('states.loading', 'Loading...') : tr('placeholders.select', 'Select...')
-          }
-          emptyText={
-            isFetching
-              ? tr('states.loading', 'Loading...')
-              : tr('empty.noRecords', 'No records found')
-          }
-          onChange={(value) => setRecordId(typeof value === 'string' ? value : '')}
-        />
+      <DialogContent className="flex h-[520px] max-w-[calc(100vw-2rem)] flex-col p-6 sm:max-w-4xl">
+        <DialogTitle>{tr('actions.selectRecord', 'Select record')}</DialogTitle>
+        <div className="flex h-8 items-center overflow-hidden rounded-xl border bg-background">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                className="h-8 shrink-0 rounded-none px-2 text-sm font-normal"
+                type="button"
+                variant="ghost"
+              >
+                <Globe2 className="size-4 text-muted-foreground" />
+                <span className="max-w-28 truncate">{searchScopeLabel}</span>
+                <ChevronDown className="size-4 text-muted-foreground" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-72 p-0" data-no-pan="true">
+              <div className="flex h-11 items-center gap-2 border-b px-3">
+                <Search className="size-4 shrink-0 text-muted-foreground" />
+                <Input
+                  aria-label={tr('placeholders.searchFields', 'Search fields...')}
+                  className="h-8 border-0 px-0 text-xs shadow-none focus-visible:ring-0"
+                  id="workflow-test-record-field-search"
+                  placeholder={tr('placeholders.search', 'Search...')}
+                  value={fieldSearchText}
+                  onChange={(event) => setFieldSearchText(event.target.value)}
+                />
+              </div>
+              <ScrollArea className="max-h-64">
+                <div className="space-y-1 p-2">
+                  {fieldOptions.map((field) => {
+                    const Icon = getFieldIcon(field);
+                    const checked = searchMode === 'global' || searchFieldIds.includes(field.id);
+                    return (
+                      <div
+                        key={field.id}
+                        className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-muted"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => {
+                          if (searchMode === 'field') toggleSearchField(field.id);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Enter' && event.key !== ' ') return;
+                          event.preventDefault();
+                          if (searchMode === 'field') toggleSearchField(field.id);
+                        }}
+                      >
+                        <span
+                          className={cn(
+                            'relative h-4 w-7 shrink-0 rounded-full transition-colors',
+                            checked ? 'bg-muted-foreground' : 'bg-muted',
+                            searchMode === 'global' && 'opacity-70'
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              'absolute top-0.5 size-3 rounded-full bg-background transition-transform',
+                              checked ? 'translate-x-3.5' : 'translate-x-0.5'
+                            )}
+                          />
+                        </span>
+                        <Icon className="size-4 shrink-0 text-muted-foreground" />
+                        <span className="min-w-0 truncate">{field.name || field.id}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+              <div className="grid grid-cols-2 gap-1 border-t p-1">
+                <Button
+                  className="h-8"
+                  type="button"
+                  variant={searchMode === 'global' ? 'secondary' : 'ghost'}
+                  onClick={() => setSearchMode('global')}
+                >
+                  {String(t('actions.globalSearch', { defaultValue: 'Global search' }))}
+                </Button>
+                <Button
+                  className="h-8"
+                  type="button"
+                  variant={searchMode === 'field' ? 'secondary' : 'ghost'}
+                  onClick={() => setSearchMode('field')}
+                >
+                  {String(t('actions.fieldSearch', { defaultValue: 'Field search' }))}
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+          <Separator orientation="vertical" className="h-full" />
+          <div className="flex min-w-0 flex-1 items-center gap-1 px-2">
+            <Input
+              aria-label={tr('placeholders.searchRecords', 'Search records')}
+              className="h-8 border-0 px-0 shadow-none focus-visible:ring-0"
+              id="workflow-test-record-search"
+              value={searchText}
+              placeholder={tr('placeholders.searchRecords', 'Search records')}
+              onChange={(event) => setSearchText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') applySearch();
+              }}
+            />
+            {searchText && (
+              <Button
+                className="size-7 shrink-0 text-muted-foreground"
+                size="icon-xs"
+                type="button"
+                variant="ghost"
+                aria-label={String(t('actions.clear', { defaultValue: 'Clear' }))}
+                onClick={clearSearch}
+              >
+                <X className="size-4" />
+              </Button>
+            )}
+            <Button
+              className="size-7 shrink-0"
+              size="icon-xs"
+              type="button"
+              variant="ghost"
+              aria-label={String(t('actions.search', { defaultValue: 'Search' }))}
+              onClick={applySearch}
+            >
+              <Search className="size-4" />
+            </Button>
+          </div>
+        </div>
+        <div className="relative min-h-0 flex-1 overflow-hidden rounded-md border">
+          <Grid
+            ref={gridRef}
+            style={{
+              width: '100%',
+              height: '100%',
+            }}
+            columns={gridColumns}
+            customIcons={customIcons}
+            draggable={DraggableType.None}
+            freezeColumnCount={0}
+            getCellContent={getCellContent}
+            isMultiSelectionEnable={false}
+            rowCount={gridRecords.length}
+            rowIndexVisible={false}
+            rowControls={[{ type: RowControlType.Checkbox }]}
+            scrollBufferX={0}
+            scrollBufferY={0}
+            selectable={SelectableType.Row}
+            theme={gridTheme}
+            onCellDblClick={([, rowIndex]) => {
+              const record = records[rowIndex];
+              if (!record) return;
+              void props.onTest(record.id);
+              setOpen(false);
+            }}
+            onSelectionChanged={handleGridSelectionChanged}
+            onRowControlClick={handleRowControlClick}
+            onItemClick={(type, _bounds, [, rowIndex]) => {
+              if (
+                ![RegionType.Cell, RegionType.ActiveCell, RegionType.RowHeaderCheckbox].includes(
+                  type
+                )
+              ) {
+                return;
+              }
+              toggleRecordSelection(rowIndex);
+            }}
+          />
+          {!records.length && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
+              {tr('empty.noRecords', 'No records found')}
+            </div>
+          )}
+        </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)}>
             {tr('actions.cancel', 'Cancel')}
           </Button>
-          <Button disabled={!recordId || props.loading} onClick={handleTest}>
-            {props.loading && <Loader2 className="size-4 animate-spin" />}
+          <Button disabled={!recordId} onClick={handleConfirm}>
             {tr('actions.confirm', 'Confirm')}
           </Button>
         </DialogFooter>
@@ -9437,19 +9889,22 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
       'recordUpdated',
       'recordMatchesConditions',
     ];
+    const isWebhookTrigger = selectedNode.category === 'trigger' && selectedNode.type === 'webhook';
+    const isRecordTestTrigger =
+      selectedNode.category === 'trigger' && tableTriggerTypes.includes(selectedNode.type);
+    const isConditionRecordTest = selectedNode.type === 'condition';
     const testRecordTableId =
       selectedNode.type === 'condition'
         ? triggerTableId
         : tableTriggerTypes.includes(selectedNode.type)
           ? selectedConfigTableId
           : undefined;
-    const shouldTestWithRecord = Boolean(testRecordTableId);
-    const shouldShowPreviewButton = selectedNode.type === 'sendEmail';
+    const shouldShowPreviewButton = ['sendEmail', 'updateRecord'].includes(selectedNode.type);
     const shouldRunWithConfigButton = ['createRecord', 'updateRecord', 'sendEmail'].includes(
       selectedNode.type
     );
-    const primaryTestButtonLabel = shouldTestWithRecord
-      ? tr('actions.testWithRecord', 'Use record for test')
+    const primaryTestButtonLabel = isWebhookTrigger
+      ? tr('actions.testTrigger', 'Test trigger')
       : shouldRunWithConfigButton
         ? tr('actions.runWithConfig', 'Run with config')
         : tr('actions.runTest', 'Run test');
@@ -9459,6 +9914,11 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
     const isPreviewPending = selectedNodePendingMode === 'preview';
     const isRunConfigPending = selectedNodePendingMode === 'test';
     const isSelectedNodeComplete = isWorkflowNodeComplete(selectedNode);
+    const shouldShowRecordTestButton =
+      isRecordTestTrigger || (isConditionRecordTest && Boolean(testRecordTableId));
+    const shouldShowSelectRecordButton =
+      Boolean(testRecordTableId) && (!isRecordTestTrigger || isSelectedNodeComplete);
+    const shouldShowGenericTestButton = !shouldShowRecordTestButton;
     const aiOutputType = config.outputType === 'json' ? 'json' : 'string';
 
     return (
@@ -10060,10 +10520,15 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
 
         <PanelSection title={tr('sections.testStep', 'Test step')}>
           <div className="text-xs leading-relaxed text-muted-foreground">
-            {tr(
-              'descriptions.testStep',
-              'Test this step to confirm its configuration is correct. This test data can be used in later steps.'
-            )}
+            {selectedNode.category === 'trigger'
+              ? tr(
+                  'descriptions.testTrigger',
+                  'Test this trigger to confirm its configuration is correct. This test data can be used in later steps.'
+                )
+              : tr(
+                  'descriptions.testStep',
+                  'Test this step to confirm its configuration is correct. This test data can be used in later steps.'
+                )}
           </div>
           <div className="flex justify-end gap-2">
             {shouldShowPreviewButton && (
@@ -10081,15 +10546,34 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
                 {tr('actions.generatePreview', 'Generate preview')}
               </Button>
             )}
-            {shouldTestWithRecord && testRecordTableId ? (
-              <TestRecordDialog
-                tableId={testRecordTableId}
-                fields={testRecordTableId === triggerTableId ? triggerFields : configFields}
-                disabled={!isSelectedNodeComplete || isSelectedNodeTestPending}
-                loading={isRunConfigPending}
-                onTest={(recordId) => handleTestSelectedNode({ recordId })}
-              />
-            ) : (
+            {shouldShowRecordTestButton ? (
+              <>
+                {shouldShowSelectRecordButton && testRecordTableId && (
+                  <TestRecordDialog
+                    tableId={testRecordTableId}
+                    fields={testRecordTableId === triggerTableId ? triggerFields : configFields}
+                    filter={selectedNode.category === 'trigger' ? config.filter : undefined}
+                    disabled={!isSelectedNodeComplete || isSelectedNodeTestPending}
+                    onTest={(recordId) => handleTestSelectedNode({ recordId })}
+                  />
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={
+                    !testRecordTableId || !isSelectedNodeComplete || isSelectedNodeTestPending
+                  }
+                  onClick={() => handleTestSelectedNode()}
+                >
+                  {isRunConfigPending ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Play className="size-4" />
+                  )}
+                  {tr('actions.testWithRecord', 'Use record for test')}
+                </Button>
+              </>
+            ) : shouldShowGenericTestButton ? (
               <Button
                 size="sm"
                 variant="outline"
@@ -10103,7 +10587,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
                 )}
                 {primaryTestButtonLabel}
               </Button>
-            )}
+            ) : null}
           </div>
         </PanelSection>
 

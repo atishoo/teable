@@ -16,6 +16,7 @@ import {
   Task,
   type IActiveWorkflowRo,
   type ICreateWorkflowGraphNodeRo,
+  type IGetRecordsRo,
   type IUpdateWorkflowGraphNodeRo,
   type IUpdateWorkflowRo,
   type IMailTransportConfig,
@@ -330,7 +331,9 @@ export class AutomationService {
       selectedNode?.category === 'trigger'
         ? selectedNode
         : snapshot.nodes.find((node) => node.category === 'trigger');
-    const trigger = await this.getManualTestTrigger(baseId, workflowId, triggerNode, ro);
+    const trigger = await this.getManualTestTrigger(baseId, workflowId, triggerNode, ro, {
+      reuseTestedTrigger: !ro?.recordId && selectedNode?.id !== triggerNode?.id,
+    });
     return this.runSnapshot(workflow, snapshot, {
       triggerType: 'manual',
       trigger,
@@ -347,33 +350,49 @@ export class AutomationService {
     baseId: string,
     workflowId: string,
     triggerNode?: IWorkflowNode,
-    ro?: IWorkflowManualTestRo
+    ro?: IWorkflowManualTestRo,
+    options?: { reuseTestedTrigger?: boolean }
   ) {
     const testedTrigger = this.getNodeTestTrigger(triggerNode);
-    if (testedTrigger && !ro?.recordId) return testedTrigger;
+    if (options?.reuseTestedTrigger && testedTrigger && !ro?.recordId) return testedTrigger;
 
-    if (triggerNode?.category === 'trigger' && triggerNode.type === 'webhook') return { body: {} };
+    if (triggerNode?.category === 'trigger' && triggerNode.type === 'webhook') {
+      return testedTrigger && !ro?.recordId ? testedTrigger : { body: {} };
+    }
 
     const trigger: Record<string, unknown> = { baseId, workflowId, manual: true };
     const tableId = this.optionalString(triggerNode?.config?.tableId);
-    if (!tableId || !ro?.recordId) return trigger;
+    if (!tableId) return trigger;
+
+    const triggerFilter = triggerNode?.config?.filter;
+    const filter = isPlainObject(triggerFilter)
+      ? (triggerFilter as IGetRecordsRo['filter'])
+      : undefined;
+    const recordId = ro?.recordId ?? (await this.getManualTestRecordId(tableId, filter));
+    if (!recordId) return { user: this.triggerUser() };
 
     const record = await this.recordService.getRecord(
       tableId,
-      ro.recordId,
+      recordId,
       { fieldKeyType: FieldKeyType.Id },
       true,
       true
     );
-    return this.withTriggerMetadata(
-      {
-        ...trigger,
-        tableId,
-        record,
-        user: this.triggerUser(),
-      },
+    const recordTrigger = this.withTriggerMetadata(
+      { tableId, record, user: this.triggerUser() },
       baseId
     );
+    return { user: recordTrigger.user, record: recordTrigger.record };
+  }
+
+  private async getManualTestRecordId(tableId: string, filter?: IGetRecordsRo['filter']) {
+    const res = await this.recordService.getRecords(tableId, {
+      fieldKeyType: FieldKeyType.Id,
+      skip: 0,
+      take: 1,
+      ...(filter ? { filter } : {}),
+    });
+    return this.optionalString(res.records[0]?.id);
   }
 
   private getNodeTestTrigger(triggerNode?: IWorkflowNode) {
@@ -1062,6 +1081,27 @@ export class AutomationService {
       this.optionalString(get(runtime, 'trigger.record.id'));
     if (!recordId) throw new Error('recordId is required');
     const fields = this.objectValue(config.fields, 'fields');
+    if (runtime.preview) {
+      const record = await this.recordService.getRecord(
+        tableId,
+        recordId,
+        { fieldKeyType: FieldKeyType.Id },
+        true,
+        true
+      );
+      const outputRecord = this.withRecordOutputMetadata(
+        {
+          ...record,
+          fields: {
+            ...(isPlainObject(record.fields) ? record.fields : {}),
+            ...fields,
+          },
+        },
+        outputBaseId,
+        tableId
+      );
+      return config.loopSource === undefined ? outputRecord : { records: [outputRecord] };
+    }
     const record = await this.recordOpenApiService.updateRecord(tableId, recordId, {
       fieldKeyType: FieldKeyType.Id,
       typecast: true,
@@ -1195,6 +1235,12 @@ export class AutomationService {
     return { trigger: runtime.trigger, nodes: action, action, logic: {} };
   }
 
+  private recordUrl(baseId: string, tableId: string, recordId: string) {
+    const path = `/base/${baseId}/table/${tableId}?recordId=${recordId}`;
+    const origin = this.optionalString(process.env.PUBLIC_ORIGIN)?.replace(/\/$/, '');
+    return origin ? `${origin}${path}` : path;
+  }
+
   private withRecordOutputMetadata<T>(output: T, baseId: string, tableId: string): T {
     if (Array.isArray(output)) {
       return output.map((item) => this.withRecordOutputMetadata(item, baseId, tableId)) as T;
@@ -1202,10 +1248,10 @@ export class AutomationService {
     if (!isPlainObject(output)) return output;
     const record = output as Record<string, unknown>;
     const recordId = this.optionalString(record.id);
-    if (!recordId || record.url) return output;
+    if (!recordId) return output;
     return {
       ...record,
-      url: `/base/${baseId}/table/${tableId}?recordId=${recordId}`,
+      url: this.recordUrl(baseId, tableId, recordId),
     } as T;
   }
 
@@ -1228,10 +1274,8 @@ export class AutomationService {
       user: isPlainObject(trigger.user) ? trigger.user : this.triggerUser(),
       record: {
         ...record,
-        ...(recordName ? { name: recordName } : {}),
-        ...(tableId && recordId
-          ? { url: `/base/${baseId}/table/${tableId}?recordId=${recordId}` }
-          : {}),
+        name: recordName ?? '',
+        ...(tableId && recordId ? { url: this.recordUrl(baseId, tableId, recordId) } : {}),
       },
     };
   }

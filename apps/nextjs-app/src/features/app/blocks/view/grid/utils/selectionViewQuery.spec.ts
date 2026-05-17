@@ -1,3 +1,4 @@
+import { SortFunc } from '@teable/core';
 import type { IGetRecordsRo } from '@teable/openapi';
 import { describe, expect, it } from 'vitest';
 import { buildSelectionViewQuery } from './selectionViewQuery';
@@ -22,8 +23,12 @@ describe('buildSelectionViewQuery', () => {
       conjunction: 'and',
       filterSet: [{ fieldId: 'fldValue', operator: 'is', value: 'Open' }],
     };
-    const orderBy: NonNullable<IGetRecordsRo['orderBy']> = [{ fieldId: 'fldSort', order: 'desc' }];
-    const groupBy: NonNullable<IGetRecordsRo['groupBy']> = [{ fieldId: 'fldGroup', order: 'asc' }];
+    const orderBy: NonNullable<IGetRecordsRo['orderBy']> = [
+      { fieldId: 'fldSort', order: SortFunc.Desc },
+    ];
+    const groupBy: NonNullable<IGetRecordsRo['groupBy']> = [
+      { fieldId: 'fldGroup', order: SortFunc.Asc },
+    ];
 
     const personalViewCommonQuery = {
       ignoreViewQuery: true,
@@ -66,7 +71,7 @@ describe('buildSelectionViewQuery', () => {
   it('returns full query with custom sorting', () => {
     const personalViewCommonQuery = {
       ignoreViewQuery: true,
-      orderBy: [{ fieldId: 'fldSort', order: 'asc' as const }],
+      orderBy: [{ fieldId: 'fldSort', order: SortFunc.Asc }],
       projection: ['fldPrimary'],
     };
 
