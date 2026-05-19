@@ -38,6 +38,7 @@ import {
   ArrowUp,
   AppWindow,
   AtSign,
+  Bot,
   Check,
   CircleCheck,
   CircleX,
@@ -56,7 +57,6 @@ import {
   SquareTerminal,
   Table2,
   Trash2,
-  Workflow,
 } from 'lucide-react';
 import { useTranslation } from 'next-i18next';
 import type {
@@ -88,6 +88,16 @@ type ChatContext = {
   title?: string;
   viewType?: ViewType;
   emoji?: string | null;
+};
+
+type ChatContextHint = {
+  title: string;
+  description: string;
+};
+
+type AddChatContextDetail = {
+  context?: ChatContext;
+  hint?: ChatContextHint | null;
 };
 
 type ContextItem = ChatContext & {
@@ -256,7 +266,7 @@ const getContextChipIcon = (context: AiChatContext) => {
     case 'app':
       return AppWindow;
     case 'workflow':
-      return Workflow;
+      return Bot;
     case 'selection':
     case 'current':
       return Database;
@@ -534,6 +544,12 @@ const getActiveContextViews = (
 const getViewIcon = (type?: ViewType) => (type ? VIEW_ICON_MAP[type] ?? LayoutGrid : LayoutGrid);
 
 const DOM_SVG_ICONS: Record<string, DomSvgIconDefinition> = {
+  table: {
+    mode: 'stroke',
+    paths: [
+      'M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18M3 9v10a2 2 0 0 0 2 2h4M3 9h18m0 0v10a2 2 0 0 1-2 2H9',
+    ],
+  },
   grid: {
     mode: 'stroke',
     paths: [
@@ -580,7 +596,12 @@ const DOM_SVG_ICONS: Record<string, DomSvgIconDefinition> = {
   workflow: {
     mode: 'stroke',
     paths: [
-      'M6 3v6M6 9a3 3 0 1 0 0 6M18 15a3 3 0 1 0 0 6M6 15v3a3 3 0 0 0 3 3h6M18 15V9a3 3 0 0 0-3-3H9',
+      'M12 8V4H8',
+      'M6 8h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2',
+      'M2 14h2',
+      'M20 14h2',
+      'M15 13v2',
+      'M9 13v2',
     ],
   },
   selection: {
@@ -684,7 +705,7 @@ const createContextNodeItem = (node: BaseNodeTreeItem, labels: ContextLabels): C
         resourceId: node.resourceId,
         label,
         detail: `${labels.automations}: ${label} (${node.resourceId})`,
-        icon: Workflow,
+        icon: Bot,
       };
   }
 };
@@ -760,6 +781,8 @@ export const ChatPanel = () => {
   const [activeContextTableId, setActiveContextTableId] = useState<string>();
   const [viewSearch, setViewSearch] = useState('');
   const [contexts, setContexts] = useState<ChatContext[]>([]);
+  const [contextHint, setContextHint] = useState<ChatContextHint | null>(null);
+  const [isComposerShadowActive, setIsComposerShadowActive] = useState(false);
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [previewAttachmentId, setPreviewAttachmentId] = useState<string>();
   const [isAttachmentDragActive, setIsAttachmentDragActive] = useState(false);
@@ -774,6 +797,8 @@ export const ChatPanel = () => {
   const messageEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLDivElement | null>(null);
+  const composerShadowTimerRef = useRef<number>();
+  const contextHintTimerRef = useRef<number>();
   const editorRef = useRef<HTMLDivElement | null>(null);
   const savedEditorRangeRef = useRef<Range>();
   const messageViewportRef = useRef<HTMLDivElement>(null);
@@ -787,6 +812,45 @@ export const ChatPanel = () => {
   const restoredChatSelectionRef = useRef<string>();
   const activeChatIdRef = useRef<string>();
   const baseIdRef = useRef<string>();
+  const pendingExternalContextRef = useRef<AddChatContextDetail | null>(null);
+
+  const clearContextHintTimer = useCallback(() => {
+    if (!contextHintTimerRef.current) return;
+    window.clearTimeout(contextHintTimerRef.current);
+    contextHintTimerRef.current = undefined;
+  }, []);
+
+  const dismissContextHint = useCallback(() => {
+    clearContextHintTimer();
+    setContextHint(null);
+  }, [clearContextHintTimer]);
+
+  const showContextHint = useCallback(
+    (hint: ChatContextHint | null | undefined) => {
+      clearContextHintTimer();
+      setContextHint(hint ?? null);
+      if (!hint) return;
+      contextHintTimerRef.current = window.setTimeout(() => {
+        setContextHint(null);
+        contextHintTimerRef.current = undefined;
+      }, 3000) as unknown as number;
+    },
+    [clearContextHintTimer]
+  );
+
+  const activateComposerShadow = useCallback(() => {
+    setIsComposerShadowActive(false);
+    if (composerShadowTimerRef.current) {
+      window.clearTimeout(composerShadowTimerRef.current);
+    }
+    window.setTimeout(() => {
+      setIsComposerShadowActive(true);
+      composerShadowTimerRef.current = window.setTimeout(
+        () => setIsComposerShadowActive(false),
+        1600
+      ) as unknown as number;
+    }, 0);
+  }, []);
 
   const messages = useMemo(
     () =>
@@ -1175,6 +1239,7 @@ export const ChatPanel = () => {
     controllerRef.current?.abort();
     setComposerText('');
     setContexts([]);
+    setContextHint(null);
     clearAttachments();
     setActiveChatId(undefined);
   }, [activeChatId, baseId, clearAttachments, setActiveChatId, setComposerText]);
@@ -1193,6 +1258,7 @@ export const ChatPanel = () => {
     void deleteBaseChat(baseId, activeChatId);
     setComposerText('');
     setContexts([]);
+    setContextHint(null);
     clearAttachments();
   }, [
     activeChatId,
@@ -1499,6 +1565,57 @@ export const ChatPanel = () => {
     },
     [contexts, createContextChipElement, getEditorInsertionRange, insertNodesAtRange]
   );
+
+  const applyExternalContext = useCallback(
+    (detail: AddChatContextDetail) => {
+      const context = detail.context;
+      if (!context?.id || !context.type || !context.label || !context.detail) return;
+      addContext(context);
+      showContextHint(detail.hint);
+      activateComposerShadow();
+    },
+    [activateComposerShadow, addContext, showContextHint]
+  );
+
+  useEffect(() => {
+    const handleAddContext = (event: Event) => {
+      const detail = (event as CustomEvent<AddChatContextDetail>).detail;
+      const context = detail?.context;
+      if (!context?.id || !context.type || !context.label || !context.detail) return;
+      if (status === 'close' || !editorRef.current) {
+        pendingExternalContextRef.current = detail;
+        setPanelType('general');
+        open();
+        return;
+      }
+      applyExternalContext(detail);
+    };
+
+    window.addEventListener('teable:ai-chat-add-context', handleAddContext);
+    return () => window.removeEventListener('teable:ai-chat-add-context', handleAddContext);
+  }, [applyExternalContext, open, setPanelType, status]);
+
+  useEffect(() => {
+    if (status === 'close' || !pendingExternalContextRef.current) return;
+    const timer = window.setTimeout(() => {
+      const detail = pendingExternalContextRef.current;
+      if (!detail || !editorRef.current) return;
+      pendingExternalContextRef.current = null;
+      applyExternalContext(detail);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [applyExternalContext, status]);
+
+  useEffect(() => {
+    return () => {
+      if (composerShadowTimerRef.current) {
+        window.clearTimeout(composerShadowTimerRef.current);
+      }
+      if (contextHintTimerRef.current) {
+        window.clearTimeout(contextHintTimerRef.current);
+      }
+    };
+  }, []);
 
   const openAttachment = useCallback((attachment: ChatAttachment) => {
     if (attachment.status !== 'ready') return;
@@ -1946,6 +2063,7 @@ export const ChatPanel = () => {
       setComposerText('');
       clearAttachments();
       setContexts([]);
+      setContextHint(null);
       setIsGenerating(true);
 
       const startedAt = Date.now();
@@ -3024,9 +3142,34 @@ export const ChatPanel = () => {
           event.target.value = '';
         }}
       />
+      {contextHint && (
+        <div className="mb-2 rounded-lg bg-slate-950 p-3 text-slate-50 shadow-sm dark:bg-slate-100 dark:text-slate-950">
+          <div className="flex items-start gap-3">
+            <MagicAi className="mt-0.5 size-4 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold">{contextHint.title}</div>
+              <div className="mt-1 text-xs leading-5 text-slate-300 dark:text-slate-600">
+                {contextHint.description}
+              </div>
+            </div>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="size-6 shrink-0 text-current hover:bg-white/10 dark:hover:bg-black/10"
+              onClick={dismissContextHint}
+            >
+              <X className="size-4" />
+            </Button>
+          </div>
+        </div>
+      )}
       <div
         ref={composerRef}
-        className="relative rounded-xl border bg-background px-3 pb-3 pt-2 transition-[border-color,box-shadow] duration-200 focus-within:border-ring/70"
+        className={cn(
+          'relative rounded-xl border bg-background px-3 pb-3 pt-2 transition-[border-color,box-shadow] duration-500 focus-within:border-ring/70',
+          isComposerShadowActive &&
+            'shadow-[inset_0_0_0_1px_rgb(15_23_42/0.16),inset_0_0_22px_rgb(15_23_42/0.08)] dark:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.14),inset_0_0_22px_rgb(255_255_255/0.08)]'
+        )}
       >
         {renderContextPicker()}
         <div className="relative">

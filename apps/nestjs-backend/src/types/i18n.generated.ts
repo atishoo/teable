@@ -1321,6 +1321,56 @@ export type I18nTranslations = {
                         "label": string;
                         "description": string;
                     };
+                    "script": {
+                        "label": string;
+                        "description": string;
+                        "aiConfig": {
+                            "title": string;
+                            "description": string;
+                            "nodeContext": string;
+                            "currentConfig": string;
+                            "chatHintTitle": string;
+                            "chatHintDescription": string;
+                        };
+                        "fields": {
+                            "code": {
+                                "title": string;
+                            };
+                        };
+                        "editor": {
+                            "title": string;
+                            "description": string;
+                            "previewTab": string;
+                            "codeTab": string;
+                            "codePlaceholder": string;
+                            "dependencies": string;
+                            "config": string;
+                            "packageNamePlaceholder": string;
+                            "packageVersionPlaceholder": string;
+                            "addDependency": string;
+                            "manualEdit": string;
+                            "running": string;
+                            "notRun": string;
+                            "runTip": string;
+                            "noOutput": string;
+                            "noPreview": string;
+                            "writeCodeForPreview": string;
+                            "runResult": string;
+                            "completions": {
+                                "ctx": string;
+                                "ctxInput": string;
+                                "ctxSteps": string;
+                                "ctxBaseId": string;
+                                "ctxWorkflowId": string;
+                                "ctxNodeId": string;
+                                "fetch": string;
+                            };
+                        };
+                        "tags": {
+                            "email": string;
+                            "custom": string;
+                        };
+                    };
                     "condition": {
                         "label": string;
                         "description": string;
@@ -5346,6 +5396,7 @@ export type I18nTranslations = {
             "shareNodeTab": string;
         };
         "aiChat": {
+            "title": string;
             "agent": {
                 "askUserQuestion": {
                     "otherPlaceholder": string;
@@ -5467,7 +5518,6 @@ export type I18nTranslations = {
                 "skip": string;
                 "submit": string;
             };
-            "title": string;
             "clearChat": string;
             "clearChatConfirmTitle": string;
             "clearChatConfirmDesc": string;

@@ -950,6 +950,7 @@
     "shareNodeTab": "Knoten teilen"
   },
   "aiChat": {
+    "title": "KI-Assistent",
     "agent": {
       "askUserQuestion": {
         "otherPlaceholder": "Oder Antwort eingeben…"

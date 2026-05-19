@@ -959,6 +959,7 @@
     "shareNodeTab": "Düğümü paylaş"
   },
   "aiChat": {
+    "title": "AI Asistanı",
     "noModel": "Kullanılabilir model yok",
     "agent": {
       "askUserQuestion": {

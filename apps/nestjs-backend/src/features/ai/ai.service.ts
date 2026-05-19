@@ -1046,9 +1046,12 @@ export class AiService {
       '- For structured payloads, prefer documented examples from help or bundled docs over inventing JSON shapes.',
       'Automation docs rule for this project:',
       '- The available trigger nodes are: buttonClick, recordCreated, recordUpdated, recordMatchesConditions, formSubmitted, webhook.',
-      '- The available action nodes are: createRecord, getRecords, updateRecord, sendEmail, aiGenerate, httpRequest.',
+      '- The available action nodes are: createRecord, getRecords, updateRecord, sendEmail, aiGenerate, httpRequest, script.',
       '- The available logic node is: condition.',
-      '- Do not mention scheduledTime, emailReceived, script actions, or automation runtime email API as supported nodes in this project.',
+      '- Do not mention scheduledTime or emailReceived as supported nodes in this project.',
+      '- For AI-created automation, prefer creating the trigger first and then using a script action for custom logic. Use createRecord/getRecords/updateRecord/sendEmail/aiGenerate/httpRequest only when the user explicitly asks for visual primitive nodes.',
+      '- For script actions, config.code should export a default async function or define async function run(ctx). The script can use input, ctx, output.set(key, value), fetch, process.env.PUBLIC_ORIGIN, and process.env.AUTOMATION_TOKEN.',
+      '- Before creating or updating automation scripts with Teable CLI, read teable automation --help and the specific command help, then use the documented setup-trigger/generate-script/test-node flow.',
       '- For record API operations, always use field ids, set fieldKeyType to id, and prefer typecast true for create/update.',
       '- For statistics, prefer the table aggregation API instead of fetching all records and aggregating manually.',
     ].join('\n');
@@ -1073,6 +1076,15 @@ export class AiService {
     return [
       contextText ? `<selected_context>\n${contextText}\n</selected_context>` : '',
       attachmentText ? `<attachments>\n${attachmentText}\n</attachments>` : '',
+      contextText?.includes('nodeType: script')
+        ? [
+            '<context_instruction>',
+            'The selected context includes a workflow script node.',
+            'When the user asks to configure it, update that exact node using the workflowId and nodeId from the selected context.',
+            'Prefer modifying config.code and config.dependencies, then test the node when possible.',
+            '</context_instruction>',
+          ].join('\n')
+        : '',
       `<user_request>\n${ro.prompt}\n</user_request>`,
     ]
       .filter(Boolean)

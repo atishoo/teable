@@ -796,6 +796,56 @@
           "label": "Solicitud HTTP",
           "description": "Conéctese a servicios externos a través de API e intercambie datos"
         },
+        "script": {
+          "label": "Ejecutar script",
+          "description": "Usa IA para automatizar cualquier lógica",
+          "aiConfig": {
+            "title": "Configurar con chat de IA",
+            "description": "Envía mensajes a Slack o Teams, o ejecuta lógica personalizada",
+            "nodeContext": "Nodo de automatización",
+            "currentConfig": "Configuración actual",
+            "chatHintTitle": "Configurar script con IA",
+            "chatHintDescription": "Describe en el chat el flujo de trabajo que quieres y Teable AI generará el script por ti"
+          },
+          "fields": {
+            "code": {
+              "title": "Código"
+            }
+          },
+          "editor": {
+            "title": "Editor de scripts",
+            "description": "Edita y prueba la acción de script.",
+            "previewTab": "Vista previa",
+            "codeTab": "Código",
+            "codePlaceholder": "Escribe JavaScript aquí. Usa ctx para leer pasos anteriores y devolver un resultado.",
+            "dependencies": "Dependencias",
+            "config": "Configuración",
+            "packageNamePlaceholder": "Nombre del paquete (p. ej. lodash)",
+            "packageVersionPlaceholder": "Versión (p. ej. ^4.17.21)",
+            "addDependency": "Añadir dependencia",
+            "manualEdit": "Edición manual",
+            "running": "Ejecutando script",
+            "notRun": "Aún no se ha ejecutado",
+            "runTip": "Haz clic en \"Ejecutar prueba\" para ejecutar el script",
+            "noOutput": "Sin salida",
+            "noPreview": "Sin vista previa del flujo",
+            "writeCodeForPreview": "Escribe código para previsualizar el flujo",
+            "runResult": "Resultado de ejecución",
+            "completions": {
+              "ctx": "Contexto de automatización",
+              "ctxInput": "Entrada del nodo actual",
+              "ctxSteps": "Salidas de pasos anteriores",
+              "ctxBaseId": "ID de la base actual",
+              "ctxWorkflowId": "ID de la automatización actual",
+              "ctxNodeId": "ID del nodo actual",
+              "fetch": "Llamar a APIs HTTP"
+            }
+          },
+          "tags": {
+            "email": "Correo",
+            "custom": "Personalizado"
+          }
+        },
         "condition": {
           "label": "Cuando las condiciones coinciden...",
           "description": "Ejecutar diferentes acciones según condiciones específicas"

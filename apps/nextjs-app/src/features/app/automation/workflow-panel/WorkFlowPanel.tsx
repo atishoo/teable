@@ -1,3 +1,13 @@
+import { autocompletion, closeBrackets } from '@codemirror/autocomplete';
+import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
+import { EditorState } from '@codemirror/state';
+import {
+  EditorView,
+  keymap,
+  lineNumbers,
+  placeholder as codeMirrorPlaceholder,
+} from '@codemirror/view';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CellValueType,
@@ -21,6 +31,7 @@ import {
   ActionSendEmail,
   ActionScript,
   ActionUpdateRecord,
+  Code2,
   A as FieldTextIcon,
   Calendar as FieldCalendarIcon,
   CheckCircle2 as FieldSingleSelectIcon,
@@ -40,9 +51,11 @@ import {
   ListChecks as FieldMultipleSelectIcon,
   ListOrdered as FieldAutoNumberIcon,
   LongText as FieldLongTextIcon,
+  Mail,
   MousePointerClick as FieldButtonIcon,
   Object as VariableObjectIcon,
   Search as FieldLookupIcon,
+  Slack,
   Star as FieldRatingIcon,
   Table2 as TableIcon,
   TriggerButton,
@@ -186,6 +199,7 @@ import {
   Link2,
   Loader2,
   Maximize2,
+  MessageSquareCode,
   Minus,
   MoreHorizontal,
   Play,
@@ -380,6 +394,11 @@ type WorkflowOutputVariable = {
   children?: WorkflowOutputVariable[];
 };
 
+type ScriptDependency = {
+  name: string;
+  version: string;
+};
+
 type PanelTranslate = (
   key: string,
   defaultValue: string,
@@ -491,6 +510,15 @@ const ACTION_NODES: INodeCatalogItem[] = [
     icon: ActionSendEmail,
   },
   {
+    type: 'script',
+    category: 'action',
+    labelKey: 'nodes.script.label',
+    labelDefault: 'Run script',
+    descriptionKey: 'nodes.script.description',
+    descriptionDefault: 'Use AI to automate any logic',
+    icon: ActionScript,
+  },
+  {
     type: 'aiGenerate',
     category: 'action',
     labelKey: 'nodes.aiGenerate.label',
@@ -591,6 +619,10 @@ const NODE_ICON_STYLES: Record<string, typeof DEFAULT_NODE_ICON_STYLE> = {
   sendEmail: {
     iconClassName: 'text-sky-600',
     wrapperClassName: 'border-sky-200 bg-sky-50 dark:border-sky-900 dark:bg-sky-950/40',
+  },
+  script: {
+    iconClassName: 'text-violet-600',
+    wrapperClassName: 'border-violet-200 bg-violet-50 dark:border-violet-900 dark:bg-violet-950/40',
   },
   aiGenerate: {
     iconClassName: 'text-pink-600',
@@ -1991,6 +2023,7 @@ const NODE_COMPLETION_CHECKS: Record<string, (config: Record<string, unknown>) =
   aiGenerate: (config) =>
     hasText(config.prompt) && hasText(config.model) && hasText(config.outputType),
   httpRequest: (config) => hasText(config.method) && hasText(config.url),
+  script: (config) => hasText(config.code),
   condition: (config) => isConditionComplete(config),
 };
 
@@ -2112,6 +2145,8 @@ const getDefaultConfig = (type: string, tableId?: string): Record<string, unknow
       };
     case 'sendEmail':
       return { to: '', cc: '', bcc: '', senderName: '', replyTo: '', subject: '', body: '' };
+    case 'script':
+      return { code: '', dependencies: [] };
     case 'aiGenerate':
       return { prompt: '', attachments: [], model: '', temperature: 0.5, outputType: 'string' };
     case 'httpRequest':
@@ -2244,6 +2279,28 @@ const rowsToRecord = (rows: { key: string; value: string }[]) => {
   return Object.fromEntries(
     rows.filter((row) => row.key.trim()).map((row) => [row.key, row.value])
   );
+};
+
+const SCRIPT_CODE_PLACEHOLDER =
+  'Write JavaScript here. Use ctx to read previous steps and return a result.';
+const DEFAULT_SCRIPT_DEPENDENCY: ScriptDependency = { name: '', version: 'latest' };
+
+const normalizeScriptDependencies = (value: unknown): ScriptDependency[] => {
+  if (!Array.isArray(value)) return [];
+  return value.filter(isPlainRecord).map((item) => ({
+    name: typeof item.name === 'string' ? item.name : '',
+    version: typeof item.version === 'string' && item.version ? item.version : 'latest',
+  }));
+};
+
+const formatScriptEditorValue = (value: unknown) => {
+  if (value === undefined) return 'undefined';
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
 };
 
 const omitUndefined = (record: Record<string, unknown>) => {
@@ -3321,6 +3378,18 @@ const buildVariableOptions = (
     }
     return { key, name, type: value === null ? 'null' : typeof value };
   };
+  const inferObjectOutputVariables = (
+    output: unknown,
+    fallbackKey: string,
+    fallbackName: string
+  ) => {
+    if (isPlainRecord(output)) {
+      return Object.entries(output).map(([key, value]) =>
+        inferOutputVariables(`$.${key}`, key, value)
+      );
+    }
+    return output === undefined ? [] : [inferOutputVariables(fallbackKey, fallbackName, output)];
+  };
   const getDynamicOutputVariables = (node: IWorkflowNode): WorkflowOutputVariable[] => {
     const result = getSuccessfulNodeTestResult(node, nodeTestResults);
     const output = result?.step?.output;
@@ -3330,12 +3399,10 @@ const buildVariableOptions = (
       ];
     }
     if (node.type === 'aiGenerate') {
-      if (isPlainRecord(output)) {
-        return Object.entries(output).map(([key, value]) =>
-          inferOutputVariables(`$.${key}`, key, value)
-        );
-      }
-      return output === undefined ? [] : [inferOutputVariables('$.message', 'message', output)];
+      return inferObjectOutputVariables(output, '$.message', 'message');
+    }
+    if (node.type === 'script') {
+      return inferObjectOutputVariables(output, '$.result', 'result');
     }
     if (
       node.type === 'sendEmail' &&
@@ -3514,7 +3581,7 @@ const buildVariableOptions = (
         return;
       }
 
-      if (['aiGenerate', 'sendEmail', 'httpRequest'].includes(node.type)) {
+      if (['aiGenerate', 'sendEmail', 'httpRequest', 'script'].includes(node.type)) {
         addSourceOnlyVariable(node, group);
         return;
       }
@@ -7360,6 +7427,396 @@ const LargeVariableInputDialog = (props: {
   );
 };
 
+const ScriptCodeEditor = (props: {
+  value: string;
+  placeholder?: string;
+  onChange: (value: string) => void;
+}) => {
+  const tr = usePanelTranslate();
+  const editorRef = useRef<HTMLDivElement>(null);
+  const editorViewRef = useRef<EditorView | null>(null);
+  const onChangeRef = useRef(props.onChange);
+
+  useEffect(() => {
+    onChangeRef.current = props.onChange;
+  }, [props.onChange]);
+
+  const extensions = useMemo(() => {
+    const completionOptions = [
+      {
+        label: 'ctx',
+        type: 'variable',
+        detail: tr('nodes.script.editor.completions.ctx', 'Automation context'),
+      },
+      {
+        label: 'ctx.input',
+        type: 'property',
+        detail: tr('nodes.script.editor.completions.ctxInput', 'Current node input'),
+      },
+      {
+        label: 'ctx.steps',
+        type: 'property',
+        detail: tr('nodes.script.editor.completions.ctxSteps', 'Previous step outputs'),
+      },
+      {
+        label: 'ctx.baseId',
+        type: 'property',
+        detail: tr('nodes.script.editor.completions.ctxBaseId', 'Current base id'),
+      },
+      {
+        label: 'ctx.workflowId',
+        type: 'property',
+        detail: tr('nodes.script.editor.completions.ctxWorkflowId', 'Current workflow id'),
+      },
+      {
+        label: 'ctx.nodeId',
+        type: 'property',
+        detail: tr('nodes.script.editor.completions.ctxNodeId', 'Current node id'),
+      },
+      {
+        label: 'fetch',
+        type: 'function',
+        detail: tr('nodes.script.editor.completions.fetch', 'Call HTTP APIs'),
+      },
+      { label: 'await', type: 'keyword' },
+      { label: 'async', type: 'keyword' },
+      { label: 'return', type: 'keyword' },
+      { label: 'JSON.stringify', type: 'function' },
+      { label: 'JSON.parse', type: 'function' },
+    ];
+    const updateListener = EditorView.updateListener.of((update) => {
+      if (update.docChanged) {
+        onChangeRef.current(update.state.doc.toString());
+      }
+    });
+
+    return [
+      lineNumbers(),
+      history(),
+      closeBrackets(),
+      autocompletion({
+        override: [
+          (context) => {
+            const word = context.matchBefore(/[\w.]*$/);
+            if (!word || (word.from === word.to && !context.explicit)) return null;
+            return {
+              from: word.from,
+              options: completionOptions,
+              validFor: /^[\w.]*$/,
+            };
+          },
+        ],
+      }),
+      keymap.of([...defaultKeymap, indentWithTab, ...historyKeymap]),
+      syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+      codeMirrorPlaceholder(props.placeholder ?? ''),
+      EditorView.lineWrapping,
+      updateListener,
+      EditorView.theme({
+        '&': {
+          height: '100%',
+          minHeight: '0',
+          backgroundColor: 'hsl(var(--background))',
+          fontSize: '12px',
+        },
+        '&.cm-focused': { outline: 'none' },
+        '.cm-scroller': {
+          height: '100%',
+          overflow: 'auto',
+          fontFamily:
+            'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+        },
+        '.cm-content': {
+          minHeight: '100%',
+          padding: '8px',
+          caretColor: 'hsl(var(--foreground))',
+          lineHeight: '20px',
+        },
+        '.cm-line': { padding: '0 2px' },
+        '.cm-gutters': {
+          borderRight: '1px solid hsl(var(--border))',
+          backgroundColor: 'hsl(var(--muted) / 0.3)',
+          color: 'hsl(var(--muted-foreground) / 0.6)',
+        },
+        '.cm-lineNumbers .cm-gutterElement': {
+          minWidth: '36px',
+          padding: '0 10px 0 4px',
+          textAlign: 'right',
+        },
+        '.cm-placeholder': {
+          color: 'hsl(var(--muted-foreground))',
+          opacity: '0.7',
+        },
+        '.cm-tooltip': {
+          border: '1px solid hsl(var(--border))',
+          borderRadius: '6px',
+          backgroundColor: 'hsl(var(--popover))',
+          color: 'hsl(var(--popover-foreground))',
+          boxShadow: '0 8px 24px rgb(0 0 0 / 0.12)',
+          overflow: 'hidden',
+        },
+        '.cm-tooltip-autocomplete ul': {
+          maxHeight: '220px',
+        },
+        '.cm-tooltip-autocomplete ul li[aria-selected]': {
+          backgroundColor: 'hsl(var(--accent))',
+          color: 'hsl(var(--accent-foreground))',
+        },
+      }),
+    ];
+  }, [props.placeholder, tr]);
+
+  useEffect(() => {
+    if (!editorRef.current) return;
+    const editorView = new EditorView({
+      parent: editorRef.current,
+      state: EditorState.create({
+        doc: props.value,
+        extensions,
+      }),
+    });
+    editorViewRef.current = editorView;
+
+    return () => {
+      editorView.destroy();
+      editorViewRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const editorView = editorViewRef.current;
+    if (!editorView) return;
+    const currentValue = editorView.state.doc.toString();
+    if (currentValue === props.value) return;
+    editorView.dispatch({
+      changes: { from: 0, to: currentValue.length, insert: props.value },
+    });
+  }, [props.value]);
+
+  return <div ref={editorRef} className="size-full min-h-0" />;
+};
+
+const ScriptEditorDialog = (props: {
+  value: string;
+  dependencies: ScriptDependency[];
+  testResult?: NodeTestResult;
+  isTesting?: boolean;
+  canRunTest?: boolean;
+  placeholder?: string;
+  trigger?: ReactNode;
+  onChange: (value: string) => void;
+  onDependenciesChange: (value: ScriptDependency[]) => void;
+  onRunTest?: () => void;
+}) => {
+  const tr = usePanelTranslate();
+  const [tab, setTab] = useState<'preview' | 'code'>('code');
+  const [open, setOpen] = useState(false);
+  const dependencyRows = props.dependencies.length
+    ? props.dependencies
+    : [DEFAULT_SCRIPT_DEPENDENCY];
+  const updateDependency = (index: number, patch: Partial<ScriptDependency>) => {
+    props.onDependenciesChange(
+      replaceItemAt(dependencyRows, index, {
+        ...dependencyRows[index],
+        ...patch,
+      })
+    );
+  };
+  const removeDependency = (index: number) => {
+    if (dependencyRows.length <= 1) return;
+    props.onDependenciesChange(removeItemAt(dependencyRows, index));
+  };
+  const addDependency = () => {
+    props.onDependenciesChange([...props.dependencies, DEFAULT_SCRIPT_DEPENDENCY]);
+  };
+  const renderResult = () => {
+    const step = props.testResult?.step;
+    if (props.isTesting) {
+      return (
+        <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" />
+          {tr('nodes.script.editor.running', 'Running script')}
+        </div>
+      );
+    }
+    if (!step) {
+      return (
+        <div className="flex h-full flex-col items-center justify-center text-center">
+          <div className="text-sm font-medium">
+            {tr('nodes.script.editor.notRun', 'Not run yet')}
+          </div>
+          <div className="mt-2 text-xs text-muted-foreground">
+            {tr('nodes.script.editor.runTip', 'Click "Run test" to run the script')}
+          </div>
+        </div>
+      );
+    }
+
+    const isSuccess = step.status === 'success';
+    return (
+      <div className="space-y-3 text-xs">
+        <div
+          className={cn(
+            'flex items-center gap-2 rounded-md border px-3 py-2 text-sm',
+            isSuccess
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300'
+              : 'border-destructive/30 bg-destructive/5 text-destructive'
+          )}
+        >
+          {isSuccess ? <CheckCircle2 className="size-4" /> : <TriangleAlert className="size-4" />}
+          {isSuccess
+            ? tr('runStatus.runSuccessful', 'Run successful')
+            : step.error || tr('runStatus.failed', 'Run failed')}
+        </div>
+        {step.error && !isSuccess ? (
+          <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-destructive">
+            {step.error}
+          </div>
+        ) : null}
+        <pre className="max-h-[520px] overflow-auto rounded-md border bg-muted/30 p-3 font-mono text-xs leading-5">
+          {step.output === undefined
+            ? tr('nodes.script.editor.noOutput', 'No output')
+            : formatScriptEditorValue(step.output)}
+        </pre>
+      </div>
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        {props.trigger ?? (
+          <Button className="h-7 gap-1 px-1.5 text-xs font-normal" size="sm" variant="ghost">
+            <Maximize2 className="size-3.5" />
+            {tr('actions.edit', 'Edit')}
+          </Button>
+        )}
+      </DialogTrigger>
+      <DialogContent className="flex h-[min(86vh,820px)] max-h-[calc(100vh-3rem)] w-[min(88vw,1400px)] max-w-[1400px] flex-col overflow-hidden">
+        <DialogTitle>{tr('nodes.script.editor.title', 'Script editor')}</DialogTitle>
+        <DialogDescription className="sr-only">
+          {tr('nodes.script.editor.description', 'Edit and test the script action.')}
+        </DialogDescription>
+        <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border">
+            <div className="flex items-center justify-between gap-3 border-b px-3 py-2">
+              <div className="inline-flex rounded-md bg-muted p-1 text-xs">
+                <button
+                  type="button"
+                  className={cn(
+                    'rounded px-3 py-1.5 font-medium text-muted-foreground transition-colors',
+                    tab === 'preview' && 'bg-background text-foreground shadow-sm'
+                  )}
+                  onClick={() => setTab('preview')}
+                >
+                  {tr('nodes.script.editor.previewTab', 'Preview')}
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    'rounded px-3 py-1.5 font-medium text-muted-foreground transition-colors',
+                    tab === 'code' && 'bg-background text-foreground shadow-sm'
+                  )}
+                  onClick={() => setTab('code')}
+                >
+                  {tr('nodes.script.editor.codeTab', 'Code')}
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  disabled={!props.canRunTest || props.isTesting}
+                  onClick={props.onRunTest}
+                >
+                  {props.isTesting ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Play className="size-4" />
+                  )}
+                  {tr('actions.runTest', 'Run test')}
+                </Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button size="sm" variant="outline">
+                      {tr('nodes.script.editor.dependencies', 'Dependencies')}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-[360px] p-4">
+                    <div className="mb-3 text-sm font-semibold">
+                      {tr('nodes.script.editor.config', 'Config')}
+                    </div>
+                    <div className="space-y-2">
+                      {dependencyRows.map((dependency, index) => (
+                        <div key={index} className="grid grid-cols-[1fr_120px_28px] gap-2">
+                          <Input
+                            value={dependency.name}
+                            placeholder={tr(
+                              'nodes.script.editor.packageNamePlaceholder',
+                              'Package name (e.g. lodash)'
+                            )}
+                            onChange={(event) =>
+                              updateDependency(index, { name: event.currentTarget.value })
+                            }
+                          />
+                          <Input
+                            value={dependency.version}
+                            placeholder={tr(
+                              'nodes.script.editor.packageVersionPlaceholder',
+                              'Version (e.g. ^4.17.21)'
+                            )}
+                            onChange={(event) =>
+                              updateDependency(index, { version: event.currentTarget.value })
+                            }
+                          />
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-9"
+                            disabled={dependencyRows.length <= 1}
+                            onClick={() => removeDependency(index)}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button className="w-full" variant="outline" onClick={addDependency}>
+                        <Plus className="size-4" />
+                        {tr('nodes.script.editor.addDependency', 'Add dependency')}
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+            {tab === 'preview' ? (
+              <div className="flex flex-1 items-center justify-center p-6 text-sm text-muted-foreground">
+                {props.value.trim()
+                  ? tr('nodes.script.editor.noPreview', 'No flow preview')
+                  : tr('nodes.script.editor.writeCodeForPreview', 'Write code to preview flow')}
+              </div>
+            ) : (
+              <div className="min-h-0 flex-1 overflow-hidden bg-background">
+                <ScriptCodeEditor
+                  value={props.value}
+                  placeholder={props.placeholder}
+                  onChange={props.onChange}
+                />
+              </div>
+            )}
+          </div>
+          <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border">
+            <div className="border-b px-4 py-3 text-center text-sm font-semibold">
+              {tr('nodes.script.editor.runResult', 'Run result')}
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">{renderResult()}</div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 const FilterBuilder = (props: {
   value: unknown;
   fields: TableField[];
@@ -9920,6 +10377,44 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
       Boolean(testRecordTableId) && (!isRecordTestTrigger || isSelectedNodeComplete);
     const shouldShowGenericTestButton = !shouldShowRecordTestButton;
     const aiOutputType = config.outputType === 'json' ? 'json' : 'string';
+    const scriptCode = typeof config.code === 'string' ? config.code : '';
+    const scriptDependencies = normalizeScriptDependencies(config.dependencies);
+    const scriptNodeIndex = (graphNodeIndexMap.get(selectedNode.id) ?? 0) + 1;
+    const updateScriptDependencies = (value: ScriptDependency[]) =>
+      updateNodeConfig('dependencies', value.length ? value : undefined);
+    const configureScriptWithAI = () => {
+      if (typeof window === 'undefined') return;
+      const label = `${scriptNodeIndex}. ${getNodeLabel(selectedNode, tr)}`;
+      window.dispatchEvent(
+        new CustomEvent('teable:ai-chat-add-context', {
+          detail: {
+            context: {
+              id: `workflow-node-${selectedNode.id}`,
+              type: 'workflow',
+              label,
+              detail: [
+                `${tr('nodes.script.aiConfig.nodeContext', 'Automation node')}: ${label}`,
+                `workflowId: ${workflowId}`,
+                `nodeId: ${selectedNode.id}`,
+                `nodeType: ${selectedNode.type}`,
+                `recommendedAction: update this exact script node config.code and config.dependencies, then test it when possible.`,
+                `${tr('nodes.script.aiConfig.currentConfig', 'Current config')}: ${formatScriptEditorValue(
+                  selectedNode.config ?? {}
+                )}`,
+              ].join('\n'),
+              title: label,
+            },
+            hint: {
+              title: tr('nodes.script.aiConfig.chatHintTitle', 'Configure script with AI'),
+              description: tr(
+                'nodes.script.aiConfig.chatHintDescription',
+                'Describe the workflow you want in chat, and Teable AI will generate the script for you'
+              ),
+            },
+          },
+        })
+      );
+    };
 
     return (
       <div className="space-y-4">
@@ -10359,6 +10854,95 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
                 />
               </FieldBlock>
             </>
+          )}
+
+          {selectedNode.type === 'script' && (
+            <div className="space-y-3">
+              {scriptCode.trim() ? (
+                <Button
+                  className="h-9 w-full justify-center gap-2 font-medium"
+                  variant="outline"
+                  onClick={configureScriptWithAI}
+                >
+                  <MessageSquareCode className="size-4" />
+                  {tr('nodes.script.aiConfig.title', 'Configure via AI chat')}
+                </Button>
+              ) : (
+                <button
+                  type="button"
+                  className="w-full rounded-md border bg-background p-4 text-left transition-colors hover:bg-accent/40 active:bg-accent"
+                  onClick={configureScriptWithAI}
+                >
+                  <div className="flex items-start gap-3">
+                    <MessageSquareCode className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-semibold">
+                        {tr('nodes.script.aiConfig.title', 'Configure via AI chat')}
+                      </div>
+                      <div className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                        {tr(
+                          'nodes.script.aiConfig.description',
+                          'Send messages to Slack, Teams, or run custom logic'
+                        )}
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Badge
+                          className="h-7 gap-1.5 rounded-md bg-background px-2 font-normal"
+                          variant="outline"
+                        >
+                          <Slack className="size-4" />
+                          Slack
+                        </Badge>
+                        <Badge
+                          className="h-7 gap-1.5 rounded-md bg-background px-2 font-normal"
+                          variant="outline"
+                        >
+                          <Mail className="size-4 text-blue-500" />
+                          {tr('nodes.script.tags.email', 'Email')}
+                        </Badge>
+                        <Badge
+                          className="h-7 gap-1.5 rounded-md bg-background px-2 font-normal"
+                          variant="outline"
+                        >
+                          <Code2 className="size-4" />
+                          {tr('nodes.script.tags.custom', 'Custom')}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              )}
+              <div className={cn(scriptCode.trim() && 'relative rounded-md border bg-muted/20')}>
+                <ScriptEditorDialog
+                  value={scriptCode}
+                  dependencies={scriptDependencies}
+                  testResult={selectedNodeResult}
+                  isTesting={isSelectedNodeTestPending}
+                  canRunTest={isSelectedNodeComplete && !isSelectedNodeTestPending}
+                  placeholder={tr('nodes.script.editor.codePlaceholder', SCRIPT_CODE_PLACEHOLDER)}
+                  trigger={
+                    scriptCode.trim() ? (
+                      <Button className="absolute right-2 top-2 size-7" size="icon" variant="ghost">
+                        <Maximize2 className="size-4" />
+                      </Button>
+                    ) : (
+                      <Button className="h-9 w-full gap-2" variant="outline">
+                        <Pencil className="size-4" />
+                        {tr('nodes.script.editor.manualEdit', 'Manual edit')}
+                      </Button>
+                    )
+                  }
+                  onChange={(value) => updateNodeConfig('code', value)}
+                  onDependenciesChange={updateScriptDependencies}
+                  onRunTest={() => void handleTestSelectedNode()}
+                />
+                {scriptCode.trim() ? (
+                  <pre className="max-h-36 overflow-auto whitespace-pre-wrap break-words p-3 pr-10 font-mono text-xs leading-5">
+                    {scriptCode}
+                  </pre>
+                ) : null}
+              </div>
+            </div>
           )}
 
           {selectedNode.type === 'aiGenerate' && (

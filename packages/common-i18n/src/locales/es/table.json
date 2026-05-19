@@ -943,6 +943,7 @@
     "more": "Explorar más ..."
   },
   "aiChat": {
+    "title": "Asistente de IA",
     "agent": {
       "askUserQuestion": {
         "otherPlaceholder": "O escribe tu respuesta…"

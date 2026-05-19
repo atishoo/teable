@@ -929,6 +929,7 @@
     "shareNodeTab": "Partager le nœud"
   },
   "aiChat": {
+    "title": "Assistant IA",
     "agent": {
       "askUserQuestion": {
         "otherPlaceholder": "Ou saisissez votre réponse…"

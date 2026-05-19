@@ -793,6 +793,56 @@
           "label": "HTTP-Anfrage",
           "description": "Stellen Sie über APIs eine Verbindung zu externen Diensten her und tauschen Sie Daten aus"
         },
+        "script": {
+          "label": "Skript ausführen",
+          "description": "Nutzen Sie KI, um beliebige Logik zu automatisieren",
+          "aiConfig": {
+            "title": "Über KI-Chat konfigurieren",
+            "description": "Nachrichten an Slack oder Teams senden oder benutzerdefinierte Logik ausführen",
+            "nodeContext": "Automatisierungsknoten",
+            "currentConfig": "Aktuelle Konfiguration",
+            "chatHintTitle": "Skript mit KI konfigurieren",
+            "chatHintDescription": "Beschreiben Sie den gewünschten Workflow im Chat, und Teable AI generiert das Skript für Sie"
+          },
+          "fields": {
+            "code": {
+              "title": "Code"
+            }
+          },
+          "editor": {
+            "title": "Skript-Editor",
+            "description": "Skriptaktion bearbeiten und testen.",
+            "previewTab": "Vorschau",
+            "codeTab": "Code",
+            "codePlaceholder": "Schreiben Sie hier JavaScript. Verwenden Sie ctx, um vorherige Schritte zu lesen und ein Ergebnis zurückzugeben.",
+            "dependencies": "Abhängigkeiten",
+            "config": "Konfiguration",
+            "packageNamePlaceholder": "Paketname (z. B. lodash)",
+            "packageVersionPlaceholder": "Version (z. B. ^4.17.21)",
+            "addDependency": "Abhängigkeit hinzufügen",
+            "manualEdit": "Manuell bearbeiten",
+            "running": "Skript wird ausgeführt",
+            "notRun": "Noch nicht ausgeführt",
+            "runTip": "Klicken Sie auf „Test ausführen“, um das Skript auszuführen",
+            "noOutput": "Keine Ausgabe",
+            "noPreview": "Keine Ablaufvorschau",
+            "writeCodeForPreview": "Schreiben Sie Code, um die Ablaufvorschau anzuzeigen",
+            "runResult": "Ausführungsergebnis",
+            "completions": {
+              "ctx": "Automatisierungskontext",
+              "ctxInput": "Aktuelle Knoteneingabe",
+              "ctxSteps": "Ausgaben vorheriger Schritte",
+              "ctxBaseId": "Aktuelle Base-ID",
+              "ctxWorkflowId": "Aktuelle Automatisierungs-ID",
+              "ctxNodeId": "Aktuelle Knoten-ID",
+              "fetch": "HTTP-APIs aufrufen"
+            }
+          },
+          "tags": {
+            "email": "E-Mail",
+            "custom": "Benutzerdefiniert"
+          }
+        },
         "condition": {
           "label": "Wenn die Bedingungen passen...",
           "description": "Verschiedene Aktionen basierend auf bestimmten Bedingungen ausführen"

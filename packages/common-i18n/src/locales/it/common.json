@@ -798,6 +798,56 @@
           "label": "Richiesta HTTP",
           "description": "Connettiti a servizi esterni tramite API e scambia dati"
         },
+        "script": {
+          "label": "Esegui script",
+          "description": "Usa l’IA per automatizzare qualsiasi logica",
+          "aiConfig": {
+            "title": "Configura tramite chat IA",
+            "description": "Invia messaggi a Slack o Teams, oppure esegui logica personalizzata",
+            "nodeContext": "Nodo di automazione",
+            "currentConfig": "Configurazione corrente",
+            "chatHintTitle": "Configura lo script con l’IA",
+            "chatHintDescription": "Descrivi in chat il workflow desiderato e Teable AI genererà lo script per te"
+          },
+          "fields": {
+            "code": {
+              "title": "Codice"
+            }
+          },
+          "editor": {
+            "title": "Editor script",
+            "description": "Modifica e testa l’azione dello script.",
+            "previewTab": "Anteprima",
+            "codeTab": "Codice",
+            "codePlaceholder": "Scrivi JavaScript qui. Usa ctx per leggere i passaggi precedenti e restituire un risultato.",
+            "dependencies": "Dipendenze",
+            "config": "Configurazione",
+            "packageNamePlaceholder": "Nome pacchetto (es. lodash)",
+            "packageVersionPlaceholder": "Versione (es. ^4.17.21)",
+            "addDependency": "Aggiungi dipendenza",
+            "manualEdit": "Modifica manuale",
+            "running": "Esecuzione script",
+            "notRun": "Non ancora eseguito",
+            "runTip": "Fai clic su \"Esegui test\" per eseguire lo script",
+            "noOutput": "Nessun output",
+            "noPreview": "Nessuna anteprima del flusso",
+            "writeCodeForPreview": "Scrivi codice per visualizzare l’anteprima del flusso",
+            "runResult": "Risultato esecuzione",
+            "completions": {
+              "ctx": "Contesto automazione",
+              "ctxInput": "Input del nodo corrente",
+              "ctxSteps": "Output dei passaggi precedenti",
+              "ctxBaseId": "ID base corrente",
+              "ctxWorkflowId": "ID automazione corrente",
+              "ctxNodeId": "ID nodo corrente",
+              "fetch": "Chiamare API HTTP"
+            }
+          },
+          "tags": {
+            "email": "Email",
+            "custom": "Personalizzato"
+          }
+        },
         "condition": {
           "label": "Quando le condizioni corrispondono...",
           "description": "Esegui azioni diverse in base a condizioni specifiche"

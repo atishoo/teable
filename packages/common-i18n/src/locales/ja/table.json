@@ -928,6 +928,7 @@
     "shareNodeTab": "ノードを共有"
   },
   "aiChat": {
+    "title": "AIアシスタント",
     "agent": {
       "askUserQuestion": {
         "otherPlaceholder": "または回答を入力…"

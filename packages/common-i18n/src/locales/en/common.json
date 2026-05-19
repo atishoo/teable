@@ -1107,6 +1107,56 @@
           "label": "Send email",
           "description": "Send a custom email"
         },
+        "script": {
+          "label": "Run script",
+          "description": "Use AI to automate any logic",
+          "aiConfig": {
+            "title": "Configure via AI chat",
+            "description": "Send messages to Slack, Teams, or run custom logic",
+            "nodeContext": "Automation node",
+            "currentConfig": "Current config",
+            "chatHintTitle": "Configure script with AI",
+            "chatHintDescription": "Describe the workflow you want in chat, and Teable AI will generate the script for you"
+          },
+          "fields": {
+            "code": {
+              "title": "Code"
+            }
+          },
+          "editor": {
+            "title": "Script editor",
+            "description": "Edit and test the script action.",
+            "previewTab": "Preview",
+            "codeTab": "Code",
+            "codePlaceholder": "Write JavaScript here. Use ctx to read previous steps and return a result.",
+            "dependencies": "Dependencies",
+            "config": "Config",
+            "packageNamePlaceholder": "Package name (e.g. lodash)",
+            "packageVersionPlaceholder": "Version (e.g. ^4.17.21)",
+            "addDependency": "Add dependency",
+            "manualEdit": "Manual edit",
+            "running": "Running script",
+            "notRun": "Not run yet",
+            "runTip": "Click \"Run test\" to run the script",
+            "noOutput": "No output",
+            "noPreview": "No flow preview",
+            "writeCodeForPreview": "Write code to preview flow",
+            "runResult": "Run result",
+            "completions": {
+              "ctx": "Automation context",
+              "ctxInput": "Current node input",
+              "ctxSteps": "Previous step outputs",
+              "ctxBaseId": "Current base id",
+              "ctxWorkflowId": "Current workflow id",
+              "ctxNodeId": "Current node id",
+              "fetch": "Call HTTP APIs"
+            }
+          },
+          "tags": {
+            "email": "Email",
+            "custom": "Custom"
+          }
+        },
         "httpRequest": {
           "label": "HTTP request",
           "description": "Connect to external services through APIs and exchange data"

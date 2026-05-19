@@ -1104,6 +1104,56 @@
           "label": "发送邮件",
           "description": "发送自定电子邮件"
         },
+        "script": {
+          "label": "运行脚本",
+          "description": "使用 AI 自动化任何逻辑",
+          "aiConfig": {
+            "title": "通过 AI 对话配置",
+            "description": "发送消息到 Slack、Teams，或运行自定义逻辑",
+            "nodeContext": "自动化节点",
+            "currentConfig": "当前配置",
+            "chatHintTitle": "用 AI 配置脚本",
+            "chatHintDescription": "直接在聊天中描述你想要的工作流，Teable AI 会为你生成对应的脚本"
+          },
+          "fields": {
+            "code": {
+              "title": "代码"
+            }
+          },
+          "editor": {
+            "title": "脚本编辑器",
+            "description": "编辑并测试运行脚本操作。",
+            "previewTab": "预览",
+            "codeTab": "代码",
+            "codePlaceholder": "在这里编写 JavaScript 脚本，可通过 ctx 读取上一步输出并返回结果。",
+            "dependencies": "依赖包",
+            "config": "配置",
+            "packageNamePlaceholder": "包名 (例如: lodash)",
+            "packageVersionPlaceholder": "版本 (例如: ^4.17.21)",
+            "addDependency": "添加依赖包",
+            "manualEdit": "手动编辑",
+            "running": "正在运行脚本",
+            "notRun": "还未运行脚本",
+            "runTip": "点击\"运行测试\"按钮来运行脚本",
+            "noOutput": "无输出",
+            "noPreview": "暂无流程图预览",
+            "writeCodeForPreview": "编写代码以查看流程图预览",
+            "runResult": "运行结果",
+            "completions": {
+              "ctx": "自动化上下文",
+              "ctxInput": "当前节点输入",
+              "ctxSteps": "前置步骤输出",
+              "ctxBaseId": "当前数据库 ID",
+              "ctxWorkflowId": "当前自动化 ID",
+              "ctxNodeId": "当前节点 ID",
+              "fetch": "调用 HTTP API"
+            }
+          },
+          "tags": {
+            "email": "邮件",
+            "custom": "自定义"
+          }
+        },
         "httpRequest": {
           "label": "HTTP 请求",
           "description": "通过 API 连接外部服务并交换数据"

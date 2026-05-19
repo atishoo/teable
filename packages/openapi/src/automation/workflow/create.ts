@@ -22,6 +22,7 @@ export const workflowActionTypeSchema = z.enum([
   'sendEmail',
   'aiGenerate',
   'httpRequest',
+  'script',
 ]);
 
 export const workflowLogicTypeSchema = z.enum(['condition']);

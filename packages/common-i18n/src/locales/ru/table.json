@@ -929,6 +929,7 @@
     "shareNodeTab": "Поделиться узлом"
   },
   "aiChat": {
+    "title": "ИИ-ассистент",
     "agent": {
       "askUserQuestion": {
         "otherPlaceholder": "Или введите ответ…"

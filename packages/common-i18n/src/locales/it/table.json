@@ -954,6 +954,7 @@
     "more": "Esplora di più..."
   },
   "aiChat": {
+    "title": "Assistente AI",
     "agent": {
       "askUserQuestion": {
         "otherPlaceholder": "Oppure digita la tua risposta…"

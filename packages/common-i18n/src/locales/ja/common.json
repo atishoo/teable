@@ -800,6 +800,56 @@
           "label": "HTTP リクエスト",
           "description": "APIを介して外部サービスに接続し、データを交換する"
         },
+        "script": {
+          "label": "スクリプトを実行",
+          "description": "AI を使って任意のロジックを自動化します",
+          "aiConfig": {
+            "title": "AI チャットで設定",
+            "description": "Slack や Teams にメッセージを送信するか、カスタムロジックを実行します",
+            "nodeContext": "自動化ノード",
+            "currentConfig": "現在の設定",
+            "chatHintTitle": "AI でスクリプトを設定",
+            "chatHintDescription": "チャットで必要なワークフローを説明すると、Teable AI がスクリプトを生成します"
+          },
+          "fields": {
+            "code": {
+              "title": "コード"
+            }
+          },
+          "editor": {
+            "title": "スクリプトエディター",
+            "description": "スクリプトアクションを編集してテストします。",
+            "previewTab": "プレビュー",
+            "codeTab": "コード",
+            "codePlaceholder": "ここに JavaScript を記述します。ctx を使用して前のステップを読み取り、結果を返します。",
+            "dependencies": "依存関係",
+            "config": "設定",
+            "packageNamePlaceholder": "パッケージ名（例: lodash）",
+            "packageVersionPlaceholder": "バージョン（例: ^4.17.21）",
+            "addDependency": "依存関係を追加",
+            "manualEdit": "手動編集",
+            "running": "スクリプトを実行中",
+            "notRun": "まだ実行されていません",
+            "runTip": "「テスト実行」をクリックしてスクリプトを実行します",
+            "noOutput": "出力なし",
+            "noPreview": "フロープレビューなし",
+            "writeCodeForPreview": "コードを書いてフローをプレビューします",
+            "runResult": "実行結果",
+            "completions": {
+              "ctx": "自動化コンテキスト",
+              "ctxInput": "現在のノード入力",
+              "ctxSteps": "前のステップの出力",
+              "ctxBaseId": "現在のベース ID",
+              "ctxWorkflowId": "現在の自動化 ID",
+              "ctxNodeId": "現在のノード ID",
+              "fetch": "HTTP API を呼び出す"
+            }
+          },
+          "tags": {
+            "email": "メール",
+            "custom": "カスタム"
+          }
+        },
         "condition": {
           "label": "条件が合えば…",
           "description": "特定の条件に基づいて異なる操作を実行"

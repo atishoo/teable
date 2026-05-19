@@ -757,6 +757,56 @@
           "label": "HTTP isteği",
           "description": "API'ler aracılığıyla harici hizmetlere bağlanın ve veri alışverişinde bulunun"
         },
+        "script": {
+          "label": "Betik çalıştır",
+          "description": "Her türlü mantığı otomatikleştirmek için AI kullanın",
+          "aiConfig": {
+            "title": "AI sohbetiyle yapılandır",
+            "description": "Slack veya Teams’e mesaj gönderin ya da özel mantık çalıştırın",
+            "nodeContext": "Otomasyon düğümü",
+            "currentConfig": "Geçerli yapılandırma",
+            "chatHintTitle": "Betik AI ile yapılandır",
+            "chatHintDescription": "İstediğiniz iş akışını sohbette açıklayın, Teable AI sizin için betiği oluştursun"
+          },
+          "fields": {
+            "code": {
+              "title": "Kod"
+            }
+          },
+          "editor": {
+            "title": "Betik düzenleyici",
+            "description": "Betik eylemini düzenleyin ve test edin.",
+            "previewTab": "Önizleme",
+            "codeTab": "Kod",
+            "codePlaceholder": "JavaScript kodunu buraya yazın. Önceki adımları okumak ve sonuç döndürmek için ctx kullanın.",
+            "dependencies": "Bağımlılıklar",
+            "config": "Yapılandırma",
+            "packageNamePlaceholder": "Paket adı (örn. lodash)",
+            "packageVersionPlaceholder": "Sürüm (örn. ^4.17.21)",
+            "addDependency": "Bağımlılık ekle",
+            "manualEdit": "Elle düzenle",
+            "running": "Betik çalıştırılıyor",
+            "notRun": "Henüz çalıştırılmadı",
+            "runTip": "Betiği çalıştırmak için \"Testi çalıştır\" düğmesine tıklayın",
+            "noOutput": "Çıktı yok",
+            "noPreview": "Akış önizlemesi yok",
+            "writeCodeForPreview": "Akış önizlemesi için kod yazın",
+            "runResult": "Çalıştırma sonucu",
+            "completions": {
+              "ctx": "Otomasyon bağlamı",
+              "ctxInput": "Geçerli düğüm girdisi",
+              "ctxSteps": "Önceki adım çıktıları",
+              "ctxBaseId": "Geçerli base ID",
+              "ctxWorkflowId": "Geçerli otomasyon ID",
+              "ctxNodeId": "Geçerli düğüm ID",
+              "fetch": "HTTP API çağır"
+            }
+          },
+          "tags": {
+            "email": "E-posta",
+            "custom": "Özel"
+          }
+        },
         "condition": {
           "label": "Koşullar eşleştiğinde...",
           "description": "Belirli koşullara göre farklı işlemler çalıştır"

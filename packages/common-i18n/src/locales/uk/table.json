@@ -948,6 +948,7 @@
     "shareNodeTab": "Поділитися вузлом"
   },
   "aiChat": {
+    "title": "ШІ-асистент",
     "agent": {
       "askUserQuestion": {
         "otherPlaceholder": "Або введіть відповідь…"

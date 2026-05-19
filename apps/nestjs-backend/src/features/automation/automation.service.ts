@@ -1,4 +1,5 @@
 import { randomBytes } from 'crypto';
+import { createContext, Script } from 'node:vm';
 import { Injectable } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import {
@@ -96,6 +97,8 @@ interface IReceiveWebhookPayload {
 const webhookTriggerNotFound = 'Webhook trigger not found';
 const webhookTriggerNotFoundI18nKey = 'httpErrors.automation.webhookTriggerNotFound';
 const httpContentTypeHeader = 'content-type';
+const automationScriptTimeoutMs = 30_000;
+const automationRuntimeToken = 'automation-runtime-token';
 
 @Injectable()
 export class AutomationService {
@@ -978,6 +981,9 @@ export class AutomationService {
       case 'httpRequest': {
         return this.executeHttpRequestAction(config);
       }
+      case 'script': {
+        return this.executeScriptAction(config, runtime);
+      }
       default:
         throw new Error(`Unsupported workflow action: ${node.type}`);
     }
@@ -1022,6 +1028,339 @@ export class AutomationService {
         error: error instanceof Error ? error.message : String(error),
       };
     }
+  }
+
+  private async executeScriptAction(config: Record<string, unknown>, runtime: IRuntimeContext) {
+    const code = this.requiredString(config.code, 'code');
+    const outputValues: Record<string, unknown> = {};
+    const logs: string[] = [];
+    const output = {
+      set: (key: unknown, value: unknown) => {
+        if (typeof key !== 'string' || !key) throw new Error('output key is required');
+        outputValues[key] = value;
+      },
+    };
+    const runtimeFetch = this.createAutomationRuntimeFetch(runtime);
+    const scriptProcess = {
+      env: {
+        PUBLIC_ORIGIN: process.env.PUBLIC_ORIGIN ?? '',
+        AUTOMATION_TOKEN: automationRuntimeToken,
+      },
+    };
+    const input = this.getScriptInput(runtime);
+    const ctx = { ...input, input, output, fetch: runtimeFetch, process: scriptProcess };
+    const context = createContext(
+      {
+        input,
+        ctx,
+        output,
+        console: this.createScriptConsole(logs),
+        fetch: runtimeFetch,
+        process: scriptProcess,
+        URL,
+        URLSearchParams,
+        Headers,
+        Request,
+        Response,
+        FormData,
+        Blob,
+        TextEncoder,
+        TextDecoder,
+        setTimeout,
+        clearTimeout,
+      },
+      { codeGeneration: { strings: false, wasm: false } }
+    );
+    const script = new Script(`
+      "use strict";
+      (async () => {
+        ${this.normalizeScriptCode(code)}
+        const __runner = typeof __teableScript === 'function'
+          ? __teableScript
+          : typeof run === 'function'
+            ? run
+            : undefined;
+        if (typeof __runner === 'function') return await __runner(ctx);
+        return undefined;
+      })()
+    `);
+    const result = await this.withScriptTimeout(
+      Promise.resolve(script.runInContext(context, { timeout: 1000 }))
+    );
+    return this.getScriptOutput(result, outputValues, logs);
+  }
+
+  private getScriptInput(runtime: IRuntimeContext) {
+    return {
+      trigger: runtime.trigger,
+      nodes: runtime.nodes,
+      action: runtime.action,
+      logic: runtime.logic,
+      ...runtime.nodes,
+    };
+  }
+
+  private normalizeScriptCode(code: string) {
+    const trimmed = code.trim();
+    return trimmed
+      .replace(
+        /export\s+default\s+async\s+function\s+[A-Za-z_$][\w$]*\s*\(/,
+        'async function __teableScript('
+      )
+      .replace(/export\s+default\s+async\s+function\s*\(/, 'async function __teableScript(')
+      .replace(/export\s+default\s+function\s+[A-Za-z_$][\w$]*\s*\(/, 'function __teableScript(')
+      .replace(/export\s+default\s+function\s*\(/, 'function __teableScript(')
+      .replace(/export\s+default\s+async\s*\(/, 'const __teableScript = async (')
+      .replace(/export\s+default\s*\(/, 'const __teableScript = (')
+      .replace(/export\s+default\s+/, 'const __teableScript = ');
+  }
+
+  private async withScriptTimeout<T>(promise: Promise<T>) {
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise<T>((_, reject) => {
+          timer = setTimeout(
+            () =>
+              reject(new Error(`Script execution timed out after ${automationScriptTimeoutMs}ms`)),
+            automationScriptTimeoutMs
+          );
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  private getScriptOutput(result: unknown, outputValues: Record<string, unknown>, logs: string[]) {
+    const output: Record<string, unknown> = {
+      ...(this.normalizeAIGenerateOutputValue(outputValues) as Record<string, unknown>),
+    };
+    const normalizedResult = this.normalizeAIGenerateOutputValue(result);
+    if (normalizedResult !== undefined) {
+      if (isPlainObject(normalizedResult)) {
+        Object.assign(output, normalizedResult);
+      } else {
+        output.result = normalizedResult;
+      }
+    }
+    if (logs.length) output.logs = logs;
+    return output;
+  }
+
+  private createScriptConsole(logs: string[]) {
+    const push = (...args: unknown[]) => {
+      if (logs.length >= 100) return;
+      logs.push(args.map((arg) => this.stringifyScriptLogValue(arg)).join(' '));
+    };
+    return {
+      log: push,
+      info: push,
+      warn: push,
+      error: push,
+      debug: push,
+    };
+  }
+
+  private stringifyScriptLogValue(value: unknown) {
+    if (typeof value === 'string') return value;
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+
+  private createAutomationRuntimeFetch(runtime: IRuntimeContext) {
+    return async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+      const url = this.getAutomationRuntimeFetchUrl(input);
+      const request = this.getAutomationRuntimeFetchRequest(input, init);
+      const path = this.getAutomationRuntimePath(url);
+      if (!path) return fetch(input, init);
+
+      this.assertAutomationRuntimeAuth(request.headers);
+      if (path === '/automation/runtime/email') {
+        if (request.method !== 'POST')
+          return this.jsonResponse({ error: 'Method not allowed' }, 405);
+        const body = await this.parseAutomationRuntimeJsonBody(request.body);
+        const result = await this.executeSendEmailAction(
+          {
+            ...body,
+            mailTransportConfig: body.mailTransportConfig ?? body.smtp,
+          },
+          runtime
+        );
+        return this.jsonResponse(result);
+      }
+
+      const recordMatch = path.match(/^\/table\/([^/]+)\/record(?:\/([^/]+))?$/);
+      if (!recordMatch) return fetch(input, init);
+      const [, tableId, recordId] = recordMatch;
+      return this.handleAutomationRecordFetch(tableId, recordId, url, request, runtime);
+    };
+  }
+
+  private getAutomationRuntimeFetchUrl(input: Parameters<typeof fetch>[0]) {
+    const publicOrigin = this.optionalString(process.env.PUBLIC_ORIGIN)?.replace(/\/$/, '');
+    const baseUrl = publicOrigin || 'http://localhost';
+    if (typeof input === 'string') return new URL(input, baseUrl);
+    if (input instanceof URL) return input;
+    return new URL(input.url, baseUrl);
+  }
+
+  private getAutomationRuntimeFetchRequest(
+    input: Parameters<typeof fetch>[0],
+    init?: Parameters<typeof fetch>[1]
+  ) {
+    const request = typeof Request !== 'undefined' && input instanceof Request ? input : undefined;
+    const headers = new Headers(request?.headers);
+    if (init?.headers) {
+      new Headers(init.headers).forEach((value, key) => headers.set(key, value));
+    }
+    return {
+      method: (init?.method ?? request?.method ?? 'GET').toUpperCase(),
+      headers,
+      body: init?.body ?? null,
+    };
+  }
+
+  private getAutomationRuntimePath(url: URL) {
+    const path = url.pathname.startsWith('/api/') ? url.pathname.slice(4) : url.pathname;
+    if (path === '/automation/runtime/email') return path;
+    if (path.startsWith('/table/')) return path;
+  }
+
+  private assertAutomationRuntimeAuth(headers: Headers) {
+    if (headers.get('authorization') !== `Bearer ${automationRuntimeToken}`) {
+      throw new Error('Unauthorized automation runtime request');
+    }
+  }
+
+  private async parseAutomationRuntimeJsonBody(body: BodyInit | null | undefined) {
+    if (!body) return {};
+    if (typeof body === 'string') return body ? JSON.parse(body) : {};
+    if (body instanceof URLSearchParams) return Object.fromEntries(body.entries());
+    if (body instanceof FormData) return Object.fromEntries(body.entries());
+    if (body instanceof Blob) {
+      const text = await body.text();
+      return text ? JSON.parse(text) : {};
+    }
+    if (body instanceof ArrayBuffer) {
+      const text = new TextDecoder().decode(body);
+      return text ? JSON.parse(text) : {};
+    }
+    if (ArrayBuffer.isView(body)) {
+      const text = new TextDecoder().decode(body);
+      return text ? JSON.parse(text) : {};
+    }
+    throw new Error('Only JSON request bodies are supported in automation runtime fetch');
+  }
+
+  private async handleAutomationRecordFetch(
+    tableId: string,
+    recordId: string | undefined,
+    url: URL,
+    request: { method: string; body: BodyInit | null },
+    runtime: IRuntimeContext
+  ) {
+    const outputBaseId = await this.getBaseIdByTableId(tableId);
+    if (request.method === 'GET') {
+      return this.handleAutomationRecordReadFetch(tableId, recordId, url, outputBaseId);
+    }
+    if (runtime.preview) {
+      return this.jsonResponse({ preview: true });
+    }
+    const body = await this.parseAutomationRuntimeJsonBody(request.body);
+    return this.handleAutomationRecordWriteFetch(
+      tableId,
+      recordId,
+      request.method,
+      body,
+      outputBaseId
+    );
+  }
+
+  private async handleAutomationRecordReadFetch(
+    tableId: string,
+    recordId: string | undefined,
+    url: URL,
+    outputBaseId: string
+  ) {
+    if (recordId) {
+      const record = await this.recordService.getRecord(
+        tableId,
+        recordId,
+        { fieldKeyType: FieldKeyType.Id },
+        true,
+        true
+      );
+      return this.jsonResponse(this.withRecordOutputMetadata(record, outputBaseId, tableId));
+    }
+    const search = this.optionalString(url.searchParams.get('search'));
+    const res = await this.recordService.getRecords(tableId, {
+      fieldKeyType: FieldKeyType.Id,
+      viewId: this.optionalString(url.searchParams.get('viewId')),
+      skip: this.positiveInteger(url.searchParams.get('skip') ?? undefined, 0),
+      take: this.positiveInteger(url.searchParams.get('take') ?? undefined, 100),
+      filter: this.parseAutomationRuntimeQueryJson(url.searchParams.get('filter')) as never,
+      search: search ? [search] : undefined,
+    });
+    return this.jsonResponse({
+      ...res,
+      records: this.withRecordOutputMetadata(res.records, outputBaseId, tableId),
+    });
+  }
+
+  private async handleAutomationRecordWriteFetch(
+    tableId: string,
+    recordId: string | undefined,
+    method: string,
+    body: Record<string, unknown>,
+    outputBaseId: string
+  ) {
+    if (method === 'POST' && !recordId) {
+      const res = await this.recordOpenApiService.createRecords(tableId, {
+        fieldKeyType: FieldKeyType.Id,
+        typecast: body.typecast !== false,
+        records: Array.isArray(body.records) ? (body.records as never) : [],
+      });
+      return this.jsonResponse({
+        ...res,
+        records: this.withRecordOutputMetadata(res.records, outputBaseId, tableId),
+      });
+    }
+    if (method === 'PATCH' && recordId) {
+      const record = await this.recordOpenApiService.updateRecord(tableId, recordId, {
+        fieldKeyType: FieldKeyType.Id,
+        typecast: body.typecast !== false,
+        record: isPlainObject(body.record) ? (body.record as never) : { fields: {} },
+      });
+      return this.jsonResponse(this.withRecordOutputMetadata(record, outputBaseId, tableId));
+    }
+    if (method === 'PATCH') {
+      const records = await this.recordOpenApiService.updateRecords(tableId, {
+        fieldKeyType: FieldKeyType.Id,
+        typecast: body.typecast !== false,
+        records: Array.isArray(body.records) ? (body.records as never) : [],
+      });
+      return this.jsonResponse({
+        records: this.withRecordOutputMetadata(records, outputBaseId, tableId),
+      });
+    }
+    return this.jsonResponse({ error: 'Method not allowed' }, 405);
+  }
+
+  private parseAutomationRuntimeQueryJson(value: string | null) {
+    if (!value) return undefined;
+    return JSON.parse(value);
+  }
+
+  private jsonResponse(body: unknown, status = 200) {
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { [httpContentTypeHeader]: 'application/json' },
+    });
   }
 
   private async executeSendEmailAction(config: Record<string, unknown>, runtime: IRuntimeContext) {
@@ -1209,9 +1548,13 @@ export class AutomationService {
   }
 
   private storeNodeOutput(node: IWorkflowNode, output: unknown, runtime: IRuntimeContext) {
-    if (node.category !== 'action') return;
     runtime.nodes[node.id] = output;
-    runtime.action[node.id] = output;
+    if (node.category === 'action') {
+      runtime.action[node.id] = output;
+    }
+    if (node.category === 'logic') {
+      runtime.logic[node.id] = output;
+    }
   }
 
   private cloneRuntimeContext(runtime: IRuntimeContext): IRuntimeContext {

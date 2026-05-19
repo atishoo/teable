@@ -798,6 +798,56 @@
           "label": "Requête HTTP",
           "description": "Connectez-vous à des services externes via des API et échangez des données"
         },
+        "script": {
+          "label": "Exécuter un script",
+          "description": "Utilisez l’IA pour automatiser n’importe quelle logique",
+          "aiConfig": {
+            "title": "Configurer via le chat IA",
+            "description": "Envoyer des messages à Slack ou Teams, ou exécuter une logique personnalisée",
+            "nodeContext": "Nœud d’automatisation",
+            "currentConfig": "Configuration actuelle",
+            "chatHintTitle": "Configurer le script avec l’IA",
+            "chatHintDescription": "Décrivez le workflow souhaité dans le chat, et Teable AI générera le script pour vous"
+          },
+          "fields": {
+            "code": {
+              "title": "Code"
+            }
+          },
+          "editor": {
+            "title": "Éditeur de script",
+            "description": "Modifiez et testez l’action de script.",
+            "previewTab": "Aperçu",
+            "codeTab": "Code",
+            "codePlaceholder": "Écrivez du JavaScript ici. Utilisez ctx pour lire les étapes précédentes et renvoyer un résultat.",
+            "dependencies": "Dépendances",
+            "config": "Configuration",
+            "packageNamePlaceholder": "Nom du paquet (p. ex. lodash)",
+            "packageVersionPlaceholder": "Version (p. ex. ^4.17.21)",
+            "addDependency": "Ajouter une dépendance",
+            "manualEdit": "Modifier manuellement",
+            "running": "Exécution du script",
+            "notRun": "Pas encore exécuté",
+            "runTip": "Cliquez sur « Exécuter le test » pour lancer le script",
+            "noOutput": "Aucune sortie",
+            "noPreview": "Aucun aperçu du flux",
+            "writeCodeForPreview": "Écrivez du code pour prévisualiser le flux",
+            "runResult": "Résultat d’exécution",
+            "completions": {
+              "ctx": "Contexte d’automatisation",
+              "ctxInput": "Entrée du nœud actuel",
+              "ctxSteps": "Sorties des étapes précédentes",
+              "ctxBaseId": "ID de la base actuelle",
+              "ctxWorkflowId": "ID de l’automatisation actuelle",
+              "ctxNodeId": "ID du nœud actuel",
+              "fetch": "Appeler des API HTTP"
+            }
+          },
+          "tags": {
+            "email": "E-mail",
+            "custom": "Personnalisé"
+          }
+        },
         "condition": {
           "label": "Quand les conditions correspondent...",
           "description": "Exécuter différentes actions selon des conditions spécifiques"
