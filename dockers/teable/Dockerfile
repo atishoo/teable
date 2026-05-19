@@ -93,12 +93,11 @@ RUN set -ex; \
 # Stage 4: Extract a minimal image from the build                #
 ##################################################################
 
-FROM tianon/gosu:1.19 AS gosu
-
 FROM node:${NODE_VERSION}-bookworm-slim AS runner
 
 ARG BUILD_VERSION
 ARG NEXTJS_APP_PORT=3000
+ARG TARGETARCH
 
 ENV TZ=UTC \
     NODE_ENV=production \
@@ -119,10 +118,15 @@ RUN set -ex; \
                 wget \
     	; \
     	rm -rf /var/lib/apt/lists/*; \
+        case "$TARGETARCH" in \
+                amd64) gosu_arch='amd64' ;; \
+                arm64) gosu_arch='arm64' ;; \
+                *) echo "unsupported gosu architecture: $TARGETARCH"; exit 1 ;; \
+        esac; \
+        curl -fsSL -o /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/1.19/gosu-${gosu_arch}"; \
+        chmod +x /usr/local/bin/gosu; \
+        gosu --version; \
         ln -s /usr/local/lib/node_modules /node_modules
-
-# gosu for better su+exec command (multi-stage copy from official image)
-COPY --from=gosu /gosu /usr/local/bin/gosu
 
 WORKDIR /app
 
