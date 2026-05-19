@@ -16,17 +16,19 @@ export function AutomationPage() {
   const { baseId, workflowId } = useBaseResource() as IBaseResourceWorkflow;
 
   return (
-    <div className="flex h-full flex-col">
-      <Head>
-        <title>{t('noun.automation')}</title>
-      </Head>
-      {workflowId ? (
-        <WorkFlowPanel baseId={baseId} workflowId={workflowId} />
-      ) : (
-        <div className="flex flex-1 items-center justify-center p-4">
-          <div className="text-sm text-muted-foreground">{t('noun.automation')}</div>
-        </div>
-      )}
+    <div className="flex h-full">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <Head>
+          <title>{t('noun.automation')}</title>
+        </Head>
+        {workflowId ? (
+          <WorkFlowPanel baseId={baseId} workflowId={workflowId} />
+        ) : (
+          <div className="flex flex-1 items-center justify-center p-4">
+            <div className="text-sm text-muted-foreground">{t('noun.automation')}</div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

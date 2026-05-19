@@ -67,9 +67,17 @@ const SwitchList = (props: SwitchListProps) => {
       name: AIFeatureListNameMap[item],
       key: item,
       description: AIFeatureListDescriptionMap[item],
-      disabled: !SwitchableActions.includes(item) || instanceDisableActions.includes(item),
+      disabled:
+        !SwitchableActions.includes(item) ||
+        instanceDisableActions.includes(item) ||
+        (item === AIActions.AIChat && sandboxConfigured === false),
     }));
-  }, [AIFeatureListDescriptionMap, AIFeatureListNameMap, instanceDisableActions]);
+  }, [
+    AIFeatureListDescriptionMap,
+    AIFeatureListNameMap,
+    instanceDisableActions,
+    sandboxConfigured,
+  ]);
 
   const onCheckItemHandler = useCallback(
     (actionName: AIActions, open: boolean) => {
@@ -115,7 +123,11 @@ const SwitchList = (props: SwitchListProps) => {
             onCheckedChange={(open) => {
               onCheckItemHandler(key, open);
             }}
-            checked={!disableActions?.includes(key) && !instanceDisableActions.includes(key)}
+            checked={
+              key === AIActions.AIChat && sandboxConfigured === false
+                ? false
+                : !disableActions?.includes(key) && !instanceDisableActions.includes(key)
+            }
             disabled={disabled}
           />
         </div>

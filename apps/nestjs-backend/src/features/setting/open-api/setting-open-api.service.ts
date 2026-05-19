@@ -46,6 +46,7 @@ import { CustomHttpException } from '../../../custom.exception';
 import type { IClsStore } from '../../../types/cls';
 import { resolveBuildVersion } from '../../../utils/build-version';
 import { INSTANCE_PROVIDER_NAME } from '../../ai/ai.service';
+import { getSandboxAgentUrl, syncSandboxAgentConfig } from '../../ai/sandbox-agent.client';
 import { getAdaptedProviderOptions, modelProviders } from '../../ai/util';
 import { AttachmentsStorageService } from '../../attachments/attachments-storage.service';
 import StorageAdapter from '../../attachments/plugins/adapter';
@@ -81,7 +82,7 @@ export class SettingOpenApiService {
   ) {}
 
   async getSetting(names?: string[]): Promise<ISettingVo> {
-    return this.settingService.getSetting(names);
+    return this.withSandboxAgentAvailability(await this.settingService.getSetting(names));
   }
 
   async updateSetting(updateSettingRo: Partial<ISettingVo>): Promise<ISettingVo> {
@@ -90,7 +91,20 @@ export class SettingOpenApiService {
     if (updateSettingRo.aiConfig) {
       this.normalizeInstanceProviderNames(updateSettingRo.aiConfig as Record<string, unknown>);
     }
-    return this.settingService.updateSetting(updateSettingRo);
+    const setting = await this.settingService.updateSetting(updateSettingRo);
+    if (updateSettingRo.sandboxAgentConfig) {
+      await syncSandboxAgentConfig(getSandboxAgentUrl(), updateSettingRo.sandboxAgentConfig);
+    }
+    return this.withSandboxAgentAvailability(setting);
+  }
+
+  private withSandboxAgentAvailability(setting: ISettingVo): ISettingVo {
+    const sandboxAgentAvailable = Boolean(getSandboxAgentUrl());
+    return {
+      ...setting,
+      sandboxAgentAvailable,
+      sandboxAgentConfig: sandboxAgentAvailable ? setting.sandboxAgentConfig : undefined,
+    };
   }
 
   /**
@@ -154,7 +168,13 @@ export class SettingOpenApiService {
       SettingKey.AI_CONFIG,
       SettingKey.APP_CONFIG,
     ]);
-    const { aiConfig, appConfig, enableCreditReward, ...rest } = setting;
+    const {
+      aiConfig,
+      appConfig,
+      enableCreditReward,
+      sandboxAgentAvailable: _sandboxAgentAvailable,
+      ...rest
+    } = setting;
 
     const availableIntegrationProviders: string[] = [
       ...(process.env.GMAIL_CLIENT_ID ? ['gmail'] : []),
@@ -294,10 +314,9 @@ export class SettingOpenApiService {
         responseText.toLowerCase().includes(indicator)
       );
 
-      const isValid =
-        (containsExpectedInQuotes || isJustTheLetter) && isShortResponse && !indicatesCannotSee;
-
-      return isValid;
+      return (
+        (containsExpectedInQuotes || isJustTheLetter) && isShortResponse && !indicatesCannotSee
+      );
     } catch (error) {
       this.logger.error(
         `[testAttachment] Error: ${error instanceof Error ? error.message : unknownErrorMsg}`
@@ -396,9 +415,7 @@ export class SettingOpenApiService {
       // 3. Check toolResults
       const hasToolResults = result.toolResults && result.toolResults.length > 0;
 
-      const hasToolCall = hasDirectToolCall || hasStepToolCall || hasToolResults;
-
-      return hasToolCall;
+      return hasDirectToolCall || hasStepToolCall || hasToolResults;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : unknownErrorMsg;
       this.logger.error(`testToolCall error: ${errorMessage}`);

@@ -11,21 +11,32 @@ import type { Prisma } from '@teable/db-main-prisma';
 import { PrismaService } from '@teable/db-main-prisma';
 import type {
   IAdminListQuery,
+  IAdminSandboxAgentStatusVo,
+  IAdminSandboxAgentTestRo,
+  IAdminSandboxAgentTestVo,
   IAdminSpaceListVo,
   IAdminUpdateSpaceRo,
   IAdminUpdateUserRo,
   IAdminUserListVo,
+  IAdminWorkflowRunListQuery,
+  IAdminWorkflowRunListVo,
 } from '@teable/openapi';
-import { CollaboratorType, PluginStatus, UploadType } from '@teable/openapi';
+import { CollaboratorType, PluginStatus, SettingKey, UploadType } from '@teable/openapi';
 import { Response } from 'express';
 import { Knex } from 'knex';
 import { InjectModel } from 'nest-knexjs';
 import { PerformanceCacheService } from '../../../performance-cache';
 import { Timing } from '../../../utils/timing';
+import {
+  getSandboxAgentUrl,
+  syncSandboxAgentConfig,
+  testSandboxAgentConfig,
+} from '../../ai/sandbox-agent.client';
 import { AttachmentsCropQueueProcessor } from '../../attachments/attachments-crop.processor';
 import StorageAdapter from '../../attachments/plugins/adapter';
 import { getPublicFullStorageUrl } from '../../attachments/plugins/utils';
 import { DeleteUserService } from '../../user/delete-user/delete-user.service';
+import { SettingService } from '../setting.service';
 
 @Injectable()
 export class AdminOpenApiService {
@@ -37,7 +48,8 @@ export class AdminOpenApiService {
     @InjectModel('CUSTOM_KNEX') private readonly knex: Knex,
     private readonly attachmentsCropQueueProcessor: AttachmentsCropQueueProcessor,
     private readonly performanceCacheService: PerformanceCacheService,
-    private readonly deleteUserService: DeleteUserService
+    private readonly deleteUserService: DeleteUserService,
+    private readonly settingService: SettingService
   ) {}
 
   private getListParams(query: IAdminListQuery = {}) {
@@ -307,6 +319,287 @@ export class AdminOpenApiService {
       where: { id: spaceId },
       data,
     });
+  }
+
+  private dateFromQuery(value?: string) {
+    if (!value) return undefined;
+    const date = new Date(value);
+    return Number.isFinite(date.getTime()) ? date : undefined;
+  }
+
+  private getWorkflowRunDuration(run: {
+    steps?: unknown;
+    startedTime: Date;
+    finishedTime?: Date | null;
+  }) {
+    const stepDuration = Array.isArray(run.steps)
+      ? run.steps.reduce((sum, step) => {
+          if (!step || typeof step !== 'object') return sum;
+          const spent = Number((step as { spent?: unknown }).spent);
+          return Number.isFinite(spent) ? sum + spent : sum;
+        }, 0)
+      : 0;
+    if (stepDuration > 0) return stepDuration;
+    if (!run.finishedTime) return null;
+    return Math.max(0, run.finishedTime.getTime() - run.startedTime.getTime());
+  }
+
+  private getWorkflowRunStepCounts(steps: unknown) {
+    if (!Array.isArray(steps)) {
+      return { stepCount: 0, failedStepCount: 0 };
+    }
+    return {
+      stepCount: steps.length,
+      failedStepCount: steps.filter(
+        (step) =>
+          step && typeof step === 'object' && (step as { status?: unknown }).status === 'failed'
+      ).length,
+    };
+  }
+
+  private async getWorkflowRunWhere(
+    query: IAdminWorkflowRunListQuery
+  ): Promise<Prisma.WorkflowRunWhereInput> {
+    const where: Prisma.WorkflowRunWhereInput = {
+      NOT: { triggerType: 'manual' },
+    };
+    if (query.status) {
+      where.status = query.status;
+    }
+    if (query.baseId) {
+      where.baseId = query.baseId;
+    }
+    if (query.workflowId) {
+      where.workflowId = query.workflowId;
+    }
+
+    const startedTime: Prisma.DateTimeFilter = {};
+    const startedTimeFrom = this.dateFromQuery(query.startedTimeFrom);
+    const startedTimeTo = this.dateFromQuery(query.startedTimeTo);
+    if (startedTimeFrom) startedTime.gte = startedTimeFrom;
+    if (startedTimeTo) startedTime.lte = startedTimeTo;
+    if (startedTime.gte || startedTime.lte) {
+      where.startedTime = startedTime;
+    }
+
+    const search = query.search?.trim();
+    if (!search) {
+      return where;
+    }
+
+    const [workflows, bases] = await Promise.all([
+      this.prismaService.workflow.findMany({
+        where: {
+          OR: [
+            { id: { contains: search, mode: 'insensitive' } },
+            { name: { contains: search, mode: 'insensitive' } },
+            { baseId: { contains: search, mode: 'insensitive' } },
+          ],
+        },
+        select: { id: true },
+        take: 100,
+      }),
+      this.prismaService.base.findMany({
+        where: {
+          OR: [
+            { id: { contains: search, mode: 'insensitive' } },
+            { name: { contains: search, mode: 'insensitive' } },
+            { spaceId: { contains: search, mode: 'insensitive' } },
+          ],
+        },
+        select: { id: true },
+        take: 100,
+      }),
+    ]);
+
+    const workflowIds = workflows.map((workflow) => workflow.id);
+    const baseIds = bases.map((base) => base.id);
+    where.OR = [
+      { id: { contains: search, mode: 'insensitive' } },
+      { workflowId: { contains: search, mode: 'insensitive' } },
+      { baseId: { contains: search, mode: 'insensitive' } },
+      ...(workflowIds.length ? [{ workflowId: { in: workflowIds } }] : []),
+      ...(baseIds.length ? [{ baseId: { in: baseIds } }] : []),
+    ];
+    return where;
+  }
+
+  async listWorkflowRuns(query: IAdminWorkflowRunListQuery): Promise<IAdminWorkflowRunListVo> {
+    const { skip, take } = this.getListParams(query);
+    const where = await this.getWorkflowRunWhere(query);
+    const summaryWhere = { ...where };
+    delete summaryWhere.status;
+    const [total, runs, summaryTotal, success, failed, running, waiting, skipped] =
+      await this.prismaService.$transaction([
+        this.prismaService.workflowRun.count({ where }),
+        this.prismaService.workflowRun.findMany({
+          where,
+          orderBy: { startedTime: 'desc' },
+          skip,
+          take,
+        }),
+        this.prismaService.workflowRun.count({ where: summaryWhere }),
+        this.prismaService.workflowRun.count({ where: { ...summaryWhere, status: 'success' } }),
+        this.prismaService.workflowRun.count({ where: { ...summaryWhere, status: 'failed' } }),
+        this.prismaService.workflowRun.count({ where: { ...summaryWhere, status: 'running' } }),
+        this.prismaService.workflowRun.count({ where: { ...summaryWhere, status: 'waiting' } }),
+        this.prismaService.workflowRun.count({ where: { ...summaryWhere, status: 'skipped' } }),
+      ]);
+
+    const workflowIds = [...new Set(runs.map((run) => run.workflowId))];
+    const baseIds = [...new Set(runs.map((run) => run.baseId))];
+    const userIds = [...new Set(runs.map((run) => run.createdBy).filter(Boolean))] as string[];
+    const [workflows, bases, users] = await Promise.all([
+      workflowIds.length
+        ? this.prismaService.workflow.findMany({
+            where: { id: { in: workflowIds } },
+            select: { id: true, name: true },
+          })
+        : [],
+      baseIds.length
+        ? this.prismaService.base.findMany({
+            where: { id: { in: baseIds } },
+            select: {
+              id: true,
+              name: true,
+              spaceId: true,
+              space: { select: { id: true, name: true } },
+            },
+          })
+        : [],
+      userIds.length
+        ? this.prismaService.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, name: true, email: true },
+          })
+        : [],
+    ]);
+
+    const workflowMap = new Map(workflows.map((workflow) => [workflow.id, workflow]));
+    const baseMap = new Map(bases.map((base) => [base.id, base]));
+    const userMap = new Map(users.map((user) => [user.id, user]));
+    return {
+      total,
+      summary: { total: summaryTotal, success, failed, running, waiting, skipped },
+      runs: runs.map((run) => {
+        const workflow = workflowMap.get(run.workflowId);
+        const base = baseMap.get(run.baseId);
+        const user = run.createdBy ? userMap.get(run.createdBy) : undefined;
+        const { stepCount, failedStepCount } = this.getWorkflowRunStepCounts(run.steps);
+        return {
+          id: run.id,
+          workflowId: run.workflowId,
+          workflowName: workflow?.name ?? null,
+          baseId: run.baseId,
+          baseName: base?.name ?? null,
+          spaceId: base?.spaceId ?? null,
+          spaceName: base?.space?.name ?? null,
+          status: run.status,
+          triggerType: run.triggerType,
+          error: run.error,
+          startedTime: run.startedTime.toISOString(),
+          finishedTime: run.finishedTime?.toISOString() ?? null,
+          durationMs: this.getWorkflowRunDuration(run),
+          createdBy: run.createdBy,
+          createdByName: user?.name ?? null,
+          createdByEmail: user?.email ?? null,
+          stepCount,
+          failedStepCount,
+        };
+      }),
+    };
+  }
+
+  private async fetchSandboxAgentHealth(url: string) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    try {
+      const response = await fetch(`${url}/health`, {
+        method: 'GET',
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        throw new Error(`Sandbox health check failed: ${response.status}`);
+      }
+      return (await response.json()) as Record<string, unknown>;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async getSandboxAgentStatus(): Promise<IAdminSandboxAgentStatusVo> {
+    const url = getSandboxAgentUrl();
+    if (!url) {
+      return {
+        available: false,
+        reachable: false,
+        error: 'SANDBOX_AGENT_URL is not configured',
+      };
+    }
+
+    try {
+      const health = await this.fetchSandboxAgentHealth(url);
+      return {
+        available: true,
+        reachable: true,
+        status: typeof health.status === 'string' ? health.status : undefined,
+        activeSessions:
+          typeof health.activeSessions === 'number' ? health.activeSessions : undefined,
+        workspaceRoot: typeof health.workspaceRoot === 'string' ? health.workspaceRoot : undefined,
+        hasTeableCli: typeof health.hasTeableCli === 'boolean' ? health.hasTeableCli : undefined,
+        runtimeConfig:
+          health.runtimeConfig && typeof health.runtimeConfig === 'object'
+            ? (health.runtimeConfig as IAdminSandboxAgentStatusVo['runtimeConfig'])
+            : undefined,
+        versions:
+          health.versions && typeof health.versions === 'object'
+            ? (health.versions as Record<string, string>)
+            : undefined,
+        assets:
+          health.assets && typeof health.assets === 'object'
+            ? (health.assets as IAdminSandboxAgentStatusVo['assets'])
+            : undefined,
+      };
+    } catch (error) {
+      return {
+        available: true,
+        reachable: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  async syncSandboxAgent(): Promise<IAdminSandboxAgentStatusVo> {
+    const url = getSandboxAgentUrl();
+    if (!url) {
+      return this.getSandboxAgentStatus();
+    }
+    const { sandboxAgentConfig } = await this.settingService.getSetting([
+      SettingKey.SANDBOX_AGENT_CONFIG,
+    ]);
+    await syncSandboxAgentConfig(url, sandboxAgentConfig ?? undefined);
+    return this.getSandboxAgentStatus();
+  }
+
+  async testSandboxAgentLLM(
+    sandboxAgentConfig: IAdminSandboxAgentTestRo
+  ): Promise<IAdminSandboxAgentTestVo> {
+    const url = getSandboxAgentUrl();
+    if (!url) {
+      return {
+        success: false,
+        error: 'SANDBOX_AGENT_URL is not configured',
+      };
+    }
+
+    try {
+      return await testSandboxAgentConfig(url, sandboxAgentConfig);
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
   }
 
   async publishPlugin(pluginId: string) {

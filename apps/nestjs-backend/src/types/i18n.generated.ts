@@ -5467,6 +5467,7 @@ export type I18nTranslations = {
                 "skip": string;
                 "submit": string;
             };
+            "title": string;
             "clearChat": string;
             "clearChatConfirmTitle": string;
             "clearChatConfirmDesc": string;

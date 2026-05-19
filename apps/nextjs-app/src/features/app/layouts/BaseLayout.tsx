@@ -17,6 +17,7 @@ import { useTableHref } from '../blocks/table-list/useTableHref';
 import { useGridSearchStore } from '../blocks/view/grid/useGridSearchStore';
 import { UsageLimitModal } from '../components/billing/UsageLimitModal';
 import { LinkConnectorLine } from '../components/LinkConnectorLine';
+import { ChatPanel } from '../components/sidebar/ChatPanel';
 import { Sidebar } from '../components/sidebar/Sidebar';
 import { SideBarFooter } from '../components/SideBarFooter';
 import { UploadProgressPanel } from '../components/upload-progress-panel/UploadProgressPanel';
@@ -65,6 +66,7 @@ const BaseLayoutInner: React.FC<{ children: React.ReactNode }> = ({ children }) 
             </Fragment>
           </Sidebar>
           <div className="min-w-80 flex-1">{children}</div>
+          <ChatPanel />
         </div>
         <UploadProgressPanel />
       </div>

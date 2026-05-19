@@ -1,4 +1,3 @@
-
 services:
   teable:
     image: ghcr.io/teableio/teable:latest
@@ -14,6 +13,9 @@ services:
       - .env
     environment:
       - TZ=${TIMEZONE}
+      - SANDBOX_AGENT_URL=http://teable-sandbox-agent:18923
+      - SANDBOX_AGENT_TEABLE_ENDPOINT=http://teable:3000
+      - SANDBOX_AGENT_ADMIN_TOKEN=${SANDBOX_AGENT_ADMIN_TOKEN}
     networks:
       - teable-standalone
     depends_on:
@@ -21,6 +23,21 @@ services:
         condition: service_healthy
       teable-cache:
         condition: service_healthy
+      teable-sandbox-agent:
+        condition: service_started
+
+  teable-sandbox-agent:
+    image: ghcr.io/teableio/teable-sandbox-agent:latest
+    restart: always
+    expose:
+      - '18923'
+    volumes:
+      - teable-sandbox-agent:/home/agent:rw
+    environment:
+      - TZ=${TIMEZONE}
+      - SANDBOX_AGENT_ADMIN_TOKEN=${SANDBOX_AGENT_ADMIN_TOKEN}
+    networks:
+      - teable-standalone
 
   teable-db:
     image: postgres:15.4
@@ -44,6 +61,7 @@ services:
       interval: 10s
       timeout: 3s
       retries: 3
+
   teable-cache:
     image: redis:7.2.4
     restart: always
@@ -60,7 +78,6 @@ services:
       timeout: 3s
       retries: 3
 
-
 networks:
   teable-standalone:
     name: teable-standalone-network
@@ -68,5 +85,6 @@ networks:
 
 volumes:
   teable-data: {}
-  teable-db: {} 
+  teable-db: {}
   teable-cache: {}
+  teable-sandbox-agent: {}

@@ -4,9 +4,13 @@ import {
   MagicAi,
   Settings,
   LayoutTemplate as TemplateIcon,
+  Server,
   ShieldUser,
   User,
+  WorkflowLogic,
 } from '@teable/icons';
+import type { ISettingVo } from '@teable/openapi';
+import { getSetting } from '@teable/openapi';
 import type { IUser } from '@teable/sdk';
 import { SessionProvider } from '@teable/sdk';
 import { AppProvider } from '@teable/sdk/context';
@@ -24,11 +28,27 @@ export const AdminLayout: React.FC<{
   children: React.ReactNode;
   user?: IUser;
   dehydratedState?: DehydratedState;
-}> = ({ children, user, dehydratedState }) => {
+  settingServerData?: ISettingVo;
+}> = ({ children, user, dehydratedState, settingServerData }) => {
   const sdkLocale = useSdkLocale();
   const { i18n } = useTranslation();
   const { t } = useTranslation('common');
   const router = useRouter();
+  const [setting, setSetting] = React.useState<ISettingVo | undefined>(settingServerData);
+
+  React.useEffect(() => {
+    let mounted = true;
+    getSetting()
+      .then(({ data }) => {
+        if (mounted) {
+          setSetting(data);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const onBack = () => {
     router.push({ pathname: '/space' });
@@ -65,6 +85,22 @@ export const AdminLayout: React.FC<{
       route: '/admin/template',
       pathTo: '/admin/template',
     },
+    {
+      Icon: WorkflowLogic,
+      label: '工作流监控',
+      route: '/admin/workflow-monitor',
+      pathTo: '/admin/workflow-monitor',
+    },
+    ...(setting?.sandboxAgentAvailable
+      ? [
+          {
+            Icon: Server,
+            label: '沙箱 Agent',
+            route: '/admin/sandbox-agent',
+            pathTo: '/admin/sandbox-agent',
+          },
+        ]
+      : []),
   ];
 
   return (

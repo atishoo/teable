@@ -1,6 +1,11 @@
 import type { RouteConfig } from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
-import { aiConfigSchema, chatModelAbilitySchema, gatewayModelTagSchema } from '../admin';
+import {
+  aiConfigSchema,
+  chatModelAbilitySchema,
+  gatewayModelTagSchema,
+  sandboxAgentConfigSchema,
+} from '../admin';
 import { axios } from '../axios';
 import { registerRoute, urlBuilder } from '../utils';
 
@@ -58,9 +63,26 @@ export const chatModelResponseSchema = z.object({
   tags: z.array(gatewayModelTagSchema).optional(),
 });
 
+export const publicSandboxAgentConfigSchema = sandboxAgentConfigSchema
+  .pick({
+    defaultAgent: true,
+    models: true,
+    defaultModel: true,
+    defaultEffort: true,
+  })
+  .extend({
+    llm: z
+      .object({
+        hasApiKey: z.boolean().optional(),
+      })
+      .optional(),
+  });
+
 export const getAIConfigSchema = aiConfigSchema.omit({ chatModel: true }).extend({
   modelDefinationMap: modelDefinationMapSchema.optional(),
   chatModel: chatModelResponseSchema.optional(),
+  sandboxAgentAvailable: z.boolean().optional(),
+  sandboxAgentConfig: publicSandboxAgentConfigSchema.nullable().optional(),
 });
 
 export type IGetAIConfig = z.infer<typeof getAIConfigSchema>;

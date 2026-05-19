@@ -27,6 +27,7 @@ export const settingVoSchema = z.object({
   automationMailTransportConfig: mailTransportConfigSchema.nullable().optional(),
   appConfig: appConfigSchema.nullable().optional(),
   canaryConfig: canaryConfigSchema.nullable().optional(),
+  sandboxAgentAvailable: z.boolean().optional(),
   sandboxAgentConfig: sandboxAgentConfigSchema.nullable().optional(),
   trashCleanupEnabledAt: z.string().nullable().optional(),
   imConfig: imConfigSchema.nullable().optional(),

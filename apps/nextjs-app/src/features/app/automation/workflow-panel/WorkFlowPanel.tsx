@@ -675,7 +675,7 @@ const NodeTypeSelectItem = (props: { item: INodeCatalogItem; selected: boolean }
   const label = getNodeItemLabel(props.item, tr);
   return (
     <SelectItem
-      className="h-auto cursor-pointer rounded-md p-0 pr-0 hover:bg-muted/80 focus:bg-muted/80 data-[state=checked]:bg-muted/80 dark:hover:bg-white/10 dark:focus:bg-white/10 dark:data-[state=checked]:bg-white/10 [&>span:first-child]:hidden"
+      className="h-auto cursor-pointer rounded-md p-0 data-[state=checked]:bg-muted/80 hover:bg-muted/80 focus:bg-muted/80 dark:data-[state=checked]:bg-white/10 dark:hover:bg-white/10 dark:focus:bg-white/10 [&>span:first-child]:hidden"
       textValue={label}
       value={props.item.type}
     >
@@ -702,7 +702,7 @@ const NodeTypeSelectGroup = (props: {
 }) => (
   <div className="space-y-1 p-1">
     {props.title && (
-      <div className="px-2 pb-1 pt-1 text-xs font-medium text-muted-foreground">{props.title}</div>
+      <div className="px-2 py-1 text-xs font-medium text-muted-foreground">{props.title}</div>
     )}
     {props.items.map((item) => (
       <NodeTypeSelectItem key={item.type} item={item} selected={props.value === item.type} />
@@ -5443,7 +5443,7 @@ const UserValueOptionContent = (props: { user: CollaboratorOption; avatarClassNa
 };
 
 const UserValueTag = (props: { user: CollaboratorOption }) => (
-  <span className="inline-flex h-6 max-w-[9rem] items-center rounded-md border bg-muted/50 px-1.5 text-xs">
+  <span className="inline-flex h-6 max-w-36 items-center rounded-md border bg-muted/50 px-1.5 text-xs">
     <UserValueOptionContent user={props.user} avatarClassName="size-4" />
   </span>
 );
@@ -7453,7 +7453,7 @@ const FilterGroupEditor = (props: {
         value={props.group.conjunction || 'and'}
         onValueChange={(conjunction) => props.onChange({ ...props.group, conjunction })}
       >
-        <SelectTrigger className="h-6 w-fit min-w-fit gap-0 border-0 !bg-transparent p-0 text-[13px] font-normal text-muted-foreground shadow-none hover:!bg-transparent hover:text-foreground focus:!bg-transparent focus:ring-0 focus:ring-offset-0 focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:!bg-transparent">
+        <SelectTrigger className="h-6 w-fit min-w-fit gap-0 border-0 !bg-transparent p-0 text-[13px] font-normal text-muted-foreground shadow-none data-[state=open]:!bg-transparent hover:!bg-transparent hover:text-foreground focus:!bg-transparent focus:ring-0 focus:ring-offset-0 focus-visible:ring-0 focus-visible:ring-offset-0">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -7719,7 +7719,7 @@ const RuntimeConditionGroupEditor = (props: {
         value={props.group.conjunction || 'and'}
         onValueChange={(conjunction) => props.onChange({ ...props.group, conjunction })}
       >
-        <SelectTrigger className="h-6 w-fit min-w-fit gap-0 border-0 !bg-transparent p-0 text-[13px] font-normal text-muted-foreground shadow-none hover:!bg-transparent hover:text-foreground focus:!bg-transparent focus:ring-0 focus:ring-offset-0 focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:!bg-transparent">
+        <SelectTrigger className="h-6 w-fit min-w-fit gap-0 border-0 !bg-transparent p-0 text-[13px] font-normal text-muted-foreground shadow-none data-[state=open]:!bg-transparent hover:!bg-transparent hover:text-foreground focus:!bg-transparent focus:ring-0 focus:ring-offset-0 focus-visible:ring-0 focus-visible:ring-offset-0">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -11131,7 +11131,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
       {canActive && !isActive && (
         <div className="relative z-10 border-b bg-background px-3 py-2">
           <div className="relative flex min-h-10 items-center gap-2 rounded-md border border-blue-600 bg-blue-50 px-3 py-2 text-sm text-blue-950 shadow-sm dark:bg-blue-950/40 dark:text-blue-100">
-            <span className="absolute -top-[5px] left-5 size-2 rotate-45 border-l border-t border-blue-600 bg-blue-50 dark:bg-blue-950" />
+            <span className="absolute left-5 top-[-5px] size-2 rotate-45 border-l border-t border-blue-600 bg-blue-50 dark:bg-blue-950" />
             <Bell className="size-4 shrink-0" />
             <span className="min-w-0 flex-1">
               {tr(
@@ -11434,7 +11434,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
                       <div className="relative flex h-[72px] flex-col justify-between rounded-lg border border-slate-200/80 bg-slate-50/70 px-2.5 py-2 dark:border-slate-700/70 dark:bg-slate-900/50">
                         <Clock className="absolute right-2.5 top-2.5 size-3 text-slate-500 opacity-70 dark:text-slate-300" />
                         <div className="flex items-baseline gap-1.5">
-                          <span className="text-2xl font-semibold leading-none tabular-nums text-slate-700 dark:text-slate-100">
+                          <span className="text-2xl font-semibold tabular-nums leading-none text-slate-700 dark:text-slate-100">
                             {averageRunDurationAmount}
                           </span>
                           {averageRunDurationUnit && (

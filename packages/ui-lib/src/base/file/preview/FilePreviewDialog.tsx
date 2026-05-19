@@ -39,6 +39,10 @@ export const FilePreviewDialog = forwardRef<IFilePreviewDialogRef, IFilePreviewD
           fileId: item?.fileId ?? genFileId(),
         }));
         resetFiles(innerFiles);
+        if (!innerFiles.length) {
+          closePreview();
+          return;
+        }
         // if current file is not in files
         const oldFileIndex = oldFiles.findIndex(({ fileId }) => fileId === currentFile?.fileId);
         if (oldFileIndex === -1) {
@@ -49,7 +53,7 @@ export const FilePreviewDialog = forwardRef<IFilePreviewDialogRef, IFilePreviewD
         if (!currentInNewExist) {
           const existIndex =
             oldFileIndex > innerFiles.length - 1 ? innerFiles.length - 1 : oldFileIndex;
-          openPreview(existIndex);
+          openPreview(innerFiles[existIndex]?.fileId);
         }
       },
       [closePreview, currentFile?.fileId, oldFiles, openPreview, resetFiles]

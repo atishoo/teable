@@ -258,6 +258,13 @@ export const X_CANARY_HEADER = 'x-teable-canary';
 export const sandboxAgentModelSchema = z.object({
   id: z.string(),
   name: z.string(),
+  modelKey: z.string().optional(),
+});
+
+export const sandboxAgentLlmSchema = z.object({
+  baseUrl: z.string().optional(),
+  apiKey: z.string().optional(),
+  timeoutMs: z.number().min(1000).max(600000).optional(),
 });
 
 export const SANDBOX_AGENT_EFFORT_VALUES = [
@@ -278,10 +285,13 @@ export const sandboxAgentConfigSchema = z.object({
   spaceIds: z.array(z.string()).default([]),
   forceAll: z.boolean().optional(),
   defaultAgent: z.enum(['claude']).default('claude').optional(),
+  llm: sandboxAgentLlmSchema.optional(),
   models: z.record(z.string(), z.array(sandboxAgentModelSchema)).optional().default({}),
+  defaultModel: z.string().optional(),
   maxDuration: z.number().min(1).max(1440).default(300).optional(),
+  streamIdleTimeout: z.number().min(30).max(1800).default(900).optional(),
   maxIdleTime: z.number().min(60).max(7200).default(1800).optional(),
-  maxConcurrentChats: z.number().min(1).max(20).default(3).optional(),
+  vcpus: z.number().min(1).max(8).default(2).optional(),
   activeSnapshotId: z.string().optional(),
   activeAppBuilderSnapshotId: z.string().optional(),
   defaultEffort: sandboxAgentEffortSchema.default(DEFAULT_SANDBOX_AGENT_EFFORT).optional(),

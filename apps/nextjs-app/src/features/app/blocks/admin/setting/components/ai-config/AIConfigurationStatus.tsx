@@ -27,7 +27,9 @@ export const AIConfigurationStatus = ({ aiConfig, onNavigate }: IAIConfiguration
   const hasGatewayModels = (aiConfig?.gatewayModels?.filter((m) => m.enabled)?.length ?? 0) > 0;
   const hasLegacyProviders = (aiConfig?.llmProviders?.length ?? 0) > 0;
   const hasChatModel = Boolean(aiConfig?.chatModel?.lg);
-  const isEnabled = Boolean(aiConfig?.chatModel?.lg);
+  const isEnabled = Boolean(
+    aiConfig?.enable || hasGatewayKey || hasGatewayModels || hasLegacyProviders
+  );
 
   // Check if chat model is a gateway model
   const chatModelIsGateway = useMemo(() => {

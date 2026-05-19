@@ -1,7 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { MessageSquareDot, Zap, Box } from '@teable/icons';
+import { MagicAi, Zap, Box } from '@teable/icons';
 import { aiConfigVoSchema } from '@teable/openapi';
 import type {
   IGatewayModel,
@@ -334,9 +334,9 @@ export function AIConfigFormWizard({
               )}
             </SetupStepCard>
 
-            {/* Step 3: Set Chat Model */}
+            {/* Step 3: Set default text model for AI fields and automation */}
             <SetupStepCard
-              icon={<MessageSquareDot className="size-4" />}
+              icon={<MagicAi className="size-4" />}
               title={t('admin.setting.ai.wizard.step.chatModel')}
               description={t('admin.setting.ai.wizard.step.chatModelDesc')}
               isComplete={Boolean(chatModel?.lg)}

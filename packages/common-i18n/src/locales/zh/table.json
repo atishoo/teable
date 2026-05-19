@@ -1279,6 +1279,7 @@
       "skip": "跳过",
       "submit": "提交"
     },
+    "title": "AI助手",
     "newChat": "新对话",
     "clearChat": "清除对话",
     "expand": "展开",
@@ -1327,7 +1328,7 @@
       "workflows": "工作流",
       "folders": "文件夹"
     },
-    "inputPlaceholder": "输入 @ 添加上下文",
+    "inputPlaceholder": "输入 @ 添加节点",
     "inputPlaceholderFiles": "粘贴或拖入文件",
     "thought": "深度思考",
     "meta": {

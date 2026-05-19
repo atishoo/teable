@@ -1,3 +1,5 @@
+import type { IAiChatMessagePart } from '@teable/openapi';
+import { LocalStorageKeys } from '@teable/sdk/config';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
@@ -15,6 +17,7 @@ export enum MessageStatus {
 
 export interface IMessage {
   id: string;
+  baseId: string;
   chatId: string;
   creatorId: string;
   creatorRole: CreatorRole;
@@ -22,6 +25,10 @@ export interface IMessage {
   content: string;
   status: MessageStatus;
   type?: 'table' | 'chart';
+  contextLabels?: string[];
+  attachmentNames?: string[];
+  parts?: IAiChatMessagePart[];
+  elapsedMs?: number;
 }
 
 interface IMessageState {
@@ -29,6 +36,7 @@ interface IMessageState {
   getState: () => IMessageState;
   addMessage: (message: IMessage) => void;
   updateMessage: (messageId: string, message: Partial<IMessage>) => void;
+  setBaseMessages: (baseId: string, chatId: string, messages: IMessage[]) => void;
   clearMessage: (filter: (message: IMessage) => boolean) => void;
 }
 
@@ -47,11 +55,20 @@ export const useMessageStore = create<IMessageState>()(
           ),
         }));
       },
+      setBaseMessages: (baseId: string, chatId: string, messages: IMessage[]) =>
+        set((state) => ({
+          messageList: [
+            ...state.messageList.filter(
+              (message) => message.baseId !== baseId || message.chatId !== chatId
+            ),
+            ...messages,
+          ],
+        })),
       clearMessage: (filter: (message: IMessage) => boolean) =>
         set((state) => ({ messageList: state.messageList.filter(filter) })),
     }),
     {
-      name: 'message-storage',
+      name: LocalStorageKeys.Chat,
     }
   )
 );

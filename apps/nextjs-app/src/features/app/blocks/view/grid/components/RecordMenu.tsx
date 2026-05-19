@@ -296,9 +296,9 @@ export const RecordMenu = () => {
   const viewId = view?.id;
   const permission = useTablePermission();
   const recordMenuRef = useRef<HTMLDivElement>(null);
-  const { enable: aiEnable } = useAI();
+  const { chatEnable } = useAI();
   const { aiChat } = useDisableAIAction();
-  const chatEnabled = Boolean(aiEnable && aiChat);
+  const chatEnabled = Boolean(chatEnable && aiChat);
 
   useClickAway(recordMenuRef, () => {
     closeRecordMenu();

@@ -7,10 +7,11 @@ interface IFilePreviewProvider {
   container?: HTMLElement | null;
   children?: React.ReactNode;
   i18nMap?: Record<string, string>;
+  onOpenChange?: (open: boolean, fileId?: IFileId) => void;
 }
 
 export const FilePreviewProvider = (props: IFilePreviewProvider) => {
-  const { children, container, i18nMap } = props;
+  const { children, container, i18nMap, onOpenChange } = props;
   const [current, setCurrent] = useState<number | string>();
   const [files, setFiles] = useState<IFileItemInner[]>([]);
 
@@ -19,13 +20,19 @@ export const FilePreviewProvider = (props: IFilePreviewProvider) => {
     [current, files]
   );
 
-  const openPreview = useCallback((fileId?: number | string) => {
-    setCurrent(fileId ?? 0);
-  }, []);
+  const openPreview = useCallback(
+    (fileId?: number | string) => {
+      const nextFileId = fileId ?? 0;
+      setCurrent(nextFileId);
+      onOpenChange?.(true, nextFileId);
+    },
+    [onOpenChange]
+  );
 
   const closePreview = useCallback(() => {
     setCurrent(undefined);
-  }, []);
+    onOpenChange?.(false);
+  }, [onOpenChange]);
 
   const mergeFiles = useCallback((item: IFileItemInner) => {
     setFiles((pre) => {
@@ -68,8 +75,10 @@ export const FilePreviewProvider = (props: IFilePreviewProvider) => {
     if (prevIndex < 0) {
       return;
     }
-    setCurrent(files[prevIndex].fileId);
-  }, [current, files]);
+    const prevFileId = files[prevIndex].fileId;
+    setCurrent(prevFileId);
+    onOpenChange?.(true, prevFileId);
+  }, [current, files, onOpenChange]);
 
   const onNext = useCallback(() => {
     const index = files.findIndex(({ fileId }) => fileId === current);
@@ -80,8 +89,10 @@ export const FilePreviewProvider = (props: IFilePreviewProvider) => {
     if (nextIndex >= files.length) {
       return;
     }
-    setCurrent(files[nextIndex].fileId);
-  }, [current, files]);
+    const nextFileId = files[nextIndex].fileId;
+    setCurrent(nextFileId);
+    onOpenChange?.(true, nextFileId);
+  }, [current, files, onOpenChange]);
 
   return (
     <FilePreviewContext.Provider

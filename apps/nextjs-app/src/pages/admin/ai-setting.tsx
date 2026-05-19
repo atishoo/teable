@@ -4,6 +4,7 @@ import { getSetting, SettingKey, updateSetting } from '@teable/openapi';
 import type { GetServerSideProps } from 'next';
 import type { ReactElement } from 'react';
 import { AIConfigurationStatus } from '@/features/app/blocks/admin/setting/components/ai-config/AIConfigurationStatus';
+import { AIControlCard } from '@/features/app/blocks/admin/setting/components/ai-config/AIControlCard';
 import { AIConfigFormWizard } from '@/features/app/blocks/admin/setting/components/ai-config/AiFormWizard';
 import { AdminLayout } from '@/features/app/layouts/AdminLayout';
 import ensureLogin from '@/lib/ensureLogin';
@@ -24,8 +25,7 @@ const AISetting: NextPageWithLayout<IAISettingPageProps> = ({ settingServerData 
   });
 
   const { mutate: mutateUpdateSetting } = useMutation({
-    mutationFn: (aiConfig: NonNullable<ISettingVo['aiConfig']>) =>
-      updateSetting({ [SettingKey.AI_CONFIG]: aiConfig }),
+    mutationFn: (settingRo: Parameters<typeof updateSetting>[0]) => updateSetting(settingRo),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['setting'] });
     },
@@ -33,22 +33,51 @@ const AISetting: NextPageWithLayout<IAISettingPageProps> = ({ settingServerData 
 
   if (!setting) return null;
 
+  const sandboxAgent = setting.sandboxAgentConfig;
+  const sandboxModels =
+    sandboxAgent?.models?.[sandboxAgent.defaultAgent ?? 'claude'] ??
+    sandboxAgent?.models?.claude ??
+    [];
+  const sandboxConfigured = Boolean(
+    setting.sandboxAgentAvailable &&
+      sandboxModels.length &&
+      sandboxAgent?.llm?.baseUrl &&
+      sandboxAgent?.llm?.apiKey
+  );
+  const aiConfig = setting.aiConfig ?? { llmProviders: [], gatewayModels: [] };
+  const disableActions = aiConfig.capabilities?.disableActions ?? [];
+
   return (
     <div className="flex h-screen flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden p-4 sm:p-8">
       <div>
         <h1 className="text-2xl font-semibold">AI 设置</h1>
         <div className="mt-2 text-sm text-muted-foreground">
-          配置实例级 LLM、模型池和默认对话模型。
+          配置实例级 LLM、AI 字段/自动化模型池和 AI 能力开关。
         </div>
       </div>
       <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
         <AIConfigurationStatus aiConfig={setting.aiConfig} />
         <AIConfigFormWizard
           aiConfig={setting.aiConfig}
-          setAiConfig={mutateUpdateSetting}
+          setAiConfig={(aiConfig) => mutateUpdateSetting({ [SettingKey.AI_CONFIG]: aiConfig })}
           showPricing={false}
         />
       </div>
+      <AIControlCard
+        disableActions={disableActions}
+        sandboxConfigured={sandboxConfigured}
+        onChange={(value) =>
+          mutateUpdateSetting({
+            [SettingKey.AI_CONFIG]: {
+              ...aiConfig,
+              capabilities: {
+                ...aiConfig.capabilities,
+                ...value,
+              },
+            },
+          })
+        }
+      />
     </div>
   );
 };

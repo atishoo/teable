@@ -35,20 +35,30 @@ export function DashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="ml-4 mt-4">
-        <Spin />
+      <div className="flex h-full">
+        <div className="ml-4 mt-4 min-w-0 flex-1">
+          <Spin />
+        </div>
       </div>
     );
   }
   if (!isLoading && !dashboardList?.length) {
-    return <EmptyDashboard />;
+    return (
+      <div className="flex h-full">
+        <div className="min-w-0 flex-1">
+          <EmptyDashboard />
+        </div>
+      </div>
+    );
   }
   const dashboardId = dashboardQueryId ?? dashboardList?.[0]?.id;
 
   return (
-    <div className="flex h-full flex-col">
-      <DashboardHeader dashboardId={dashboardId} />
-      <DashboardMain dashboardId={dashboardId} />
+    <div className="flex h-full">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <DashboardHeader dashboardId={dashboardId} />
+        <DashboardMain dashboardId={dashboardId} />
+      </div>
     </div>
   );
 }

@@ -582,7 +582,7 @@
         "name": "Name",
         "nameDescription": "The name of the LLM provider",
         "customModel": "Custom model",
-        "customModelDescription": "Custom models can be used in AI fields, AI automation, and AI chat interface. Image generation models need to be checked for testing",
+        "customModelDescription": "Custom models can be used in AI fields and AI automation. Image generation models need to be checked for testing",
         "updateLLMProvider": "Update LLM provider",
         "addProvider": "Add LLM provider",
         "addProviderDescription": "Add a new LLM provider to the list",
@@ -604,13 +604,13 @@
         "embeddingModelDescription": "Optional. For Document Q&A. Usually, the model ID contains \"embedding\".",
         "translationModel": "Translation model",
         "translationModelDescription": "The translation model to use",
-        "chatModel": "Chat model",
-        "chatModelDescription": "The chat model to use, Tips: tool calling is required for teable ai features",
+        "chatModel": "Default text model",
+        "chatModelDescription": "The default text model for AI fields and automation. Tips: tool calling is required for Teable AI features",
         "chatModels": {
-          "lg": "Advanced chat model",
+          "lg": "Advanced text model",
           "lgDescription": "For planning, coding, and other complex task scenarios. Recommended: claude-sonnet-4.5",
           "md": "Standard",
-          "mdDescription": "For daily conversations and general tasks",
+          "mdDescription": "For general tasks",
           "sm": "Lightweight",
           "smDescription": "For simple queries and quick responses",
           "inheritHint": "Same as primary ({{model}})",
@@ -628,7 +628,7 @@
           "aiChat": {
             "title": "AI Chat",
             "description": "AI Chat sidebar and all agent capabilities",
-            "sandboxWarning": "AI Chat runtime must be configured below before use"
+            "sandboxWarning": "Configure Sandbox Agent before using AI Chat"
           },
           "modelSelection": {
             "title": "Allow Model Selection",
@@ -638,9 +638,9 @@
         "chatModelTest": {
           "text": "Test model",
           "description": "Test the ability of the model to handle image, pdf.",
-          "notConfigLgModel": "Please configure the advanced chat model first",
+          "notConfigLgModel": "Please configure the advanced text model first",
           "confirmTitle": "Test model ability",
-          "confirmDescription": "Do you want to test the advanced chat model's capabilities?",
+          "confirmDescription": "Do you want to test the advanced text model's capabilities?",
           "confirm": "Test model",
           "cancel": "Cancel",
           "missingCapabilitiesWarning": "This model does not support image or PDF processing, which may cause some features to be unavailable.",
@@ -795,7 +795,7 @@
         "displayLabel": "Display Label",
         "isImageModel": "This is an image generation model",
         "capabilities": "Capabilities",
-        "setAsDefault": "Set as default chat model",
+        "setAsDefault": "Set as default text model",
         "quickAdd": "Quick add popular models:",
         "guide": {
           "configStatus": "Configuration Status",
@@ -815,10 +815,10 @@
           "providers": "Custom Providers",
           "providersConfigured": "{{count}} providers configured",
           "providersEmpty": "No custom providers configured",
-          "chatModel": "Default Chat Model",
+          "chatModel": "Default Text Model",
           "chatModelGateway": "Using gateway model",
           "chatModelProvider": "Using custom provider model",
-          "chatModelMissing": "Select a default chat model"
+          "chatModelMissing": "Select a default text model"
         },
         "enableCard": {
           "title": "AI Services",
@@ -864,14 +864,14 @@
           "completeStep2First": "Please complete Step 2: Add at least one model first",
           "addCustom": "Custom...",
           "enabledModels": "Enabled Models",
-          "chatDefault": "Chat Default",
+          "chatDefault": "Text Default",
           "noModelsAvailable": "No models available, please add models in Step 2 first",
           "quickSetup": "Quick Setup",
           "useRecommended": "Use Recommended",
-          "useRecommendedDesc": "Set {{model}} as default for all chat scenarios with one click",
-          "chatModels": "Chat Model",
-          "chatModelTip": "This model is used for sidebar AI chat, specified by admin and cannot be changed by users",
-          "selectChatModel": "Select chat model...",
+          "useRecommendedDesc": "Set {{model}} as the default text model for AI fields and automation",
+          "chatModels": "Default Text Model",
+          "chatModelTip": "This model is used for AI fields and automation. It does not control the sidebar AI assistant; configure that in Sandbox Agent.",
+          "selectChatModel": "Select default text model...",
           "lgDesc": "Complex tasks, deep analysis",
           "mdDesc": "Daily conversations, general tasks",
           "smDesc": "Simple queries, quick responses",
@@ -894,8 +894,8 @@
             "llmApiDesc": "Choose AI Gateway or configure custom providers",
             "modelPool": "Configure Recommended Models",
             "modelPoolDesc": "Recommended models for users to select in AI fields & automation",
-            "chatModel": "Set Chat Model",
-            "chatModelDesc": "Model for sidebar AI chat (select from recommended models)",
+            "chatModel": "Set Default Text Model",
+            "chatModelDesc": "Default text model for AI fields and automation (select from recommended models)",
             "providers": "Configure Providers",
             "providersDesc": "Add and manage AI providers"
           }
@@ -972,8 +972,8 @@
           "description": "Enable at least one model for AI Fields and automations, <anchor>go to setting</anchor>"
         },
         "aiChatModel": {
-          "title": "AI: Set chat model",
-          "description": "Select a default model for the sidebar AI Chat, <anchor>go to setting</anchor>"
+          "title": "AI: Set default text model",
+          "description": "Select a default text model for AI fields and automation, <anchor>go to setting</anchor>"
         },
         "appBuilderDomain": {
           "title": "App Builder: Custom domain",

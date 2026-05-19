@@ -40,11 +40,11 @@ body {
   background-color: hsl(var(--muted-foreground)) !important;
 }
 
-.fc-scrollgrid-section>td {
+.fc-scrollgrid-section > td {
   border-radius: 0px 0px 8px 8px !important;
 }
 
-.fc-scrollgrid-section>th {
+.fc-scrollgrid-section > th {
   border-radius: 0px 8px 0px 0px !important;
 }
 
@@ -174,7 +174,7 @@ body {
   }
 
   35% {
-    box-shadow: inset 0 0 0 5px hsl(var(--primary)/ 0.15);
+    box-shadow: inset 0 0 0 5px hsl(var(--primary) / 0.15);
   }
 
   100% {
@@ -184,4 +184,28 @@ body {
 
 .ui-attention-pulse {
   animation: ui-attention-pulse 700ms ease-in-out 2;
+}
+
+@keyframes ai-chat-thinking-shimmer {
+  0% {
+    background-position: 180% 0;
+  }
+
+  100% {
+    background-position: -80% 0;
+  }
+}
+
+.ai-chat-thinking-text {
+  color: transparent;
+  background-image: linear-gradient(
+    90deg,
+    hsl(var(--muted-foreground) / 0.6) 0%,
+    hsl(var(--foreground)) 45%,
+    hsl(var(--muted-foreground) / 0.6) 90%
+  );
+  background-size: 220% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: ai-chat-thinking-shimmer 1.6s ease-in-out infinite;
 }

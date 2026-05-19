@@ -903,3 +903,47 @@ model BaseShare {
   @@index([baseId])
   @@map("base_share")
 }
+
+model AiChat {
+  id               String          @id
+  baseId           String          @map("base_id")
+  title            String
+  type             String          @default("general")
+  status           String          @default("idle")
+  agentSessionId   String?         @map("agent_session_id")
+  workspaceKey     String?         @map("workspace_key")
+  selectedModel    String?         @map("selected_model")
+  selectedEffort   String?         @map("selected_effort")
+  deletedTime      DateTime?       @map("deleted_time")
+  createdTime      DateTime        @default(now()) @map("created_time")
+  createdBy        String          @map("created_by")
+  lastModifiedTime DateTime?       @updatedAt @map("last_modified_time")
+  lastModifiedBy   String?         @map("last_modified_by")
+  messages         AiChatMessage[]
+
+  @@index([baseId, createdBy, deletedTime, lastModifiedTime])
+  @@map("ai_chat")
+}
+
+model AiChatMessage {
+  id               String    @id
+  chatId           String    @map("chat_id")
+  baseId           String    @map("base_id")
+  creatorId        String    @map("creator_id")
+  creatorRole      String    @map("creator_role")
+  content          String
+  status           String
+  type             String?
+  contextLabels    String?   @map("context_labels")
+  attachmentNames  String?   @map("attachment_names")
+  parts            String?
+  elapsedMs        Int?      @map("elapsed_ms")
+  createdTime      DateTime  @default(now()) @map("created_time")
+  createdBy        String    @map("created_by")
+  lastModifiedTime DateTime? @updatedAt @map("last_modified_time")
+  chat             AiChat    @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([baseId, chatId, createdTime])
+  @@index([createdBy, baseId, createdTime])
+  @@map("ai_chat_message")
+}

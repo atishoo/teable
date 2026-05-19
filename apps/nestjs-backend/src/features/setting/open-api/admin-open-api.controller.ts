@@ -1,9 +1,28 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
-import type { IAdminListQuery, IAdminUpdateSpaceRo, IAdminUpdateUserRo } from '@teable/openapi';
 import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Res,
+} from '@nestjs/common';
+import type {
+  IAdminListQuery,
+  IAdminUpdateSpaceRo,
+  IAdminUpdateUserRo,
+  IAdminWorkflowRunListQuery,
+  IAdminSandboxAgentTestRo,
+} from '@teable/openapi';
+import {
+  adminSandboxAgentTestRoSchema,
   adminListQuerySchema,
   adminUpdateSpaceRoSchema,
   adminUpdateUserRoSchema,
+  adminWorkflowRunListQuerySchema,
 } from '@teable/openapi';
 import { Response } from 'express';
 import { ClsService } from 'nestjs-cls';
@@ -46,6 +65,33 @@ export class AdminOpenApiController {
     updateRo: IAdminUpdateSpaceRo
   ): Promise<void> {
     await this.adminService.updateSpace(spaceId, updateRo, this.cls.get('user.id'));
+  }
+
+  @Get('/workflow-runs')
+  async listWorkflowRuns(
+    @Query(new ZodValidationPipe(adminWorkflowRunListQuerySchema)) query: IAdminWorkflowRunListQuery
+  ) {
+    return await this.adminService.listWorkflowRuns(query);
+  }
+
+  @Get('/sandbox-agent/status')
+  async getSandboxAgentStatus() {
+    return await this.adminService.getSandboxAgentStatus();
+  }
+
+  @Post('/sandbox-agent/sync')
+  @HttpCode(200)
+  async syncSandboxAgent() {
+    return await this.adminService.syncSandboxAgent();
+  }
+
+  @Post('/sandbox-agent/test-llm')
+  @HttpCode(200)
+  async testSandboxAgentLLM(
+    @Body(new ZodValidationPipe(adminSandboxAgentTestRoSchema))
+    sandboxAgentConfig: IAdminSandboxAgentTestRo
+  ) {
+    return await this.adminService.testSandboxAgentLLM(sandboxAgentConfig);
   }
 
   @Patch('/plugin/:pluginId/publish')
