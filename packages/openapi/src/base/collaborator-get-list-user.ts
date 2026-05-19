@@ -11,6 +11,17 @@ export const listBaseCollaboratorUserRoSchema = z.object({
   take: z.coerce.number().optional(),
   includeSystem: z.coerce.boolean().optional(),
   orderBy: z.enum(['desc', 'asc']).optional(),
+  userIds: z
+    .preprocess((value) => {
+      if (Array.isArray(value)) {
+        return value;
+      }
+      if (typeof value === 'string') {
+        return value.split(',').filter(Boolean);
+      }
+      return undefined;
+    }, z.array(z.string()).optional())
+    .optional(),
 });
 
 export type IListBaseCollaboratorUserRo = z.infer<typeof listBaseCollaboratorUserRoSchema>;
@@ -59,10 +70,14 @@ export const getUserCollaborators = async (
   baseId: string,
   options?: IListBaseCollaboratorUserRo
 ) => {
+  const { userIds, ...params } = options ?? {};
   return axios.get<IListBaseCollaboratorUserVo>(
     urlBuilder(BASE_COLLABORATE_LIST_USER, { baseId }),
     {
-      params: options,
+      params: {
+        ...params,
+        userIds: userIds?.join(','),
+      },
     }
   );
 };

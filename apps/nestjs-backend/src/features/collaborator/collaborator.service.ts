@@ -162,7 +162,13 @@ export class CollaboratorService {
   protected async getBaseCollaboratorBuilder(
     knex: Knex.QueryBuilder,
     baseId: string,
-    options?: { includeSystem?: boolean; search?: string; type?: PrincipalType; role?: IRole[] }
+    options?: {
+      includeSystem?: boolean;
+      search?: string;
+      type?: PrincipalType;
+      role?: IRole[];
+      userIds?: string[];
+    }
   ) {
     const base = await this.prismaService
       .txClient()
@@ -172,7 +178,7 @@ export class CollaboratorService {
       .from('collaborator')
       .leftJoin('users', 'collaborator.principal_id', 'users.id')
       .whereIn('collaborator.resource_id', [baseId, base.spaceId]);
-    const { includeSystem, search, type, role } = options ?? {};
+    const { includeSystem, search, type, role, userIds } = options ?? {};
     if (!includeSystem) {
       builder.where((db) => {
         return db.whereNull('users.is_system').orWhere('users.is_system', false);
@@ -188,6 +194,9 @@ export class CollaboratorService {
     if (role?.length) {
       builder.whereIn('collaborator.role_name', role);
     }
+    if (userIds?.length) {
+      builder.whereIn('users.id', userIds);
+    }
     if (type) {
       builder.where('collaborator.principal_type', type);
     }
@@ -195,7 +204,13 @@ export class CollaboratorService {
 
   async getTotalBase(
     baseId: string,
-    options?: { includeSystem?: boolean; search?: string; type?: PrincipalType; role?: IRole[] }
+    options?: {
+      includeSystem?: boolean;
+      search?: string;
+      type?: PrincipalType;
+      role?: IRole[];
+      userIds?: string[];
+    }
   ) {
     const builder = this.knex.queryBuilder();
     await this.getBaseCollaboratorBuilder(builder, baseId, options);

@@ -1,7 +1,14 @@
+import { useQuery } from '@tanstack/react-query';
 import { getCollaboratorsChannel } from '@teable/core';
+import { getUserCollaborators } from '@teable/openapi';
 import type { ICollaboratorUser } from '@teable/sdk';
-import { useSession, CollaboratorWithHoverCard, getCollaboratorColorMap } from '@teable/sdk';
-import { useConnection, useTableId } from '@teable/sdk/hooks';
+import {
+  useSession,
+  CollaboratorWithHoverCard,
+  getCollaboratorColorMap,
+  ReactQueryKeys,
+} from '@teable/sdk';
+import { useBaseId, useConnection, useTableId } from '@teable/sdk/hooks';
 import { cn, Popover, PopoverContent, PopoverTrigger } from '@teable/ui-lib/shadcn';
 import { chunk, isEmpty } from 'lodash';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -14,6 +21,7 @@ interface CollaboratorsProps {
 
 export const Collaborators: React.FC<CollaboratorsProps> = ({ className, maxAvatarLen = 3 }) => {
   const { connection } = useConnection();
+  const baseId = useBaseId();
   const tableId = useTableId();
   const { user: sessionUser } = useSession();
 
@@ -28,10 +36,38 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ className, maxAvat
     [sessionUser]
   );
   const [users, setUsers] = useState<ICollaboratorUser[]>([{ ...user }]);
-  const [boardUsers, hiddenUser] = chunk(users, maxAvatarLen);
+  const userIds = useMemo(() => Array.from(new Set(users.map(({ id }) => id))).sort(), [users]);
+  const { data: collaboratorProfiles, refetch: refetchCollaboratorProfiles } = useQuery({
+    queryKey: ReactQueryKeys.baseCollaboratorListUser(baseId as string, {
+      includeSystem: true,
+      take: userIds.length ? userIds.length * 2 : 1,
+      userIds,
+    }),
+    queryFn: ({ queryKey }) =>
+      getUserCollaborators(queryKey[1], queryKey[2]).then((res) => res.data.users),
+    enabled: Boolean(baseId && userIds.length),
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+  });
+  const collaboratorProfileMap = useMemo(
+    () => new Map((collaboratorProfiles ?? []).map((profile) => [profile.id, profile])),
+    [collaboratorProfiles]
+  );
+  const displayUsers = useMemo(
+    () =>
+      users.map((user) => {
+        const profile = collaboratorProfileMap.get(user.id);
+        if (user.id === sessionUser.id) {
+          return profile ? { ...profile, ...user } : user;
+        }
+        return profile ? { ...user, ...profile } : user;
+      }),
+    [collaboratorProfileMap, sessionUser.id, users]
+  );
+  const [boardUsers, hiddenUser] = chunk(displayUsers, maxAvatarLen);
   const collaboratorColorMap = useMemo(
-    () => getCollaboratorColorMap(users.map(({ id }) => `${tableId}_${id}`)),
-    [tableId, users]
+    () => getCollaboratorColorMap(displayUsers.map(({ id }) => `${tableId}_${id}`)),
+    [tableId, displayUsers]
   );
 
   useEffect(() => {
@@ -72,6 +108,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ className, maxAvat
         newUser = [{ ...user }, ...remoteUsers];
       }
       setUsers(newUser);
+      refetchCollaboratorProfiles();
     };
 
     presence.on('receive', receiveHandler);
@@ -80,7 +117,7 @@ export const Collaborators: React.FC<CollaboratorsProps> = ({ className, maxAvat
       presence.unsubscribe();
       presence?.removeListener('receive', receiveHandler);
     };
-  }, [connection, presence, tableId, user]);
+  }, [connection, presence, refetchCollaboratorProfiles, tableId, user]);
 
   return (
     <div className={cn('gap-1 items-center flex', className)}>
