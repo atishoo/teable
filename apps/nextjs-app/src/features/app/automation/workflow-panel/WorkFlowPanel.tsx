@@ -5291,7 +5291,10 @@ const InlineVariableToken = (props: {
 
   return (
     <span
-      className={cn('inline-flex rounded-md', props.selected && 'ring-2 ring-slate-950')}
+      className={cn(
+        'inline-flex rounded-md',
+        props.selected && 'ring-2 ring-slate-950 dark:ring-blue-300'
+      )}
       contentEditable={false}
       data-variable-value={props.value}
     >
@@ -6612,7 +6615,7 @@ const VariableInput = (props: {
           key={value}
           ref={editorRef}
           className={cn(
-            'min-h-9 w-full break-words rounded-md border border-input bg-background px-3 py-1.5 pr-10 text-sm leading-6 outline-none focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500/30',
+            'min-h-9 w-full break-words rounded-md border border-input bg-background px-3 py-1.5 pr-10 text-sm leading-6 outline-none focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500/30 dark:focus-visible:border-slate-800 dark:focus-visible:ring-blue-300',
             hasFixedHeight ? ['overflow-y-auto', props.fixedHeightClassName] : 'overflow-hidden',
             props.resizable && 'resize-y'
           )}
@@ -6699,7 +6702,7 @@ const VariableInput = (props: {
       <textarea
         ref={textareaRef}
         className={cn(
-          'min-h-9 w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm leading-5 outline-none placeholder:text-muted-foreground focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500/30',
+          'min-h-9 w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm leading-5 outline-none placeholder:text-muted-foreground focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500/30 dark:focus-visible:border-slate-800 dark:focus-visible:ring-blue-300',
           props.resizable ? 'resize-y' : 'resize-none',
           hasFixedHeight ? ['overflow-y-auto', props.fixedHeightClassName] : 'overflow-hidden'
         )}

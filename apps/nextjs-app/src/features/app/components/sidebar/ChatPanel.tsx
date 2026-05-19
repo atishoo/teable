@@ -1412,7 +1412,7 @@ export const ChatPanel = () => {
       chip.title = attachment.name;
       const isSelected = chip.classList.contains('ProseMirror-selectednode');
       chip.className = cn(
-        'attachment-chip mx-0.5 inline-flex h-6 max-w-full -translate-y-px items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-primary/[0.08] bg-primary/[0.04] px-1.5 align-middle text-sm leading-none text-foreground transition-[background-color,box-shadow] hover:bg-primary/[0.08] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/15 [&.ProseMirror-selectednode]:border-primary',
+        'attachment-chip mx-0.5 inline-flex h-6 max-w-full -translate-y-px select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-primary/[0.08] bg-primary/[0.04] px-1.5 align-middle text-sm leading-none text-foreground transition-[background-color,box-shadow] selection:bg-transparent selection:text-foreground hover:bg-primary/[0.08] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/15 [&.ProseMirror-selectednode]:border-primary [&.ProseMirror-selectednode]:ring-2 [&.ProseMirror-selectednode]:ring-slate-950 [&_*]:select-none dark:[&.ProseMirror-selectednode]:border-blue-300 dark:[&.ProseMirror-selectednode]:ring-blue-300',
         attachment.status === 'loading' ? 'uploading opacity-80' : 'previewable cursor-pointer',
         isSelected && 'ProseMirror-selectednode'
       );
@@ -1466,7 +1466,7 @@ export const ChatPanel = () => {
     chip.dataset.contextId = context.id;
     chip.title = context.title ?? context.label;
     chip.className =
-      'context-chip mx-0.5 inline-flex h-6 max-w-full -translate-y-px items-center gap-1.5 rounded-md border border-foreground/10 bg-foreground/[0.04] px-1.5 align-middle text-sm leading-none text-foreground transition-[background-color,box-shadow] hover:bg-foreground/[0.08] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/15';
+      'context-chip mx-0.5 inline-flex h-6 max-w-full -translate-y-px select-none items-center gap-1.5 rounded-md border border-foreground/10 bg-foreground/[0.04] px-1.5 align-middle text-sm leading-none text-foreground transition-[background-color,box-shadow] selection:bg-transparent selection:text-foreground hover:bg-foreground/[0.08] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/15 [&.ProseMirror-selectednode]:border-primary [&.ProseMirror-selectednode]:ring-2 [&.ProseMirror-selectednode]:ring-slate-950 [&_*]:select-none dark:[&.ProseMirror-selectednode]:border-blue-300 dark:[&.ProseMirror-selectednode]:ring-blue-300';
 
     const icon = document.createElement('span');
     icon.className =
@@ -2922,6 +2922,23 @@ export const ChatPanel = () => {
     [clearSelectedChip]
   );
 
+  const selectEditorContents = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    clearSelectedChip();
+    editor
+      .querySelectorAll<HTMLElement>('.attachment-chip,.context-chip')
+      .forEach((chip) => chip.classList.add('ProseMirror-selectednode'));
+
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    savedEditorRangeRef.current = range.cloneRange();
+  }, [clearSelectedChip]);
+
   const removeChipElement = useCallback(
     (chip: HTMLElement) => {
       const editor = editorRef.current;
@@ -3049,10 +3066,11 @@ export const ChatPanel = () => {
   }, [contextOpen, isRangeInEditor, updateContextPickerPosition]);
 
   const handleEditorInput = useCallback(() => {
+    clearSelectedChip();
     syncComposerFromDom();
     saveEditorSelection();
     syncMentionFromSelection();
-  }, [saveEditorSelection, syncComposerFromDom, syncMentionFromSelection]);
+  }, [clearSelectedChip, saveEditorSelection, syncComposerFromDom, syncMentionFromSelection]);
 
   const handleEditorKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -3062,6 +3080,15 @@ export const ChatPanel = () => {
         event.stopPropagation();
         selectChipElement(chip);
         openAttachmentByChip(chip);
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+        event.preventDefault();
+        selectEditorContents();
+        setContextOpen(false);
+        setContextSearch('');
+        setContextPickerPosition(undefined);
         return;
       }
 
@@ -3102,6 +3129,7 @@ export const ChatPanel = () => {
       removeAdjacentChip,
       saveEditorSelection,
       selectChipElement,
+      selectEditorContents,
       sendMessage,
       syncComposerFromDom,
     ]
