@@ -16,6 +16,28 @@ export interface ISandboxWorkspaceInitPayload {
   effort?: string;
 }
 
+export interface ISandboxAgentAttachmentUploadPayload {
+  sessionKey: string;
+  scope: ISandboxAgentScope;
+  attachment: {
+    name: string;
+    type: string;
+    size?: number;
+    data: string;
+    encoding: 'base64';
+  };
+}
+
+export interface ISandboxAgentAttachmentUploadResult {
+  success: boolean;
+  attachment: {
+    name: string;
+    type: string;
+    size?: number;
+    path: string;
+  };
+}
+
 interface ISandboxAgentRequestOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
@@ -172,4 +194,17 @@ export const initSandboxAgentWorkspace = async (
   options?: ISandboxAgentRequestOptions
 ) => {
   await requestSandboxAgent(sandboxUrl, '/workspaces/init', payload, options);
+};
+
+export const uploadSandboxAgentAttachment = async (
+  sandboxUrl: string,
+  payload: ISandboxAgentAttachmentUploadPayload,
+  options?: ISandboxAgentRequestOptions
+) => {
+  return requestSandboxAgentJson<ISandboxAgentAttachmentUploadResult>(
+    sandboxUrl,
+    '/workspaces/attachment',
+    payload,
+    options
+  );
 };

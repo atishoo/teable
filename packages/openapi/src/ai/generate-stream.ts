@@ -18,6 +18,7 @@ export const BASE_CHAT_MESSAGES = '/base/{baseId}/chat/{chatId}/messages';
 export const BASE_CHAT_SEND = '/base/{baseId}/chat/{chatId}/send';
 export const BASE_CHAT_INTERRUPT = '/base/{baseId}/chat/{chatId}/interrupt';
 export const BASE_CHAT_GATE_RESPONSE = '/base/{baseId}/chat/{chatId}/gate-response';
+export const BASE_CHAT_ATTACHMENT = '/base/{baseId}/chat/{chatId}/attachment';
 export const BASE_CHAT = '/base/{baseId}/chat/{chatId}';
 
 export const aiGenerateRoSchema = z.object({
@@ -84,6 +85,8 @@ export const aiChatAttachmentSchema = z.object({
   size: z.number().optional(),
   text: z.string().optional(),
   thumbnailUrl: z.string().optional(),
+  path: z.string().optional(),
+  uploadToken: z.string().optional(),
   data: z.string().optional(),
   encoding: z.enum(['base64']).optional(),
 });
@@ -197,6 +200,13 @@ export const sendBaseChatMessageRoSchema = z.object({
 });
 
 export type ISendBaseChatMessageRo = z.infer<typeof sendBaseChatMessageRoSchema>;
+
+export const uploadBaseChatAttachmentVoSchema = aiChatAttachmentSchema.extend({
+  path: z.string(),
+  uploadToken: z.string(),
+});
+
+export type IUploadBaseChatAttachmentVo = z.infer<typeof uploadBaseChatAttachmentVoSchema>;
 
 export const baseChatGateResponseRoSchema = z.object({
   toolCallId: z.string().optional(),
@@ -436,6 +446,24 @@ export const sendBaseChatMessage = (
     body: JSON.stringify(sendRo),
     signal,
   });
+};
+
+export const uploadBaseChatAttachment = (
+  baseId: string,
+  chatId: string,
+  file: File,
+  meta?: Pick<IAiChatAttachment, 'text' | 'thumbnailUrl' | 'typeLabel'>
+) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (meta?.text) formData.append('text', meta.text);
+  if (meta?.thumbnailUrl) formData.append('thumbnailUrl', meta.thumbnailUrl);
+  if (meta?.typeLabel) formData.append('typeLabel', meta.typeLabel);
+
+  return axios.post<IUploadBaseChatAttachmentVo>(
+    urlBuilder(BASE_CHAT_ATTACHMENT, { baseId, chatId }),
+    formData
+  );
 };
 
 export const interruptBaseChat = async (baseId: string, chatId: string) => {

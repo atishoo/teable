@@ -1,4 +1,17 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Query,
+  Res,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   aiGenerateRoSchema,
   baseChatGateResponseRoSchema,
@@ -7,6 +20,7 @@ import {
   ICreateBaseChatRo,
   IAiGenerateRo,
   ISendBaseChatMessageRo,
+  IUploadBaseChatAttachmentVo,
   IUpsertAiChatMessageRo,
   sendBaseChatMessageRoSchema,
   upsertAiChatMessageRoSchema,
@@ -104,6 +118,28 @@ export class BaseChatController {
     @Res() res: Response
   ) {
     await this.aiService.sendBaseChatMessage(baseId, chatId, sendRo, res);
+  }
+
+  @Post('/:chatId/attachment')
+  @Permissions('base|read')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 25 * 1024 * 1024 },
+    })
+  )
+  async uploadAttachment(
+    @Param('baseId') baseId: string,
+    @Param('chatId') chatId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body('text') text?: string,
+    @Body('thumbnailUrl') thumbnailUrl?: string,
+    @Body('typeLabel') typeLabel?: string
+  ): Promise<IUploadBaseChatAttachmentVo> {
+    return await this.aiService.uploadBaseChatAttachment(baseId, chatId, file, {
+      text,
+      thumbnailUrl,
+      typeLabel,
+    });
   }
 
   @Post('/:chatId/interrupt')

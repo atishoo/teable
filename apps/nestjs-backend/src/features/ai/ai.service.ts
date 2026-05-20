@@ -1,5 +1,5 @@
 /* eslint-disable sonarjs/no-duplicate-string */
-import { createHash, randomUUID } from 'crypto';
+import { createHash, createHmac, randomUUID, timingSafeEqual } from 'crypto';
 import type { OpenAIProvider } from '@ai-sdk/openai';
 import { Injectable, Logger } from '@nestjs/common';
 import type { Action } from '@teable/core';
@@ -31,6 +31,7 @@ import type {
   IGetAIConfig,
   ISendBaseChatMessageRo,
   ISandboxAgentConfig,
+  IUploadBaseChatAttachmentVo,
   IUpsertAiChatMessageRo,
   GatewayModelTag,
   LLMProvider,
@@ -53,6 +54,7 @@ import {
   initSandboxAgentWorkspace,
   resolveSandboxAgentModel,
   syncSandboxAgentConfig,
+  uploadSandboxAgentAttachment,
 } from './sandbox-agent.client';
 import { getAdaptedProviderOptions, getTaskModelKey, modelProviders } from './util';
 
@@ -66,6 +68,13 @@ export type ILanguageModelV2 = Exclude<LanguageModel, string>;
 // In-memory cache for Gateway models (TTL: 10 minutes)
 const gatewayModelsCacheTtl = 10 * 60 * 1000;
 const agentAccessTokenClientId = 'ai-agent';
+
+const decodeMultipartFileName = (fileName: string) => {
+  const decoded = Buffer.from(fileName, 'latin1').toString('utf8');
+  return decoded.includes('\uFFFD') ? fileName : decoded;
+};
+
+const sandboxAttachmentPathRegExp = /^upload\/[^/]+$/;
 
 const agentAccessTokenScopes: Action[] = [
   'base|read',
@@ -145,6 +154,7 @@ interface IAiGenerateTextResult {
 }
 
 type IAiChatPayload = IUpsertAiChatMessageRo['chat'];
+type IAiChatAttachmentPayload = NonNullable<ISendBaseChatMessageRo['attachments']>[number];
 
 @Injectable()
 export class AiService {
@@ -888,6 +898,98 @@ export class AiService {
     return `${baseId}-${hash.slice(0, 32)}`;
   }
 
+  private getSandboxAttachmentUploadTokenPayload(
+    sessionKey: string,
+    attachment: Pick<IAiChatAttachmentPayload, 'name' | 'type' | 'size' | 'path'>
+  ) {
+    return JSON.stringify([
+      sessionKey,
+      attachment.path,
+      attachment.name,
+      attachment.type,
+      attachment.size ?? null,
+    ]);
+  }
+
+  private signSandboxAttachmentPath(
+    sessionKey: string,
+    attachment: Pick<IAiChatAttachmentPayload, 'name' | 'type' | 'size' | 'path'>
+  ) {
+    return `v1.${createHmac('sha256', this.baseConfig.secretKey)
+      .update(this.getSandboxAttachmentUploadTokenPayload(sessionKey, attachment))
+      .digest('hex')}`;
+  }
+
+  private getSandboxAttachmentValidationKey(
+    attachment: Pick<IAiChatAttachmentPayload, 'name' | 'type' | 'size' | 'path'>
+  ) {
+    return JSON.stringify([attachment.path, attachment.name, attachment.type, attachment.size]);
+  }
+
+  private isValidSandboxAttachmentUploadToken(
+    token: string | undefined,
+    sessionKey: string,
+    attachment: Pick<IAiChatAttachmentPayload, 'name' | 'type' | 'size' | 'path'>
+  ) {
+    if (!token) return false;
+    const expected = this.signSandboxAttachmentPath(sessionKey, attachment);
+    const tokenBuffer = Buffer.from(token);
+    const expectedBuffer = Buffer.from(expected);
+    return (
+      tokenBuffer.length === expectedBuffer.length && timingSafeEqual(tokenBuffer, expectedBuffer)
+    );
+  }
+
+  private sanitizeSandboxAttachment(
+    sessionKey: string,
+    attachment: IAiChatAttachmentPayload
+  ): IAiChatAttachmentPayload {
+    const sanitized = { ...attachment };
+    delete sanitized.uploadToken;
+    if (!attachment.path) {
+      return sanitized;
+    }
+    if (
+      !sandboxAttachmentPathRegExp.test(attachment.path) ||
+      !this.isValidSandboxAttachmentUploadToken(attachment.uploadToken, sessionKey, attachment)
+    ) {
+      throw new CustomHttpException('Invalid attachment path', HttpErrorCode.VALIDATION_ERROR);
+    }
+
+    return sanitized;
+  }
+
+  private sanitizeSendBaseChatMessageRo(
+    ro: ISendBaseChatMessageRo,
+    sessionKey: string
+  ): ISendBaseChatMessageRo {
+    const attachments = ro.attachments?.map((attachment) =>
+      this.sanitizeSandboxAttachment(sessionKey, attachment)
+    );
+    const attachmentsByKey = new Map(
+      attachments
+        ?.filter((attachment) => attachment.path)
+        .map((attachment) => [this.getSandboxAttachmentValidationKey(attachment), attachment])
+    );
+
+    return {
+      ...ro,
+      attachments,
+      parts: ro.parts?.map((part) => {
+        if (part.type !== 'attachment') return part;
+        return {
+          ...part,
+          attachments: part.attachments.map((attachment) =>
+            attachment.path
+              ? attachmentsByKey.get(this.getSandboxAttachmentValidationKey(attachment)) ??
+                this.sanitizeSandboxAttachment(sessionKey, attachment)
+              : this.sanitizeSandboxAttachment(sessionKey, attachment)
+          ),
+        };
+      }),
+    };
+  }
+
   private async getSandboxAgentConfig() {
     const { sandboxAgentConfig } = await this.settingService.getSetting([
       SettingKey.SANDBOX_AGENT_CONFIG,
@@ -956,14 +1058,17 @@ export class AiService {
     if (ro.attachments?.length) {
       parts.push({
         type: 'attachment',
-        attachments: ro.attachments.map(({ name, type, size, text, thumbnailUrl, typeLabel }) => ({
-          name,
-          type,
-          typeLabel,
-          size,
-          text,
-          thumbnailUrl,
-        })),
+        attachments: ro.attachments.map(
+          ({ name, type, size, text, thumbnailUrl, typeLabel, path }) => ({
+            name,
+            type,
+            typeLabel,
+            size,
+            text,
+            thumbnailUrl,
+            path,
+          })
+        ),
       });
     }
     if (ro.prompt) {
@@ -1067,11 +1172,14 @@ export class AiService {
       ?.map((attachment) =>
         [
           `- ${attachment.name} (${attachment.type}${attachment.size ? `, ${attachment.size} bytes` : ''})`,
+          attachment.path ? `Sandbox path: ${attachment.path}` : undefined,
           attachment.text ??
-            (attachment.data
+            (attachment.path || attachment.data
               ? 'The full file is available in the sandbox upload directory.'
               : 'File content is not available in the prompt.'),
-        ].join('\n')
+        ]
+          .filter(Boolean)
+          .join('\n')
       )
       .join('\n\n');
 
@@ -1360,15 +1468,17 @@ export class AiService {
       throw new CustomHttpException('AI chat is disabled', HttpErrorCode.RESTRICTED_RESOURCE);
     }
 
+    const workspaceKey = this.getSandboxSessionKey(baseId, userId, chatId);
+    const sanitizedRo = this.sanitizeSendBaseChatMessageRo(ro, workspaceKey);
     const assistantMessageId = ro.assistantMessageId ?? randomUUID();
     const userMessageId = ro.messageId ?? randomUUID();
-    const title = ro.prompt.trim().slice(0, 36) || 'AI助手';
-    const workspaceKey = await this.ensureBaseChatForAgent(
+    const title = sanitizedRo.prompt.trim().slice(0, 36) || 'AI助手';
+    await this.ensureBaseChatForAgent(
       baseId,
       chatId,
       title,
-      ro.modelKey,
-      ro.reasoningEffort
+      sanitizedRo.modelKey,
+      sanitizedRo.reasoningEffort
     );
     const now = new Date();
     const startedAt = Date.now();
@@ -1396,11 +1506,13 @@ export class AiService {
           baseId,
           creatorId: userId,
           creatorRole: 'user',
-          content: ro.prompt,
+          content: sanitizedRo.prompt,
           status: 'done',
-          contextLabels: this.stringifyStringArray(ro.contexts?.map(({ label }) => label)),
-          attachmentNames: this.stringifyStringArray(ro.attachments?.map(({ name }) => name)),
-          parts: this.stringifyMessageParts(this.createUserMessageParts(ro)),
+          contextLabels: this.stringifyStringArray(sanitizedRo.contexts?.map(({ label }) => label)),
+          attachmentNames: this.stringifyStringArray(
+            sanitizedRo.attachments?.map(({ name }) => name)
+          ),
+          parts: this.stringifyMessageParts(this.createUserMessageParts(sanitizedRo)),
           createdTime: now,
           createdBy: userId,
         },
@@ -1430,7 +1542,7 @@ export class AiService {
         baseId,
         chatId,
         workspaceKey,
-        ro,
+        sanitizedRo,
         response,
         assistantMessageId,
         contentRef,
@@ -1489,6 +1601,62 @@ export class AiService {
         response.end();
       }
     }
+  }
+
+  async uploadBaseChatAttachment(
+    baseId: string,
+    chatId: string,
+    file: Express.Multer.File | undefined,
+    meta: Pick<IUploadBaseChatAttachmentVo, 'text' | 'thumbnailUrl' | 'typeLabel'> = {}
+  ): Promise<IUploadBaseChatAttachmentVo> {
+    const { disableActions } = await this.getAIDisableAIActions(baseId);
+    if (disableActions.includes(AIActions.AIChat)) {
+      throw new CustomHttpException('AI chat is disabled', HttpErrorCode.RESTRICTED_RESOURCE);
+    }
+    if (!file?.buffer) {
+      throw new CustomHttpException('Attachment file is required', HttpErrorCode.VALIDATION_ERROR);
+    }
+    const sandboxUrl = this.getSandboxAgentUrl();
+    if (!sandboxUrl) {
+      throw new CustomHttpException(
+        'Sandbox agent is not configured',
+        HttpErrorCode.VALIDATION_ERROR
+      );
+    }
+
+    const userId = this.userId();
+    const scope = await this.getSandboxAgentScope(baseId, userId, chatId);
+    const sessionKey = this.getSandboxSessionKey(baseId, userId, chatId);
+    const type = file.mimetype || 'application/octet-stream';
+    const fileName = decodeMultipartFileName(file.originalname);
+    const result = await uploadSandboxAgentAttachment(sandboxUrl, {
+      sessionKey,
+      scope,
+      attachment: {
+        name: fileName,
+        type,
+        size: file.size,
+        data: file.buffer.toString('base64'),
+        encoding: 'base64',
+      },
+    });
+    const attachment = {
+      name: result.attachment.name || fileName,
+      type: result.attachment.type || type,
+      size: result.attachment.size ?? file.size,
+      path: result.attachment.path,
+    };
+
+    return {
+      name: attachment.name,
+      type: attachment.type,
+      typeLabel: meta.typeLabel,
+      size: attachment.size,
+      text: meta.text,
+      thumbnailUrl: meta.thumbnailUrl,
+      path: attachment.path,
+      uploadToken: this.signSandboxAttachmentPath(sessionKey, attachment),
+    };
   }
 
   async interruptBaseChat(baseId: string, chatId: string) {

@@ -13,6 +13,7 @@ import {
   type IGetAIConfig,
   respondBaseChatGate,
   sendBaseChatMessage,
+  uploadBaseChatAttachment,
 } from '@teable/openapi';
 import { MarkdownPreview } from '@teable/sdk';
 import { ReactQueryKeys } from '@teable/sdk/config';
@@ -137,12 +138,17 @@ type ChatAttachment = {
   type: string;
   typeLabel: string;
   size: number;
-  status: 'loading' | 'ready';
+  status: 'loading' | 'ready' | 'failed';
   objectUrl?: string;
   thumbnailUrl?: string;
+  path?: string;
+  uploadToken?: string;
+  uploadBaseId?: string;
+  uploadChatId?: string;
   text?: string;
   data?: string;
   encoding?: 'base64';
+  error?: string;
 };
 
 type EditorPart =
@@ -253,7 +259,6 @@ const FLOATING_MIN_WIDTH = 320;
 const FLOATING_MIN_HEIGHT = 480;
 const CONTEXT_PICKER_WIDTH = 260;
 const MAX_ATTACHMENT_TEXT_LENGTH = 12000;
-const MAX_ATTACHMENT_BINARY_BYTES = 16 * 1024 * 1024;
 const TOOL_BURST_VISIBLE_COUNT = 3;
 const INTERNAL_CLIPBOARD_MIME = 'application/x-teable-ai-chat-fragment-token';
 const MAX_EDITOR_CLIPBOARD_PAYLOADS = 20;
@@ -318,11 +323,17 @@ const createContextFromChipDataset = (dataset: DOMStringMap): ChatContext | unde
 const cloneRestorableAttachmentForPaste = (
   attachment: ChatAttachment | undefined
 ): ChatAttachment | undefined => {
-  if (!attachment || (!attachment.data && !attachment.text)) return undefined;
+  if (
+    !attachment ||
+    attachment.status !== 'ready' ||
+    (!attachment.path && !attachment.data && !attachment.text && !attachment.objectUrl)
+  ) {
+    return undefined;
+  }
   return {
     ...attachment,
     id: createId(),
-    objectUrl: getAttachmentDataUrl(attachment),
+    objectUrl: attachment.objectUrl ?? getAttachmentDataUrl(attachment),
   };
 };
 
@@ -937,37 +948,24 @@ const getContextChipIcon = (context: AiChatContext) => {
   }
 };
 
-const getAttachmentPayload = ({
+const getAttachmentPayload = (
+  { name, type, typeLabel, size, text, thumbnailUrl, path, uploadToken }: ChatAttachment,
+  includeUploadToken = false
+): AiChatAttachment => ({
   name,
   type,
   typeLabel,
   size,
   text,
   thumbnailUrl,
-}: ChatAttachment): AiChatAttachment => ({
-  name,
-  type,
-  typeLabel,
-  size,
-  text,
-  thumbnailUrl,
+  path,
+  uploadToken: includeUploadToken ? uploadToken : undefined,
 });
 
-const getAttachmentTransportPayload = ({
-  name,
-  type,
-  size,
-  text,
-  data,
-  encoding,
-}: ChatAttachment): AiChatAttachment => ({
-  name,
-  type,
-  size,
-  text,
-  data,
-  encoding,
-});
+const getAttachmentUploadChatIds = (attachments: ChatAttachment[]) =>
+  Array.from(
+    new Set(attachments.flatMap(({ uploadChatId }) => (uploadChatId ? [uploadChatId] : [])))
+  );
 
 const appendUserTextPart = (parts: IAiChatMessagePart[], text: string) => {
   if (!text) return;
@@ -1024,18 +1022,18 @@ const getUserMessageParts = ({
 const shouldSkipSendMessage = ({
   currentAttachments,
   currentContexts,
-  isAttachmentUploading,
+  hasUnavailableAttachment,
   isGenerating,
   userInput,
 }: {
   currentAttachments: ChatAttachment[];
   currentContexts: ChatContext[];
-  isAttachmentUploading: boolean;
+  hasUnavailableAttachment: boolean;
   isGenerating: boolean;
   userInput: string;
 }) =>
   isGenerating ||
-  isAttachmentUploading ||
+  hasUnavailableAttachment ||
   (!userInput && currentAttachments.length === 0 && currentContexts.length === 0);
 
 const getAssistantErrorState = ({
@@ -1113,21 +1111,6 @@ const readImageThumbnail = (file: File) =>
     };
     image.src = objectUrl;
   });
-
-const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  const chunkSize = 0x8000;
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
-  }
-  return btoa(binary);
-};
-
-const readAttachmentData = async (file: File) => {
-  if (file.size > MAX_ATTACHMENT_BINARY_BYTES) return undefined;
-  return arrayBufferToBase64(await file.arrayBuffer());
-};
 
 const formatElapsed = (elapsedMs?: number) => {
   if (!elapsedMs) return '';
@@ -1623,6 +1606,7 @@ export const ChatPanel = () => {
   const filePreviewDialogRef = useRef<IFilePreviewDialogRef>(null);
   const attachmentDragDepthRef = useRef(0);
   const attachmentObjectUrlsRef = useRef(new Set<string>());
+  const pendingAttachmentUploadChatIdRef = useRef<string>();
   const editorClipboardPayloadRef = useRef(new Map<string, EditorClipboardPayload>());
   const appliedSelectionTimestampRef = useRef<number>();
   const loadedHistoryBaseRef = useRef<string>();
@@ -1798,7 +1782,7 @@ export const ChatPanel = () => {
         : String(t(COMPOSER_PLACEHOLDER_KEYS[placeholderIndex])),
     [attachments.length, placeholderIndex, t]
   );
-  const isAttachmentUploading = attachments.some(({ status }) => status === 'loading');
+  const hasUnavailableAttachment = attachments.some(({ status }) => status !== 'ready');
 
   const selection = baseId
     ? queryClient.getQueryData<GridSelectionContext>(ReactQueryKeys.gridSelection(baseId))
@@ -2077,15 +2061,36 @@ export const ChatPanel = () => {
     [baseId, chats, t, upsertChat]
   );
 
-  const revokeAttachmentUrl = useCallback((objectUrl?: string) => {
-    revokeTrackedObjectUrl(attachmentObjectUrlsRef.current, objectUrl);
-  }, []);
+  const revokeAttachmentUrl = useCallback(
+    (objectUrl?: string, activeAttachments: Pick<ChatAttachment, 'objectUrl'>[] = []) => {
+      if (activeAttachments.some((attachment) => attachment.objectUrl === objectUrl)) return;
+      revokeTrackedObjectUrl(attachmentObjectUrlsRef.current, objectUrl);
+    },
+    []
+  );
+
+  const getActiveBaseChat = useCallback(() => {
+    return chats.find(({ id, baseId: chatBaseId }) => id === activeChatId && chatBaseId === baseId);
+  }, [activeChatId, baseId, chats]);
+
+  const createAttachmentUploadChatId = useCallback(() => {
+    const activeBaseChat = getActiveBaseChat();
+    if (activeBaseChat) {
+      pendingAttachmentUploadChatIdRef.current = undefined;
+      return activeBaseChat.id;
+    }
+    if (!pendingAttachmentUploadChatIdRef.current) {
+      pendingAttachmentUploadChatIdRef.current = createId();
+    }
+    return pendingAttachmentUploadChatIdRef.current;
+  }, [getActiveBaseChat]);
 
   const clearAttachments = useCallback(() => {
     setAttachments((prev) => {
       prev.forEach(({ objectUrl }) => revokeAttachmentUrl(objectUrl));
       return [];
     });
+    pendingAttachmentUploadChatIdRef.current = undefined;
     setPreviewAttachmentId(undefined);
   }, [revokeAttachmentUrl]);
 
@@ -2243,12 +2248,16 @@ export const ChatPanel = () => {
         parts.flatMap((part) => (part.type === 'context' ? [part.contextId] : []))
       );
       setAttachments((prev) => {
+        const next = prev.filter(({ id }) => attachmentIds.has(id));
         prev.forEach((attachment) => {
           if (!attachmentIds.has(attachment.id)) {
-            revokeAttachmentUrl(attachment.objectUrl);
+            revokeAttachmentUrl(attachment.objectUrl, next);
           }
         });
-        return prev.filter(({ id }) => attachmentIds.has(id));
+        if (next.length === 0) {
+          pendingAttachmentUploadChatIdRef.current = undefined;
+        }
+        return next;
       });
       setContexts((prev) => prev.filter(({ id }) => contextIds.has(id)));
     },
@@ -2271,7 +2280,13 @@ export const ChatPanel = () => {
 
   const updateAttachmentChipElement = useCallback(
     (chip: HTMLElement, attachment: ChatAttachment) => {
-      chip.dataset.uploadStatus = attachment.status === 'ready' ? 'done' : 'uploading';
+      const failedText = t('table:upload.statusFailed');
+      chip.dataset.uploadStatus =
+        attachment.status === 'ready'
+          ? 'done'
+          : attachment.status === 'failed'
+            ? 'failed'
+            : 'uploading';
       chip.dataset.attachmentName = attachment.name;
       chip.dataset.attachmentType = attachment.type;
       chip.dataset.attachmentTypeLabel = attachment.typeLabel;
@@ -2280,11 +2295,17 @@ export const ChatPanel = () => {
       delete chip.dataset.attachmentData;
       delete chip.dataset.attachmentEncoding;
       delete chip.dataset.attachmentThumbnailUrl;
-      chip.title = attachment.name;
+      chip.title =
+        attachment.status === 'failed'
+          ? `${attachment.name} - ${attachment.error ?? failedText}`
+          : attachment.name;
       const isSelected = chip.classList.contains('ProseMirror-selectednode');
       chip.className = cn(
         'attachment-chip mx-0.5 inline-flex h-6 max-w-full -translate-y-px select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-primary/[0.08] bg-primary/[0.04] px-1.5 align-middle text-sm leading-none text-foreground transition-[background-color,box-shadow] selection:bg-transparent selection:text-foreground hover:bg-primary/[0.08] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/15 [&.ProseMirror-selectednode]:border-primary [&.ProseMirror-selectednode]:ring-2 [&.ProseMirror-selectednode]:ring-slate-950 [&_*]:select-none dark:[&.ProseMirror-selectednode]:border-blue-300 dark:[&.ProseMirror-selectednode]:ring-blue-300',
-        attachment.status === 'loading' ? 'uploading opacity-80' : 'previewable cursor-pointer',
+        attachment.status === 'loading' && 'uploading opacity-80',
+        attachment.status === 'failed' &&
+          'border-destructive/30 bg-destructive/10 text-destructive dark:bg-destructive/15',
+        attachment.status === 'ready' && 'previewable cursor-pointer',
         isSelected && 'ProseMirror-selectednode'
       );
 
@@ -2300,6 +2321,12 @@ export const ChatPanel = () => {
         spinner.className =
           'attachment-chip-spinner size-3.5 shrink-0 animate-spin rounded-full border border-muted-foreground/30 border-t-muted-foreground opacity-95';
         button.appendChild(spinner);
+      } else if (attachment.status === 'failed') {
+        const failedIcon = document.createElement('span');
+        failedIcon.className =
+          'flex size-3.5 shrink-0 items-center justify-center rounded-full bg-destructive text-[10px] font-medium leading-none text-destructive-foreground';
+        failedIcon.textContent = '!';
+        button.appendChild(failedIcon);
       } else {
         const image = document.createElement('img');
         image.src = iconSrc;
@@ -2315,7 +2342,7 @@ export const ChatPanel = () => {
       button.appendChild(label);
       chip.appendChild(button);
     },
-    []
+    [t]
   );
 
   const createAttachmentChipElement = useCallback(
@@ -2518,6 +2545,7 @@ export const ChatPanel = () => {
       if (fileList.length === 0) return;
       setPreviewAttachmentId(undefined);
       filePreviewDialogRef.current?.closePreview();
+      const uploadChatId = createAttachmentUploadChatId();
 
       const pendingAttachments = fileList.map((file): ChatAttachment => {
         const objectUrl = URL.createObjectURL(file);
@@ -2531,6 +2559,8 @@ export const ChatPanel = () => {
           size: file.size,
           status: 'loading',
           objectUrl,
+          uploadBaseId: baseId,
+          uploadChatId,
         };
       });
 
@@ -2544,34 +2574,62 @@ export const ChatPanel = () => {
         const file = fileList[index];
         if (!file) return;
         void (async () => {
-          const [text, thumbnailUrl, data] = await Promise.all([
-            isReadableFile(file)
-              ? file.text().then((content) => content.slice(0, MAX_ATTACHMENT_TEXT_LENGTH))
-              : Promise.resolve(undefined),
-            file.type.startsWith('image/')
-              ? readImageThumbnail(file).catch(() => undefined)
-              : Promise.resolve(undefined),
-            readAttachmentData(file).catch(() => undefined),
-          ]);
+          try {
+            const [text, thumbnailUrl] = await Promise.all([
+              isReadableFile(file)
+                ? file.text().then((content) => content.slice(0, MAX_ATTACHMENT_TEXT_LENGTH))
+                : Promise.resolve(undefined),
+              attachment.type.startsWith('image/')
+                ? readImageThumbnail(file).catch(() => undefined)
+                : Promise.resolve(undefined),
+            ]);
+            const uploaded = await uploadBaseChatAttachment(baseId, uploadChatId, file, {
+              text,
+              thumbnailUrl,
+              typeLabel: attachment.typeLabel,
+            }).then(({ data }) => data);
 
-          setAttachments((prev) =>
-            prev.map((item) =>
-              item.id === attachment.id
-                ? {
-                    ...item,
-                    status: 'ready',
-                    text,
-                    thumbnailUrl,
-                    data,
-                    encoding: data === undefined ? undefined : 'base64',
-                  }
-                : item
-            )
-          );
+            setAttachments((prev) =>
+              prev.map((item) =>
+                item.id === attachment.id
+                  ? {
+                      ...item,
+                      status: 'ready',
+                      name: uploaded.name,
+                      type: uploaded.type,
+                      size: uploaded.size ?? item.size,
+                      text,
+                      thumbnailUrl,
+                      path: uploaded.path,
+                      uploadToken: uploaded.uploadToken,
+                    }
+                  : item
+              )
+            );
+          } catch {
+            setAttachments((prev) =>
+              prev.map((item) =>
+                item.id === attachment.id
+                  ? {
+                      ...item,
+                      status: 'failed',
+                      error: t('table:upload.statusFailed'),
+                    }
+                  : item
+              )
+            );
+          }
         })();
       });
     },
-    [createAttachmentChipElement, getEditorInsertionRange, insertNodesAtRange]
+    [
+      baseId,
+      createAttachmentChipElement,
+      createAttachmentUploadChatId,
+      getEditorInsertionRange,
+      insertNodesAtRange,
+      t,
+    ]
   );
 
   const createPlainPastePayload = useCallback(
@@ -3062,7 +3120,9 @@ export const ChatPanel = () => {
           assistantMessageId,
           prompt: userInput,
           contexts: requestContexts,
-          attachments: currentAttachments.map(getAttachmentTransportPayload),
+          attachments: currentAttachments.map((attachment) =>
+            getAttachmentPayload(attachment, true)
+          ),
           parts: userParts,
           modelKey: selectedModelKey,
           reasoningEffort,
@@ -3092,11 +3152,25 @@ export const ChatPanel = () => {
         .flatMap((part) => (part.type === 'text' ? [part.text] : []))
         .join('');
       const userInput = (value ?? (editorText || input)).trim();
+      const markCurrentAttachmentsFailed = () => {
+        const currentAttachmentIds = new Set(currentAttachments.map(({ id }) => id));
+        setAttachments((prev) =>
+          prev.map((attachment) =>
+            currentAttachmentIds.has(attachment.id)
+              ? {
+                  ...attachment,
+                  status: 'failed',
+                  error: t('table:upload.statusFailed'),
+                }
+              : attachment
+          )
+        );
+      };
       if (
         shouldSkipSendMessage({
           currentAttachments,
           currentContexts,
-          isAttachmentUploading,
+          hasUnavailableAttachment,
           isGenerating,
           userInput,
         })
@@ -3106,8 +3180,27 @@ export const ChatPanel = () => {
       if (!selectedModelKey) return;
 
       const chatTitle = userInput.slice(0, 36) || t('table:aiChat.newChat');
-      const ensuredChat = ensureChat(chatTitle, selectedModelKey, reasoningEffort);
-      const chatId = ensuredChat.id;
+      if (currentAttachments.some(({ uploadBaseId }) => uploadBaseId && uploadBaseId !== baseId)) {
+        markCurrentAttachmentsFailed();
+        return;
+      }
+      const attachmentUploadChatIds = getAttachmentUploadChatIds(currentAttachments);
+      if (attachmentUploadChatIds.length > 1) {
+        markCurrentAttachmentsFailed();
+        return;
+      }
+      const uploadChatId = attachmentUploadChatIds[0];
+      const activeBaseChat = getActiveBaseChat();
+      if (
+        uploadChatId &&
+        (activeBaseChat
+          ? uploadChatId !== activeBaseChat.id
+          : uploadChatId !== pendingAttachmentUploadChatIdRef.current)
+      ) {
+        markCurrentAttachmentsFailed();
+        return;
+      }
+      const chatId = uploadChatId ?? ensureChat(chatTitle, selectedModelKey, reasoningEffort).id;
       const now = Date.now();
       const userMessageId = createId();
       const assistantMessageId = createId();
@@ -3212,14 +3305,16 @@ export const ChatPanel = () => {
       ensureChat,
       getCurrentAttachments,
       getCurrentContexts,
+      getActiveBaseChat,
+      hasUnavailableAttachment,
       input,
       isGenerating,
-      isAttachmentUploading,
       modelKey,
       queryClient,
       readEditorParts,
       reasoningEffort,
       sendAgentMessageAndRead,
+      setAttachments,
       setComposerText,
       t,
       updateChatMeta,
@@ -4602,8 +4697,12 @@ export const ChatPanel = () => {
       if (attachmentId) {
         setAttachments((prev) => {
           const removedAttachment = prev.find(({ id }) => id === attachmentId);
-          revokeAttachmentUrl(removedAttachment?.objectUrl);
-          return prev.filter(({ id }) => id !== attachmentId);
+          const next = prev.filter(({ id }) => id !== attachmentId);
+          revokeAttachmentUrl(removedAttachment?.objectUrl, next);
+          if (next.length === 0) {
+            pendingAttachmentUploadChatIdRef.current = undefined;
+          }
+          return next;
         });
       }
       if (contextId) {
@@ -4974,7 +5073,7 @@ export const ChatPanel = () => {
                 className="size-7 rounded-full"
                 disabled={
                   !selectedModel?.key ||
-                  isAttachmentUploading ||
+                  hasUnavailableAttachment ||
                   (!isGenerating &&
                     !input.trim() &&
                     attachments.length === 0 &&
