@@ -956,11 +956,13 @@ export class AiService {
     if (ro.attachments?.length) {
       parts.push({
         type: 'attachment',
-        attachments: ro.attachments.map(({ name, type, size, text }) => ({
+        attachments: ro.attachments.map(({ name, type, size, text, thumbnailUrl, typeLabel }) => ({
           name,
           type,
+          typeLabel,
           size,
           text,
+          thumbnailUrl,
         })),
       });
     }

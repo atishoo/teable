@@ -75,6 +75,7 @@ import type {
   DragEvent,
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
+  ElementType,
   ReactNode,
 } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -226,6 +227,11 @@ type TargetToolPart = {
 type RenderedToolItem = {
   key: string;
   node: ReactNode;
+};
+type ToolDisplayMeta = {
+  icon: ElementType<{ className?: string }>;
+  title?: string;
+  hideDetails?: boolean;
 };
 type AskUserQuestionShadowResults = {
   toolCallIds: Set<string>;
@@ -382,6 +388,13 @@ const getToolDisplayName = (part: ToolCallPart | ToolResultPart) => {
   return part.toolName;
 };
 
+const getSkillNameFromPath = (input: unknown) => {
+  if (!isRecord(input)) return;
+  const filePath = getStringValue(input.file_path) ?? getStringValue(input.path);
+  const match = filePath?.match(/(?:^|\/)(?:assets\/)?skills\/([^/]+)\/SKILL\.md$/i);
+  return match?.[1];
+};
+
 const getToolIcon = (toolName: string) => {
   switch (toolName.toLowerCase()) {
     case 'askuserquestion':
@@ -401,7 +414,7 @@ const getToolIcon = (toolName: string) => {
     case 'websearch':
       return Globe;
     case 'skill':
-      return Bot;
+      return MagicAi;
     default:
       return SquareTerminal;
   }
@@ -924,11 +937,20 @@ const getContextChipIcon = (context: AiChatContext) => {
   }
 };
 
-const getAttachmentPayload = ({ name, type, size, text }: ChatAttachment): AiChatAttachment => ({
+const getAttachmentPayload = ({
   name,
   type,
+  typeLabel,
   size,
   text,
+  thumbnailUrl,
+}: ChatAttachment): AiChatAttachment => ({
+  name,
+  type,
+  typeLabel,
+  size,
+  text,
+  thumbnailUrl,
 });
 
 const getAttachmentTransportPayload = ({
@@ -1060,10 +1082,36 @@ const getAttachmentTypeIcon = (typeLabel: string) => {
 
 const readImageThumbnail = (file: File) =>
   new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      try {
+        const size = 48;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const context = canvas.getContext('2d');
+        if (!context) {
+          throw new Error('Canvas context is unavailable');
+        }
+        if (!image.naturalWidth || !image.naturalHeight) {
+          throw new Error('Image dimensions are unavailable');
+        }
+        const scale = Math.max(size / image.naturalWidth, size / image.naturalHeight);
+        const width = image.naturalWidth * scale;
+        const height = image.naturalHeight * scale;
+        context.drawImage(image, (size - width) / 2, (size - height) / 2, width, height);
+        resolve(canvas.toDataURL('image/webp', 0.82));
+      } catch (error) {
+        reject(error);
+      }
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Failed to load image thumbnail'));
+    };
+    image.src = objectUrl;
   });
 
 const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
@@ -1400,7 +1448,7 @@ const ToolTimelineItem = ({
 }) => (
   <div className="flex items-start gap-1 self-stretch">
     <div
-      className="flex w-3 shrink-0 flex-col items-center gap-0.5 self-stretch text-zinc-400 dark:text-zinc-600"
+      className="flex w-3 shrink-0 flex-col items-center gap-0 self-stretch text-zinc-400 dark:text-zinc-600"
       aria-hidden="true"
     >
       <div className={cn('h-[8px] w-px shrink-0', isFirst ? 'bg-transparent' : 'bg-current')} />
@@ -1432,75 +1480,79 @@ const ToolDisclosure = ({
   body,
   hasError,
   hasResult,
+  hideDetails,
   icon: Icon,
   title,
 }: {
   body: string;
   hasError: boolean;
   hasResult: boolean;
-  icon: typeof SquareTerminal;
+  hideDetails?: boolean;
+  icon: ElementType<{ className?: string }>;
   title: string;
 }) => {
   const [open, setOpen] = useState(false);
+  const canOpen = Boolean(body && !hideDetails);
+  const row = (
+    <div className="flex h-6 w-full items-center gap-3 rounded-md p-1 hover:bg-accent/50">
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="truncate text-xs text-muted-foreground">{title}</span>
+        {hasResult ? (
+          hasError ? (
+            <CircleX className="ml-0.5 size-3.5 shrink-0 text-muted-foreground" />
+          ) : (
+            <CircleCheck className="ml-0.5 size-3.5 shrink-0 text-muted-foreground" />
+          )
+        ) : (
+          <Loader2 className="ml-0.5 size-3.5 shrink-0 animate-spin text-muted-foreground" />
+        )}
+      </div>
+      {canOpen && (
+        <ChevronDown
+          className={cn(
+            'size-3.5 shrink-0 text-muted-foreground transition-transform',
+            open && 'rotate-180'
+          )}
+        />
+      )}
+    </div>
+  );
+
+  if (!canOpen) {
+    return <div className="group/tool-row w-full">{row}</div>;
+  }
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="group/tool-row w-full">
       <CollapsibleTrigger asChild>
-        <button
-          type="button"
-          className="flex h-6 w-full items-center gap-3 rounded-md p-1 hover:bg-accent/50"
-        >
-          <div className="flex min-w-0 flex-1 items-center gap-1.5">
-            <Icon className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="truncate text-xs text-muted-foreground">{title}</span>
-            {hasResult ? (
-              hasError ? (
-                <CircleX className="ml-0.5 size-3.5 shrink-0 text-muted-foreground" />
-              ) : (
-                <CircleCheck className="ml-0.5 size-3.5 shrink-0 text-muted-foreground" />
-              )
-            ) : (
-              <Loader2 className="ml-0.5 size-3.5 shrink-0 animate-spin text-muted-foreground" />
-            )}
-          </div>
-          <ChevronDown
-            className={cn(
-              'size-3.5 shrink-0 text-muted-foreground transition-transform',
-              open && 'rotate-180'
-            )}
-          />
+        <button type="button" className="block w-full text-left">
+          {row}
         </button>
       </CollapsibleTrigger>
-      {body && (
-        <CollapsibleContent>
-          <div className="mt-1 overflow-hidden rounded-lg bg-zinc-950 text-zinc-100">
-            <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-xs leading-5">
-              {body}
-            </pre>
-          </div>
-        </CollapsibleContent>
-      )}
+      <CollapsibleContent>
+        <div className="mt-1 overflow-hidden rounded-lg bg-zinc-950 text-zinc-100">
+          <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-xs leading-5">
+            {body}
+          </pre>
+        </div>
+      </CollapsibleContent>
     </Collapsible>
   );
 };
 
-const CollapsedToolRun = ({ label, items }: { label: string; items: RenderedToolItem[] }) => {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <>
-      <button
-        type="button"
-        className="flex h-6 items-center gap-1 self-start rounded-md px-1 text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
-        onClick={() => setOpen((value) => !value)}
-      >
-        <span className="text-zinc-400 dark:text-zinc-600">···</span>
-        <span>{label}</span>
-      </button>
-      {open && <ToolTimelineGroup items={items} />}
-    </>
-  );
-};
+const CollapsedToolRun = ({ label, onExpand }: { label: string; onExpand: () => void }) => (
+  <button
+    type="button"
+    className="flex h-6 w-full items-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+    onClick={onExpand}
+  >
+    <span className="mr-1.5 shrink-0 text-xs leading-none text-zinc-400 dark:text-zinc-600">
+      ···
+    </span>
+    <span className="min-w-0 truncate text-xs">{label}</span>
+  </button>
+);
 
 export const ChatPanel = () => {
   const baseId = useBaseId() as string;
@@ -1557,6 +1609,7 @@ export const ChatPanel = () => {
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const [loadingElapsedNow, setLoadingElapsedNow] = useState(Date.now());
+  const [expandedToolRunKeys, setExpandedToolRunKeys] = useState<Set<string>>(new Set());
   const controllerRef = useRef<AbortController | null>(null);
   const manualStopRef = useRef(false);
   const messageEndRef = useRef<HTMLDivElement>(null);
@@ -3660,6 +3713,30 @@ export const ChatPanel = () => {
       ? getAskUserQuestionToolTitle(part.input)
       : getToolDisplayName(part);
 
+  const getLoadSkillMeta = (input: unknown): ToolDisplayMeta | undefined => {
+    const skillName = getSkillNameFromPath(input);
+    if (!skillName) return;
+    return {
+      icon: MagicAi,
+      title: `${t('table:aiChat.partTool.skill')} ${skillName}`,
+      hideDetails: true,
+    };
+  };
+
+  const getToolPartMeta = (
+    part: ToolCallPart | ToolResultPart,
+    isQuestionTool: boolean
+  ): ToolDisplayMeta => {
+    if (!isQuestionTool && part.type === 'tool-call' && part.toolName.toLowerCase() === 'read') {
+      const meta = getLoadSkillMeta(part.input);
+      if (meta) return meta;
+    }
+    return {
+      icon: getToolIcon(part.toolName),
+      title: getToolPartTitle(part, isQuestionTool),
+    };
+  };
+
   const renderToolPart = (
     message: IMessage,
     part: ToolCallPart | ToolResultPart,
@@ -3680,7 +3757,7 @@ export const ChatPanel = () => {
         (part.type === 'tool-result' && part.error) ||
         (isQuestionTool && isAskUserQuestionTimeout(questionOutput))
     );
-    const ToolIcon = getToolIcon(part.toolName);
+    const meta = getToolPartMeta(part, isQuestionTool);
 
     return (
       <ToolDisclosure
@@ -3688,8 +3765,9 @@ export const ChatPanel = () => {
         body={body}
         hasError={hasError}
         hasResult={hasResult}
-        icon={ToolIcon}
-        title={getToolPartTitle(part, isQuestionTool)}
+        hideDetails={meta.hideDetails}
+        icon={meta.icon}
+        title={meta.title ?? getToolPartTitle(part, isQuestionTool)}
       />
     );
   };
@@ -3779,6 +3857,17 @@ export const ChatPanel = () => {
     }
   };
 
+  const getTargetToolMeta = (part: TargetToolPart, isQuestionTool: boolean): ToolDisplayMeta => {
+    if (!isQuestionTool && part.toolName.toLowerCase() === 'read') {
+      const meta = getLoadSkillMeta(part.input);
+      if (meta) return meta;
+    }
+    return {
+      icon: getToolIcon(part.toolName),
+      title: getTargetToolTitle(part),
+    };
+  };
+
   const renderTargetToolPart = (message: IMessage, part: TargetToolPart, index: number) => {
     const isQuestionTool = isAskUserQuestionToolName(part.toolName);
     const inputText = getToolInputText(part.input);
@@ -3804,7 +3893,7 @@ export const ChatPanel = () => {
       part.state === 'error' ||
       part.state === 'output-error' ||
       (isQuestionTool && isAskUserQuestionTimeout(part.output));
-    const ToolIcon = getToolIcon(part.toolName);
+    const meta = getTargetToolMeta(part, isQuestionTool);
 
     return (
       <ToolDisclosure
@@ -3812,8 +3901,9 @@ export const ChatPanel = () => {
         body={body}
         hasError={hasError}
         hasResult={hasResult}
-        icon={ToolIcon}
-        title={getTargetToolTitle(part)}
+        hideDetails={meta.hideDetails}
+        icon={meta.icon}
+        title={meta.title ?? getTargetToolTitle(part)}
       />
     );
   };
@@ -4111,7 +4201,7 @@ export const ChatPanel = () => {
     }
 
     if (part.type === 'text') {
-      return renderMarkdownText(part.text, `${message.id}-part-${index}`);
+      return part.text ? renderMarkdownText(part.text, `${message.id}-part-${index}`) : null;
     }
 
     return null;
@@ -4132,22 +4222,34 @@ export const ChatPanel = () => {
       const items = [...toolRun];
       if (items.length > TOOL_BURST_VISIBLE_COUNT) {
         const visibleStart = items.length - TOOL_BURST_VISIBLE_COUNT;
-        rendered.push(
-          <CollapsedToolRun
-            key={`${message.id}-tool-run-${rendered.length}`}
-            label={String(
-              t('table:aiChat.partTool.moreTools', {
-                count: visibleStart,
-                defaultValue: `还有 ${visibleStart} 个工具`,
-              })
-            )}
-            items={items.slice(0, visibleStart)}
-          />
-        );
+        const runKey = `${message.id}-tool-run-${items[0].key}-${items[items.length - 1].key}`;
+        const isExpanded = expandedToolRunKeys.has(runKey);
         rendered.push(
           <ToolTimelineGroup
-            key={`${message.id}-tool-run-${rendered.length}-visible`}
-            items={items.slice(visibleStart)}
+            key={runKey}
+            items={
+              isExpanded
+                ? items
+                : [
+                    {
+                      key: `${runKey}-collapsed`,
+                      node: (
+                        <CollapsedToolRun
+                          label={String(
+                            t('table:aiChat.partTool.moreTools', {
+                              count: visibleStart,
+                              defaultValue: `还有 ${visibleStart} 个工具`,
+                            })
+                          )}
+                          onExpand={() =>
+                            setExpandedToolRunKeys((previous) => new Set(previous).add(runKey))
+                          }
+                        />
+                      ),
+                    },
+                    ...items.slice(visibleStart),
+                  ]
+            }
           />
         );
       } else {
@@ -4203,8 +4305,11 @@ export const ChatPanel = () => {
         });
         return null;
       }
-      appendToolRun();
-      rendered.push(renderMessagePart(message, part, index));
+      const renderedPart = renderMessagePart(message, part, index);
+      if (renderedPart) {
+        appendToolRun();
+        rendered.push(renderedPart);
+      }
       return null;
     });
     appendToolRun();
@@ -4239,7 +4344,7 @@ export const ChatPanel = () => {
         data-context-title={context.label}
         data-context-view-type={context.viewType}
         data-context-emoji={context.emoji ?? undefined}
-        className="mx-0.5 inline-flex h-6 max-w-full items-center gap-1.5 rounded-md border border-foreground/10 bg-foreground/[0.04] px-1.5 align-middle text-xs"
+        className="mx-0.5 inline-flex h-6 max-w-full -translate-y-px items-center gap-1.5 rounded-md border border-foreground/10 bg-foreground/[0.04] px-1.5 align-middle text-xs leading-none"
       >
         {context.type === 'table' && context.emoji ? (
           <Emoji emoji={context.emoji} size="1em" className="size-[1em] shrink-0" />
@@ -4251,15 +4356,22 @@ export const ChatPanel = () => {
     );
   };
 
-  const renderUserAttachmentChip = (attachment: AiChatAttachment, key: string) => (
-    <span
-      key={key}
-      className="mx-0.5 inline-flex h-6 max-w-full items-center gap-1.5 rounded-md border border-primary/[0.08] bg-primary/[0.04] px-1.5 align-middle text-xs"
-    >
-      <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
-      <span className="max-w-28 truncate">{attachment.name}</span>
-    </span>
-  );
+  const renderUserAttachmentChip = (attachment: AiChatAttachment, key: string) => {
+    const iconSrc = getAttachmentTypeIcon(
+      attachment.typeLabel ?? getAttachmentTypeLabelFromMeta(attachment.name, attachment.type)
+    );
+    const imageSrc = attachment.thumbnailUrl ?? iconSrc;
+
+    return (
+      <span
+        key={key}
+        className="mx-0.5 inline-flex h-6 max-w-full -translate-y-px items-center gap-1.5 rounded-md border border-primary/[0.08] bg-primary/[0.04] px-1.5 align-middle text-xs leading-none"
+      >
+        <img alt="" className="size-3.5 shrink-0 rounded-sm object-cover" src={imageSrc} />
+        <span className="max-w-28 truncate">{attachment.name}</span>
+      </span>
+    );
+  };
 
   const renderUserMessageParts = (message: IMessage) => {
     const parts = message.parts ?? [];
@@ -4336,7 +4448,7 @@ export const ChatPanel = () => {
                           {contextLabels.map((label) => (
                             <span
                               key={label}
-                              className="mx-0.5 inline-flex h-6 max-w-full items-center gap-1 rounded-md border border-foreground/10 bg-foreground/[0.04] px-1.5 align-middle text-xs"
+                              className="mx-0.5 inline-flex h-6 max-w-full -translate-y-px items-center gap-1 rounded-md border border-foreground/10 bg-foreground/[0.04] px-1.5 align-middle text-xs leading-none"
                             >
                               <Table2 className="size-3 shrink-0" />
                               {label}

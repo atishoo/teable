@@ -80,8 +80,10 @@ export type IAiChatContext = z.infer<typeof aiChatContextSchema>;
 export const aiChatAttachmentSchema = z.object({
   name: z.string(),
   type: z.string(),
+  typeLabel: z.string().optional(),
   size: z.number().optional(),
   text: z.string().optional(),
+  thumbnailUrl: z.string().optional(),
   data: z.string().optional(),
   encoding: z.enum(['base64']).optional(),
 });
