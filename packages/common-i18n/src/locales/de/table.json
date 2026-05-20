@@ -953,7 +953,17 @@
     "title": "KI-Assistent",
     "agent": {
       "askUserQuestion": {
-        "otherPlaceholder": "Oder Antwort eingeben…"
+        "chooseAnswer": "Antwort auswählen",
+        "otherPlaceholder": "Oder Antwort eingeben…",
+        "asked": "Gefragt",
+        "skipped": "Übersprungen",
+        "question": "Frage",
+        "answer": "Antwort",
+        "timedOut": "Zeitüberschreitung beim Warten auf die Benutzerantwort",
+        "waiting": "Warten auf Benutzerauswahl",
+        "noAnswer": "Keine Antwort erhalten",
+        "previousQuestion": "Vorherige Frage",
+        "nextQuestion": "Nächste Frage"
       }
     },
     "tool": {
@@ -980,6 +990,10 @@
     },
     "action": {
       "locateResource": "Suchen"
+    },
+    "showUI": {
+      "skip": "Überspringen",
+      "submit": "Absenden"
     },
     "newChat": "Neue Chat",
     "expand": "Erweitern",

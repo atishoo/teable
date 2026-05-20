@@ -963,8 +963,22 @@
     "noModel": "Kullanılabilir model yok",
     "agent": {
       "askUserQuestion": {
-        "otherPlaceholder": "Veya yanıtınızı yazın…"
+        "chooseAnswer": "Bir cevap seçin",
+        "otherPlaceholder": "Veya yanıtınızı yazın…",
+        "asked": "Soruldu",
+        "skipped": "Atlandı",
+        "question": "Soru",
+        "answer": "Cevap",
+        "timedOut": "Kullanıcı yanıtı beklenirken zaman aşımına uğradı",
+        "waiting": "Kullanıcı seçimi bekleniyor",
+        "noAnswer": "Yanıt alınmadı",
+        "previousQuestion": "Önceki soru",
+        "nextQuestion": "Sonraki soru"
       }
+    },
+    "showUI": {
+      "skip": "Atla",
+      "submit": "Gönder"
     },
     "mention": {
       "tables": "Tablolar",

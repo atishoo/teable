@@ -5399,9 +5399,15 @@ export type I18nTranslations = {
             "title": string;
             "agent": {
                 "askUserQuestion": {
+                    "chooseAnswer": string;
                     "otherPlaceholder": string;
                     "asked": string;
                     "skipped": string;
+                    "question": string;
+                    "answer": string;
+                    "timedOut": string;
+                    "waiting": string;
+                    "noAnswer": string;
                     "previousQuestion": string;
                     "nextQuestion": string;
                 };
@@ -5450,6 +5456,10 @@ export type I18nTranslations = {
             };
             "action": {
                 "locateResource": string;
+            };
+            "showUI": {
+                "skip": string;
+                "submit": string;
             };
             "newChat": string;
             "expand": string;
@@ -5513,10 +5523,6 @@ export type I18nTranslations = {
                 "writeCodeHint": string;
                 "noPreview": string;
                 "codeChanged": string;
-            };
-            "showUI": {
-                "skip": string;
-                "submit": string;
             };
             "clearChat": string;
             "clearChatConfirmTitle": string;

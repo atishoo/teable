@@ -21,6 +21,9 @@ import { FilePreviewDialog, FilePreviewProvider, type IFilePreviewDialogRef } fr
 import {
   Button,
   cn,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -38,6 +41,7 @@ import {
   ArrowUp,
   AppWindow,
   AtSign,
+  Ban,
   Bot,
   Check,
   CircleCheck,
@@ -46,14 +50,21 @@ import {
   ChevronDown,
   Clock3,
   Database,
+  FilePenLine,
+  FilePlus2,
+  FileText,
+  FolderSearch,
+  Globe,
   History,
   LayoutGrid,
   Lightbulb,
+  ListTodo,
   Loader2,
+  MessageCircleQuestion,
   Paperclip,
   Plus,
   Search,
-  Square,
+  SkipForward,
   SquareTerminal,
   Table2,
   Trash2,
@@ -64,6 +75,7 @@ import type {
   DragEvent,
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
+  ReactNode,
 } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Rnd } from 'react-rnd';
@@ -176,6 +188,58 @@ type AiChatContext = DataContextPart['contexts'][number] & {
   emoji?: string | null;
 };
 type AiChatAttachment = AttachmentPart['attachments'][number];
+type TaskProgressTodo = {
+  content: string;
+  status: string;
+  activeForm?: string;
+};
+type TaskProgressPart = {
+  title?: string;
+  todos: TaskProgressTodo[];
+};
+type AskUserQuestionOption = {
+  label: string;
+};
+type AskUserQuestionItem = {
+  id?: string;
+  header?: string;
+  question: string;
+  options: AskUserQuestionOption[];
+};
+type AskUserQuestionPart = {
+  toolCallId?: string;
+  header?: string;
+  question: string;
+  options: AskUserQuestionOption[];
+  questions?: AskUserQuestionItem[];
+  answered?: boolean;
+};
+type TargetToolPart = {
+  type: string;
+  toolName: string;
+  toolCallId?: string;
+  input?: unknown;
+  output?: unknown;
+  error?: string;
+  state?: string;
+};
+type RenderedToolItem = {
+  key: string;
+  node: ReactNode;
+};
+type AskUserQuestionShadowResults = {
+  toolCallIds: Set<string>;
+  outputTexts: Set<string>;
+};
+type EditorPastePayload = {
+  nodes: Node[];
+  contexts: ChatContext[];
+  attachments: ChatAttachment[];
+};
+type EditorClipboardPayload = {
+  contexts: ChatContext[];
+  attachments: ChatAttachment[];
+};
 
 const PANEL_MIN_WIDTH = 340;
 const PANEL_MAX_WIDTH = 720;
@@ -184,6 +248,28 @@ const FLOATING_MIN_HEIGHT = 480;
 const CONTEXT_PICKER_WIDTH = 260;
 const MAX_ATTACHMENT_TEXT_LENGTH = 12000;
 const MAX_ATTACHMENT_BINARY_BYTES = 16 * 1024 * 1024;
+const TOOL_BURST_VISIBLE_COUNT = 3;
+const INTERNAL_CLIPBOARD_MIME = 'application/x-teable-ai-chat-fragment-token';
+const MAX_EDITOR_CLIPBOARD_PAYLOADS = 20;
+const CHAT_CONTEXT_TYPES = new Set<ChatContext['type']>([
+  'table',
+  'view',
+  'dashboard',
+  'app',
+  'workflow',
+  'selection',
+  'current',
+]);
+const FLOATING_RESIZE_HANDLE_STYLES = {
+  top: { top: 0, height: 8 },
+  right: { right: 0, width: 8 },
+  bottom: { bottom: 0, height: 8 },
+  left: { left: 0, width: 8 },
+  topRight: { right: 0, top: 0, width: 12, height: 12 },
+  bottomRight: { right: 0, bottom: 0, width: 12, height: 12 },
+  bottomLeft: { left: 0, bottom: 0, width: 12, height: 12 },
+  topLeft: { left: 0, top: 0, width: 12, height: 12 },
+};
 const REASONING_EFFORTS: ReasoningEffort[] = ['low', 'medium', 'high', 'xhigh'];
 const isReasoningEffort = (value: unknown): value is ReasoningEffort =>
   REASONING_EFFORTS.includes(value as ReasoningEffort);
@@ -197,12 +283,59 @@ const createId = () =>
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
-const getAttachmentTypeLabel = (file: File) => {
-  const extension = file.name.split('.').pop();
-  if (extension && extension !== file.name) return extension.slice(0, 4).toUpperCase();
-  const [, subtype] = file.type.split('/');
+const getAttachmentDataUrl = (attachment: Pick<ChatAttachment, 'type' | 'data'>) =>
+  attachment.data ? `data:${attachment.type};base64,${attachment.data}` : undefined;
+
+const createContextFromChipDataset = (dataset: DOMStringMap): ChatContext | undefined => {
+  const contextType = dataset.contextType;
+  if (
+    !dataset.contextId ||
+    !contextType ||
+    !CHAT_CONTEXT_TYPES.has(contextType as ChatContext['type']) ||
+    !dataset.contextLabel ||
+    !dataset.contextDetail
+  ) {
+    return undefined;
+  }
+
+  return {
+    id: createId(),
+    type: contextType as ChatContext['type'],
+    label: dataset.contextLabel,
+    detail: dataset.contextDetail,
+    title: dataset.contextTitle,
+    viewType: dataset.contextViewType as ViewType | undefined,
+    emoji: dataset.contextEmoji,
+  };
+};
+
+const cloneRestorableAttachmentForPaste = (
+  attachment: ChatAttachment | undefined
+): ChatAttachment | undefined => {
+  if (!attachment || (!attachment.data && !attachment.text)) return undefined;
+  return {
+    ...attachment,
+    id: createId(),
+    objectUrl: getAttachmentDataUrl(attachment),
+  };
+};
+
+const cloneContextForPaste = (context: ChatContext | undefined): ChatContext | undefined =>
+  context
+    ? {
+        ...context,
+        id: createId(),
+      }
+    : undefined;
+
+const getAttachmentTypeLabelFromMeta = (name: string, type: string) => {
+  const extension = name.split('.').pop();
+  if (extension && extension !== name) return extension.slice(0, 4).toUpperCase();
+  const [, subtype] = type.split('/');
   return (subtype || 'FILE').slice(0, 4).toUpperCase();
 };
+
+const getAttachmentTypeLabel = (file: File) => getAttachmentTypeLabelFromMeta(file.name, file.type);
 
 const getAttachmentMimeType = (file: File) => {
   if (file.type) return file.type;
@@ -248,6 +381,522 @@ const getToolDisplayName = (part: ToolCallPart | ToolResultPart) => {
   }
   return part.toolName;
 };
+
+const getToolIcon = (toolName: string) => {
+  switch (toolName.toLowerCase()) {
+    case 'askuserquestion':
+      return MessageCircleQuestion;
+    case 'bash':
+      return SquareTerminal;
+    case 'read':
+      return FileText;
+    case 'write':
+      return FilePlus2;
+    case 'edit':
+      return FilePenLine;
+    case 'glob':
+      return FolderSearch;
+    case 'grep':
+      return Search;
+    case 'websearch':
+      return Globe;
+    case 'skill':
+      return Bot;
+    default:
+      return SquareTerminal;
+  }
+};
+
+const getPartType = (part: unknown) =>
+  isRecord(part) && typeof part.type === 'string' ? part.type : undefined;
+
+const getStringValue = (value: unknown) => (typeof value === 'string' ? value : undefined);
+
+const isAskUserQuestionToolName = (toolName: unknown) =>
+  typeof toolName === 'string' &&
+  toolName.replace(/[\s_-]/g, '').toLowerCase() === 'askuserquestion';
+
+const isGenericToolName = (toolName: unknown) =>
+  toolName == null ||
+  (typeof toolName === 'string' && toolName.replace(/[\s_-]/g, '').toLowerCase() === 'tool');
+
+const getToolResultIndex = (
+  parts: IAiChatMessagePart[],
+  index: number,
+  toolCallId: string | undefined,
+  usedToolResultIndexes: Set<number>
+) =>
+  parts.findIndex(
+    (item, itemIndex) =>
+      itemIndex > index &&
+      item.type === 'tool-result' &&
+      !usedToolResultIndexes.has(itemIndex) &&
+      (!toolCallId || item.toolCallId === toolCallId)
+  );
+
+const markToolResultUsed = (
+  parts: IAiChatMessagePart[],
+  index: number,
+  part: IAiChatMessagePart,
+  usedToolResultIndexes: Set<number>
+) => {
+  if (part.type !== 'tool-call') return -1;
+  const resultIndex = getToolResultIndex(parts, index, part.toolCallId, usedToolResultIndexes);
+  if (resultIndex >= 0) usedToolResultIndexes.add(resultIndex);
+  return resultIndex;
+};
+
+const getAskUserQuestionResultIndex = (
+  parts: IAiChatMessagePart[],
+  index: number,
+  question: AskUserQuestionPart,
+  usedToolResultIndexes: Set<number>
+) =>
+  parts.findIndex((item, itemIndex) => {
+    if (itemIndex <= index || item.type !== 'tool-result' || usedToolResultIndexes.has(itemIndex)) {
+      return false;
+    }
+    if (question.toolCallId && item.toolCallId !== question.toolCallId) return false;
+    return isAskUserQuestionToolName(item.toolName) || isResolvedAskUserQuestionOutput(item.output);
+  });
+
+const getAskUserQuestionSignature = (questions: AskUserQuestionItem[]) =>
+  questions
+    .map(({ question }) => question.trim())
+    .filter(Boolean)
+    .join('\n');
+
+const getAskUserQuestionPartSignature = (question: AskUserQuestionPart) =>
+  getAskUserQuestionSignature(getAskUserQuestionPartItems(question));
+
+const getAskUserQuestionInputSignature = (input: unknown) =>
+  getAskUserQuestionSignature(
+    getAskUserQuestionInputItems(input).flatMap((item) => normalizeQuestionItems(item))
+  );
+
+const isSameAskUserQuestion = (
+  question: AskUserQuestionPart,
+  toolCallId: string | undefined,
+  input: unknown
+) => {
+  if (question.toolCallId && toolCallId) return question.toolCallId === toolCallId;
+  const questionSignature = getAskUserQuestionPartSignature(question);
+  const inputSignature = getAskUserQuestionInputSignature(input);
+  return Boolean(questionSignature && inputSignature && questionSignature === inputSignature);
+};
+
+const hasEquivalentAskUserQuestionToolPart = (
+  parts: IAiChatMessagePart[],
+  question: AskUserQuestionPart,
+  index: number
+) =>
+  parts.some((item, itemIndex) => {
+    if (itemIndex === index) return false;
+    const targetToolPart = normalizeTargetToolPart(item);
+    if (targetToolPart && isAskUserQuestionToolName(targetToolPart.toolName)) {
+      return isSameAskUserQuestion(question, targetToolPart.toolCallId, targetToolPart.input);
+    }
+    if (item.type === 'tool-call' && isAskUserQuestionToolName(item.toolName)) {
+      return isSameAskUserQuestion(question, item.toolCallId, item.input);
+    }
+    if (item.type === 'tool-result' && isAskUserQuestionToolName(item.toolName)) {
+      return Boolean(question.toolCallId && item.toolCallId === question.toolCallId);
+    }
+    return false;
+  });
+
+const getCanonicalAskUserQuestionPartIndex = (
+  parts: IAiChatMessagePart[],
+  question: AskUserQuestionPart,
+  index: number
+) => {
+  if (hasEquivalentAskUserQuestionToolPart(parts, question, index)) return -1;
+
+  let firstIndex = -1;
+  let firstResultIndex = -1;
+  parts.forEach((item, itemIndex) => {
+    if (getPartType(item) !== 'ask-user-question') return;
+    const candidate = normalizeAskUserQuestionPart(item);
+    if (
+      !candidate ||
+      !isSameAskUserQuestion(question, candidate.toolCallId, getAskUserQuestionPartInput(candidate))
+    ) {
+      return;
+    }
+    if (firstIndex === -1) firstIndex = itemIndex;
+    if (
+      firstResultIndex === -1 &&
+      getAskUserQuestionResultIndex(parts, itemIndex, candidate, new Set()) >= 0
+    ) {
+      firstResultIndex = itemIndex;
+    }
+  });
+
+  return firstResultIndex >= 0 ? firstResultIndex : firstIndex;
+};
+
+const getLatestNormalizedPart = <T,>(
+  parts: IAiChatMessagePart[] | undefined,
+  normalize: (part: unknown, index: number) => T | undefined
+) => {
+  for (let index = (parts?.length ?? 0) - 1; index >= 0; index--) {
+    const normalized = normalize(parts?.[index], index);
+    if (normalized) return { index, value: normalized };
+  }
+};
+
+const normalizeTaskTodos = (todos: unknown): TaskProgressTodo[] => {
+  if (!Array.isArray(todos)) return [];
+  return todos.flatMap((todo) => {
+    if (!isRecord(todo)) return [];
+    const content = getStringValue(todo.content)?.trim();
+    if (!content) return [];
+    return [
+      {
+        content,
+        status: getStringValue(todo.status) ?? 'pending',
+        activeForm: getStringValue(todo.activeForm),
+      },
+    ];
+  });
+};
+
+const normalizeTaskProgressPart = (part: unknown): TaskProgressPart | undefined => {
+  if (!isRecord(part)) return;
+  const type = getPartType(part);
+  if (type === 'task-progress') {
+    const todos = normalizeTaskTodos(part.todos);
+    return todos.length
+      ? {
+          title: getStringValue(part.title),
+          todos,
+        }
+      : undefined;
+  }
+  if (type === 'tool-TodoWrite' && isRecord(part.input)) {
+    const todos = normalizeTaskTodos(part.input.todos);
+    return todos.length
+      ? {
+          title: getStringValue(part.input.title),
+          todos,
+        }
+      : undefined;
+  }
+};
+
+const normalizeQuestionOptions = (options: unknown): AskUserQuestionOption[] => {
+  if (!Array.isArray(options)) return [];
+  return options.flatMap((option) => {
+    if (typeof option === 'string') return [{ label: option }];
+    if (!isRecord(option)) return [];
+    const label = getStringValue(option.label)?.trim();
+    if (!label) return [];
+    return [
+      {
+        label,
+      },
+    ];
+  });
+};
+
+const normalizeQuestionItems = (input: unknown): AskUserQuestionItem[] => {
+  if (!isRecord(input)) return [];
+  const rawQuestions = Array.isArray(input.questions) ? input.questions : [input];
+  return rawQuestions.flatMap((item) => {
+    if (!isRecord(item)) return [];
+    const question = getStringValue(item.question)?.trim();
+    if (!question) return [];
+    return [
+      {
+        id: getStringValue(item.id) ?? getStringValue(item.key),
+        header: getStringValue(item.header),
+        question,
+        options: normalizeQuestionOptions(item.options),
+      },
+    ];
+  });
+};
+
+const normalizeAskUserQuestionPart = (part: unknown): AskUserQuestionPart | undefined => {
+  if (!isRecord(part)) return;
+  const type = getPartType(part);
+  if (type === 'ask-user-question') {
+    const question = getStringValue(part.question)?.trim();
+    if (!question) return;
+    return {
+      toolCallId: getStringValue(part.toolCallId),
+      question,
+      options: normalizeQuestionOptions(part.options),
+      questions: [
+        {
+          question,
+          options: normalizeQuestionOptions(part.options),
+        },
+      ],
+    };
+  }
+  if (type !== 'tool-AskUserQuestion' || !isRecord(part.input)) return;
+  const questions = normalizeQuestionItems(part.input);
+  const firstQuestion = questions[0];
+  if (!firstQuestion) return;
+  return {
+    toolCallId: getStringValue(part.toolCallId),
+    header: firstQuestion.header,
+    question: firstQuestion.question,
+    options: firstQuestion.options,
+    questions,
+    answered: getStringValue(part.state) === 'output-available' || part.output != null,
+  };
+};
+
+const getAskUserQuestionInputItems = (input: unknown) => {
+  if (!isRecord(input)) return [];
+  return Array.isArray(input.questions) ? input.questions.filter(isRecord) : [input];
+};
+
+const getAskUserQuestionPartItems = (question: AskUserQuestionPart) =>
+  question.questions?.length
+    ? question.questions
+    : [
+        {
+          header: question.header,
+          question: question.question,
+          options: question.options,
+        },
+      ];
+
+const getAskUserQuestionPartInput = (question: AskUserQuestionPart) => ({
+  questions: getAskUserQuestionPartItems(question).map((item) => ({
+    id: item.id,
+    header: item.header,
+    question: item.question,
+    options: item.options,
+  })),
+});
+
+const getAskUserQuestionItemKey = (question: AskUserQuestionItem, index: number) =>
+  question.id ?? `${index}:${question.question}`;
+
+const getAskUserQuestionAnswerKey = (question: AskUserQuestionItem) =>
+  question.id ?? question.question;
+
+const getGateQuestionKey = (messageId: string, question: AskUserQuestionPart) =>
+  question.toolCallId ??
+  `${messageId}:${getAskUserQuestionPartItems(question)
+    .map(({ question: text }) => text)
+    .join('\n')}`;
+
+const getAskUserQuestionValue = (input: unknown) => {
+  if (!isRecord(input)) return;
+  return (
+    getStringValue(input.question) ??
+    getStringValue(input.prompt) ??
+    getStringValue(input.message) ??
+    getStringValue(input.title) ??
+    getStringValue(input.description)
+  );
+};
+
+const getAskUserQuestionTexts = (input: unknown) =>
+  getAskUserQuestionInputItems(input)
+    .map(getAskUserQuestionValue)
+    .filter((question): question is string => Boolean(question?.trim()));
+
+const getAskUserQuestionAnswers = (value: unknown) => {
+  if (!isRecord(value) || !isRecord(value.answers)) return [];
+  return Object.values(value.answers).filter(
+    (answer): answer is string => typeof answer === 'string' && Boolean(answer.trim())
+  );
+};
+
+const isAskUserQuestionTimeout = (output: unknown) =>
+  (isRecord(output) &&
+    (output.status === 'timeout' ||
+      getStringValue(output.message)?.toLowerCase() === 'gate timeout')) ||
+  (typeof output === 'string' && output.toLowerCase().includes('gate timeout'));
+
+const isAskUserQuestionSkipped = (output: unknown) =>
+  isRecord(output) && output.status === 'skipped';
+
+const getAskUserQuestionAnswerFromText = (text: string) => {
+  const quotedAnswers = Array.from(text.matchAll(/"[^"]+"\s*=\s*"([^"]+)"/g)).map(
+    (match) => match[1]
+  );
+  if (quotedAnswers.length) return quotedAnswers.join(', ');
+  return text.trim();
+};
+
+const isAskUserQuestionAnswerText = (value: unknown) =>
+  typeof value === 'string' && value.trim().startsWith('User has answered your questions:');
+
+const isAskUserQuestionProtocolOutput = (value: unknown) =>
+  isRecord(value) &&
+  typeof value.status === 'string' &&
+  ['answered', 'skipped', 'timeout'].includes(value.status) &&
+  typeof value.question === 'string';
+
+const isAskUserQuestionSkipText = (value: unknown) => {
+  if (typeof value !== 'string') return false;
+  return ['跳过', '已跳过', 'skip', 'skipped', 'skipped by user'].includes(
+    value.trim().toLowerCase()
+  );
+};
+
+const isResolvedAskUserQuestionOutput = (value: unknown) =>
+  isAskUserQuestionAnswerText(value) ||
+  isAskUserQuestionProtocolOutput(value) ||
+  isAskUserQuestionSkipText(value);
+
+const addAskUserQuestionShadowText = (
+  shadowResults: AskUserQuestionShadowResults,
+  value: unknown
+) => {
+  if (typeof value !== 'string') return;
+  const text = value.trim();
+  if (text) shadowResults.outputTexts.add(text);
+};
+
+const rememberAskUserQuestionResult = (
+  shadowResults: AskUserQuestionShadowResults,
+  toolCallId: string | undefined,
+  input: unknown,
+  output: unknown,
+  error?: string
+) => {
+  if (toolCallId) shadowResults.toolCallIds.add(toolCallId);
+  if (error) {
+    addAskUserQuestionShadowText(shadowResults, error);
+    return;
+  }
+  if (isRecord(output)) {
+    addAskUserQuestionShadowText(shadowResults, output.answer);
+    addAskUserQuestionShadowText(shadowResults, output.message);
+    getAskUserQuestionAnswers(output).forEach((answer) =>
+      addAskUserQuestionShadowText(shadowResults, answer)
+    );
+  }
+  const answer = getAskUserQuestionAnswer(input, output);
+  addAskUserQuestionShadowText(shadowResults, answer);
+};
+
+const rememberTargetAskUserQuestionResult = (
+  shadowResults: AskUserQuestionShadowResults,
+  part: TargetToolPart
+) => {
+  if (!isAskUserQuestionToolName(part.toolName)) return;
+  rememberAskUserQuestionResult(
+    shadowResults,
+    part.toolCallId,
+    part.input,
+    part.output,
+    part.error
+  );
+};
+
+const rememberToolAskUserQuestionResult = (
+  shadowResults: AskUserQuestionShadowResults,
+  part: ToolCallPart | ToolResultPart,
+  result?: ToolResultPart
+) => {
+  if (!isAskUserQuestionToolName(part.toolName)) return;
+  rememberAskUserQuestionResult(
+    shadowResults,
+    part.toolCallId,
+    part.type === 'tool-call' ? part.input : undefined,
+    result?.output ?? (part.type === 'tool-result' ? part.output : undefined),
+    result?.error ?? (part.type === 'tool-result' ? part.error : undefined)
+  );
+};
+
+const isAskUserQuestionShadowResultPart = (
+  part: IAiChatMessagePart,
+  shadowResults: AskUserQuestionShadowResults
+) => {
+  if (part.type !== 'tool-result') return false;
+  if (!isGenericToolName(part.toolName)) return false;
+  if (isResolvedAskUserQuestionOutput(part.output)) {
+    return true;
+  }
+  if (part.toolCallId && shadowResults.toolCallIds.has(part.toolCallId)) return true;
+  const outputText = typeof part.output === 'string' ? part.output.trim() : undefined;
+  return Boolean(outputText && shadowResults.outputTexts.has(outputText));
+};
+
+const getAskUserQuestionAnswer = (input: unknown, output: unknown) => {
+  if (isRecord(output)) {
+    const answer = getStringValue(output.answer);
+    if (answer?.trim()) return answer;
+    const outputAnswers = getAskUserQuestionAnswers(output);
+    if (outputAnswers.length) return outputAnswers.join(', ');
+    const message = getStringValue(output.message);
+    if (message?.trim() && !isAskUserQuestionTimeout(output) && !isAskUserQuestionSkipped(output)) {
+      return message;
+    }
+  }
+  const inputAnswers = getAskUserQuestionAnswers(input);
+  if (inputAnswers.length) return inputAnswers.join(', ');
+  return typeof output === 'string' && output.trim() && !isAskUserQuestionTimeout(output)
+    ? getAskUserQuestionAnswerFromText(output)
+    : undefined;
+};
+
+const getResolvedAskUserQuestionToolCallIds = (parts: IAiChatMessagePart[] | undefined) =>
+  new Set(
+    parts?.flatMap((part) => {
+      if (
+        part.type === 'tool-result' &&
+        (isAskUserQuestionToolName(part.toolName) || isResolvedAskUserQuestionOutput(part.output))
+      ) {
+        return part.toolCallId ? [part.toolCallId] : [];
+      }
+      const targetToolPart = normalizeTargetToolPart(part);
+      if (
+        targetToolPart &&
+        isAskUserQuestionToolName(targetToolPart.toolName) &&
+        (targetToolPart.output != null ||
+          isResolvedAskUserQuestionOutput(targetToolPart.output) ||
+          targetToolPart.state === 'output-available' ||
+          targetToolPart.state === 'output-error')
+      ) {
+        return targetToolPart.toolCallId ? [targetToolPart.toolCallId] : [];
+      }
+      return [];
+    }) ?? []
+  );
+
+const normalizeTargetToolPart = (part: unknown): TargetToolPart | undefined => {
+  if (!isRecord(part)) return;
+  const type = getPartType(part);
+  if (
+    !type?.startsWith('tool-') ||
+    type === 'tool-call' ||
+    type === 'tool-result' ||
+    type === 'tool-TodoWrite'
+  ) {
+    return;
+  }
+  const toolName = type.slice('tool-'.length);
+  return {
+    type,
+    toolName,
+    toolCallId: getStringValue(part.toolCallId),
+    input: part.input,
+    output: part.output,
+    error: getStringValue(part.error) ?? getStringValue(part.errorText),
+    state: getStringValue(part.state),
+  };
+};
+
+const isTaskDone = (status: string) =>
+  ['completed', 'done', 'success', 'output-available'].includes(status);
+
+const isTaskRunning = (status: string) =>
+  ['active', 'in_progress', 'running', 'input-available'].includes(status);
+
+const isTaskProgressToolResult = (part: IAiChatMessagePart) =>
+  part.type === 'tool-result' &&
+  typeof part.output === 'string' &&
+  part.output.startsWith('Todos have been modified successfully');
 
 const getVisibleContextLabels = (message: IMessage) => {
   const contexts =
@@ -740,6 +1389,119 @@ const getContextNodeItems = (
   }));
 };
 
+const ToolTimelineItem = ({
+  item,
+  isFirst,
+  isLast,
+}: {
+  item: RenderedToolItem;
+  isFirst: boolean;
+  isLast: boolean;
+}) => (
+  <div className="flex items-start gap-1 self-stretch">
+    <div
+      className="flex w-3 shrink-0 flex-col items-center gap-0.5 self-stretch text-zinc-400 dark:text-zinc-600"
+      aria-hidden="true"
+    >
+      <div className={cn('h-[8px] w-px shrink-0', isFirst ? 'bg-transparent' : 'bg-current')} />
+      <div className="relative size-1 shrink-0 rounded-full bg-current" />
+      <div className={cn('w-px flex-1', isLast ? 'bg-transparent' : 'bg-current')} />
+    </div>
+    <div className="flex flex-1 flex-col overflow-hidden">{item.node}</div>
+  </div>
+);
+
+const ToolTimelineGroup = ({ items }: { items: RenderedToolItem[] }) => {
+  if (items.length === 1) return <div className="w-full">{items[0].node}</div>;
+
+  return (
+    <div className="flex w-full flex-col">
+      {items.map((item, index) => (
+        <ToolTimelineItem
+          key={`${item.key}-line`}
+          item={item}
+          isFirst={index === 0}
+          isLast={index === items.length - 1}
+        />
+      ))}
+    </div>
+  );
+};
+
+const ToolDisclosure = ({
+  body,
+  hasError,
+  hasResult,
+  icon: Icon,
+  title,
+}: {
+  body: string;
+  hasError: boolean;
+  hasResult: boolean;
+  icon: typeof SquareTerminal;
+  title: string;
+}) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="group/tool-row w-full">
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="flex h-6 w-full items-center gap-3 rounded-md p-1 hover:bg-accent/50"
+        >
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+            <span className="truncate text-xs text-muted-foreground">{title}</span>
+            {hasResult ? (
+              hasError ? (
+                <CircleX className="ml-0.5 size-3.5 shrink-0 text-muted-foreground" />
+              ) : (
+                <CircleCheck className="ml-0.5 size-3.5 shrink-0 text-muted-foreground" />
+              )
+            ) : (
+              <Loader2 className="ml-0.5 size-3.5 shrink-0 animate-spin text-muted-foreground" />
+            )}
+          </div>
+          <ChevronDown
+            className={cn(
+              'size-3.5 shrink-0 text-muted-foreground transition-transform',
+              open && 'rotate-180'
+            )}
+          />
+        </button>
+      </CollapsibleTrigger>
+      {body && (
+        <CollapsibleContent>
+          <div className="mt-1 overflow-hidden rounded-lg bg-zinc-950 text-zinc-100">
+            <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-xs leading-5">
+              {body}
+            </pre>
+          </div>
+        </CollapsibleContent>
+      )}
+    </Collapsible>
+  );
+};
+
+const CollapsedToolRun = ({ label, items }: { label: string; items: RenderedToolItem[] }) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        type="button"
+        className="flex h-6 items-center gap-1 self-start rounded-md px-1 text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span className="text-zinc-400 dark:text-zinc-600">···</span>
+        <span>{label}</span>
+      </button>
+      {open && <ToolTimelineGroup items={items} />}
+    </>
+  );
+};
+
 export const ChatPanel = () => {
   const baseId = useBaseId() as string;
   const queryClient = useQueryClient();
@@ -771,6 +1533,9 @@ export const ChatPanel = () => {
   const { messageList, addMessage, updateMessage, setBaseMessages, clearMessage } =
     useMessageStore();
   const [input, setInput] = useState('');
+  const [gateAnswer, setGateAnswer] = useState('');
+  const [gateAnswerSelections, setGateAnswerSelections] = useState<Record<string, string>>({});
+  const [answeredGateToolCallIds, setAnsweredGateToolCallIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [contextSearch, setContextSearch] = useState('');
   const [contextOpen, setContextOpen] = useState(false);
@@ -805,6 +1570,7 @@ export const ChatPanel = () => {
   const filePreviewDialogRef = useRef<IFilePreviewDialogRef>(null);
   const attachmentDragDepthRef = useRef(0);
   const attachmentObjectUrlsRef = useRef(new Set<string>());
+  const editorClipboardPayloadRef = useRef(new Map<string, EditorClipboardPayload>());
   const appliedSelectionTimestampRef = useRef<number>();
   const loadedHistoryBaseRef = useRef<string>();
   const locallyUpdatedMessagesAtRef = useRef(new Map<string, number>());
@@ -867,6 +1633,50 @@ export const ChatPanel = () => {
       ),
     [messages]
   );
+  const activeLoadingAssistantMessage = useMemo(
+    () =>
+      [...messages]
+        .reverse()
+        .find(
+          (message) =>
+            message.creatorRole === CreatorRole.Assistant &&
+            message.status === MessageStatus.Loading
+        ),
+    [messages]
+  );
+  const activeTaskProgress = useMemo(
+    () =>
+      getLatestNormalizedPart(activeLoadingAssistantMessage?.parts, normalizeTaskProgressPart)
+        ?.value,
+    [activeLoadingAssistantMessage?.parts]
+  );
+  const resolvedQuestionToolCallIds = useMemo(
+    () => getResolvedAskUserQuestionToolCallIds(activeLoadingAssistantMessage?.parts),
+    [activeLoadingAssistantMessage?.parts]
+  );
+  const activeQuestion = useMemo(
+    () =>
+      getLatestNormalizedPart(activeLoadingAssistantMessage?.parts, (_part) => {
+        const question = normalizeAskUserQuestionPart(_part);
+        if (!question || !activeLoadingAssistantMessage) return;
+        const questionKey = getGateQuestionKey(activeLoadingAssistantMessage.id, question);
+        if (
+          answeredGateToolCallIds.has(questionKey) ||
+          (question.toolCallId && resolvedQuestionToolCallIds.has(question.toolCallId))
+        ) {
+          return;
+        }
+        return question?.answered ? undefined : question;
+      })?.value,
+    [activeLoadingAssistantMessage, answeredGateToolCallIds, resolvedQuestionToolCallIds]
+  );
+  useEffect(() => {
+    setAnsweredGateToolCallIds(new Set());
+  }, [activeChatId, activeLoadingAssistantMessage?.id]);
+  useEffect(() => {
+    setGateAnswer('');
+    setGateAnswerSelections({});
+  }, [activeQuestion?.question, activeQuestion?.toolCallId]);
   const attachmentMap = useMemo(
     () => new Map(attachments.map((attachment) => [attachment.id, attachment])),
     [attachments]
@@ -1409,6 +2219,14 @@ export const ChatPanel = () => {
   const updateAttachmentChipElement = useCallback(
     (chip: HTMLElement, attachment: ChatAttachment) => {
       chip.dataset.uploadStatus = attachment.status === 'ready' ? 'done' : 'uploading';
+      chip.dataset.attachmentName = attachment.name;
+      chip.dataset.attachmentType = attachment.type;
+      chip.dataset.attachmentTypeLabel = attachment.typeLabel;
+      chip.dataset.attachmentSize = String(attachment.size);
+      delete chip.dataset.attachmentText;
+      delete chip.dataset.attachmentData;
+      delete chip.dataset.attachmentEncoding;
+      delete chip.dataset.attachmentThumbnailUrl;
       chip.title = attachment.name;
       const isSelected = chip.classList.contains('ProseMirror-selectednode');
       chip.className = cn(
@@ -1464,6 +2282,12 @@ export const ChatPanel = () => {
     chip.contentEditable = 'false';
     chip.dataset.type = 'contextChip';
     chip.dataset.contextId = context.id;
+    chip.dataset.contextType = context.type;
+    chip.dataset.contextLabel = context.label;
+    chip.dataset.contextDetail = context.detail;
+    if (context.title) chip.dataset.contextTitle = context.title;
+    if (context.viewType) chip.dataset.contextViewType = context.viewType;
+    if (context.emoji) chip.dataset.contextEmoji = context.emoji;
     chip.title = context.title ?? context.label;
     chip.className =
       'context-chip mx-0.5 inline-flex h-6 max-w-full -translate-y-px select-none items-center gap-1.5 rounded-md border border-foreground/10 bg-foreground/[0.04] px-1.5 align-middle text-sm leading-none text-foreground transition-[background-color,box-shadow] selection:bg-transparent selection:text-foreground hover:bg-foreground/[0.08] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/15 [&.ProseMirror-selectednode]:border-primary [&.ProseMirror-selectednode]:ring-2 [&.ProseMirror-selectednode]:ring-slate-950 [&_*]:select-none dark:[&.ProseMirror-selectednode]:border-blue-300 dark:[&.ProseMirror-selectednode]:ring-blue-300';
@@ -1497,16 +2321,16 @@ export const ChatPanel = () => {
   );
 
   const insertNodesAtRange = useCallback(
-    (nodes: Node[], range: Range | undefined) => {
+    (nodes: Node[], range: Range | undefined, appendSpace = true) => {
       const targetRange = range ?? getFallbackEditorRange();
       if (!targetRange) return;
       const fragment = document.createDocumentFragment();
-      const spaceNode = document.createTextNode(' ');
+      const spaceNode = document.createTextNode(appendSpace ? ' ' : '');
       nodes.forEach((node) => fragment.appendChild(node));
       fragment.appendChild(spaceNode);
       targetRange.deleteContents();
       targetRange.insertNode(fragment);
-      placeCaretAfter(spaceNode, 1);
+      placeCaretAfter(spaceNode);
       syncComposerFromDom();
     },
     [getFallbackEditorRange, placeCaretAfter, syncComposerFromDom]
@@ -1697,6 +2521,102 @@ export const ChatPanel = () => {
     [createAttachmentChipElement, getEditorInsertionRange, insertNodesAtRange]
   );
 
+  const createPlainPastePayload = useCallback(
+    (text: string): EditorPastePayload => ({
+      nodes: text ? [document.createTextNode(text)] : [],
+      contexts: [],
+      attachments: [],
+    }),
+    []
+  );
+
+  const createEditorPastePayload = useCallback(
+    (clipboardData: DataTransfer): EditorPastePayload => {
+      const text = clipboardData.getData('text/plain');
+      const html = clipboardData.getData('text/html');
+      const internalClipboardToken = clipboardData.getData(INTERNAL_CLIPBOARD_MIME);
+      const internalClipboardPayload = internalClipboardToken
+        ? editorClipboardPayloadRef.current.get(internalClipboardToken)
+        : undefined;
+      const internalAttachmentMap = new Map(
+        internalClipboardPayload?.attachments.map((attachment) => [attachment.id, attachment]) ?? []
+      );
+      const internalContextMap = new Map(
+        internalClipboardPayload?.contexts.map((context) => [context.id, context]) ?? []
+      );
+      if (!html || (!html.includes('data-attachment-id') && !html.includes('data-context-id'))) {
+        return createPlainPastePayload(text);
+      }
+
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const nodes: Node[] = [];
+      const pastedContexts = new Map<string, ChatContext>();
+      const pastedAttachments = new Map<string, ChatAttachment>();
+      const appendText = (value: string | null | undefined) => {
+        if (!value) return;
+        const lastNode = nodes[nodes.length - 1];
+        if (lastNode?.nodeType === Node.TEXT_NODE) {
+          lastNode.textContent = `${lastNode.textContent ?? ''}${value}`;
+          return;
+        }
+        nodes.push(document.createTextNode(value));
+      };
+      const visit = (node: ChildNode) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          appendText(node.textContent);
+          return;
+        }
+        if (!(node instanceof HTMLElement)) return;
+
+        const attachmentId = node.dataset.attachmentId;
+        const attachment = attachmentId
+          ? cloneRestorableAttachmentForPaste(
+              attachmentMap.get(attachmentId) ?? internalAttachmentMap.get(attachmentId)
+            )
+          : undefined;
+        if (attachment) {
+          pastedAttachments.set(attachment.id, attachment);
+          nodes.push(createAttachmentChipElement(attachment));
+          return;
+        }
+
+        const contextId = node.dataset.contextId;
+        const clipboardContext = contextId
+          ? contextMap.get(contextId) ?? internalContextMap.get(contextId)
+          : undefined;
+        const context = cloneContextForPaste(clipboardContext);
+        const pastedContext = context ?? createContextFromChipDataset(node.dataset);
+        if (pastedContext) {
+          pastedContexts.set(pastedContext.id, pastedContext);
+          nodes.push(createContextChipElement(pastedContext));
+          return;
+        }
+
+        if (node.tagName === 'BR') {
+          appendText('\n');
+          return;
+        }
+        node.childNodes.forEach(visit);
+      };
+
+      doc.body.childNodes.forEach(visit);
+      return nodes.length
+        ? {
+            nodes,
+            contexts: Array.from(pastedContexts.values()),
+            attachments: Array.from(pastedAttachments.values()),
+          }
+        : createPlainPastePayload(text);
+    },
+    [
+      attachmentMap,
+      contextMap,
+      createAttachmentChipElement,
+      createContextChipElement,
+      createPlainPastePayload,
+    ]
+  );
+
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor) return;
@@ -1764,6 +2684,123 @@ export const ChatPanel = () => {
       readFiles(files);
     },
     [readFiles]
+  );
+
+  const getEditorCopyFragment = useCallback(
+    (editor: HTMLElement) => {
+      const selection = window.getSelection();
+      if (selection?.rangeCount) {
+        const range = selection.getRangeAt(0);
+        if (!range.collapsed && isRangeInEditor(range)) {
+          return range.cloneContents();
+        }
+      }
+
+      const selectedChip = editor.querySelector<HTMLElement>('.ProseMirror-selectednode');
+      if (!selectedChip) return;
+      const fragment = document.createDocumentFragment();
+      fragment.appendChild(selectedChip.cloneNode(true));
+      return fragment;
+    },
+    [isRangeInEditor]
+  );
+
+  const getEditorClipboardPayload = useCallback(
+    (container: HTMLElement): EditorClipboardPayload => ({
+      contexts: Array.from(container.querySelectorAll<HTMLElement>('[data-context-id]')).flatMap(
+        (node) => {
+          const contextId = node.dataset.contextId;
+          const context = contextId ? contextMap.get(contextId) : undefined;
+          return context ? [context] : [];
+        }
+      ),
+      attachments: Array.from(
+        container.querySelectorAll<HTMLElement>('[data-attachment-id]')
+      ).flatMap((node) => {
+        const attachmentId = node.dataset.attachmentId;
+        const attachment = attachmentId ? attachmentMap.get(attachmentId) : undefined;
+        return attachment ? [attachment] : [];
+      }),
+    }),
+    [attachmentMap, contextMap]
+  );
+
+  const rememberEditorClipboardPayload = useCallback((payload: EditorClipboardPayload) => {
+    if (payload.contexts.length === 0 && payload.attachments.length === 0) return;
+    const token = createId();
+    editorClipboardPayloadRef.current.set(token, payload);
+    while (editorClipboardPayloadRef.current.size > MAX_EDITOR_CLIPBOARD_PAYLOADS) {
+      const firstToken = editorClipboardPayloadRef.current.keys().next().value;
+      if (!firstToken) break;
+      editorClipboardPayloadRef.current.delete(firstToken);
+    }
+    return token;
+  }, []);
+
+  const handleEditorCopy = useCallback(
+    (event: ReactClipboardEvent<HTMLDivElement>) => {
+      const editor = editorRef.current;
+      if (!editor) return;
+
+      const fragment = getEditorCopyFragment(editor);
+      if (!fragment) return;
+      const container = document.createElement('div');
+      container.appendChild(fragment);
+      const token = rememberEditorClipboardPayload(getEditorClipboardPayload(container));
+      if (token) {
+        event.clipboardData.setData(INTERNAL_CLIPBOARD_MIME, token);
+      }
+      event.clipboardData.setData('text/html', container.innerHTML);
+      event.clipboardData.setData('text/plain', container.textContent ?? '');
+      event.preventDefault();
+    },
+    [getEditorClipboardPayload, getEditorCopyFragment, rememberEditorClipboardPayload]
+  );
+
+  const handleEditorPaste = useCallback(
+    (event: ReactClipboardEvent<HTMLDivElement>) => {
+      const files = getTransferFiles(event.clipboardData);
+      if (files.length > 0) {
+        event.preventDefault();
+        event.stopPropagation();
+        readFiles(files);
+        return;
+      }
+
+      const range = getEditorInsertionRange();
+      if (!range || !isRangeInEditor(range)) return;
+      const {
+        nodes,
+        contexts: pastedContexts,
+        attachments: pastedAttachments,
+      } = createEditorPastePayload(event.clipboardData);
+      if (nodes.length === 0) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      if (pastedContexts.length > 0) {
+        setContexts((previous) => {
+          const existingIds = new Set(previous.map(({ id }) => id));
+          return [...previous, ...pastedContexts.filter(({ id }) => !existingIds.has(id))];
+        });
+      }
+      if (pastedAttachments.length > 0) {
+        setAttachments((previous) => {
+          const existingIds = new Set(previous.map(({ id }) => id));
+          return [...previous, ...pastedAttachments.filter(({ id }) => !existingIds.has(id))];
+        });
+      }
+      insertNodesAtRange(nodes, range, false);
+      saveEditorSelection();
+    },
+    [
+      createEditorPastePayload,
+      getEditorInsertionRange,
+      insertNodesAtRange,
+      isRangeInEditor,
+      readFiles,
+      saveEditorSelection,
+    ]
   );
 
   useEffect(() => {
@@ -2527,50 +3564,544 @@ export const ChatPanel = () => {
     </div>
   );
 
-  const renderToolPart = (
+  const getAskUserQuestionToolTitle = (input: unknown) => {
+    const count =
+      isRecord(input) && Array.isArray(input.questions) && input.questions.length > 0
+        ? input.questions.length
+        : 1;
+    return `${t('table:aiChat.agent.askUserQuestion.asked')} ${t(
+      'table:aiChat.partTool.questionCount',
+      { count }
+    )}`;
+  };
+
+  const getAskUserQuestionToolBody = (
+    input: unknown,
+    output: unknown,
+    error: string | undefined,
+    isMessageDone: boolean
+  ) => {
+    const lines: string[] = [];
+    const questionLabel = String(
+      t('table:aiChat.agent.askUserQuestion.question', { defaultValue: 'Question' })
+    );
+    const answerLabel = String(
+      t('table:aiChat.agent.askUserQuestion.answer', { defaultValue: 'Answer' })
+    );
+    const timedOutLabel = String(
+      t('table:aiChat.agent.askUserQuestion.timedOut', {
+        defaultValue: 'Timed out waiting for user answer',
+      })
+    );
+    const waitingLabel = String(
+      t('table:aiChat.agent.askUserQuestion.waiting', { defaultValue: 'Waiting for user choice' })
+    );
+    const noAnswerLabel = String(
+      t('table:aiChat.agent.askUserQuestion.noAnswer', { defaultValue: 'No answer received' })
+    );
+    const questions = getAskUserQuestionTexts(input);
+    const answer = getAskUserQuestionAnswer(input, output);
+
+    questions.forEach((question, index) => {
+      lines.push(
+        `${questionLabel}${questions.length > 1 ? ` ${index + 1}` : ''}: ${question.trim()}`
+      );
+    });
+    if (error) {
+      lines.push(`${answerLabel}: ${error}`);
+    } else if (isAskUserQuestionTimeout(output)) {
+      lines.push(timedOutLabel);
+    } else if (isAskUserQuestionSkipped(output)) {
+      lines.push(String(t('table:aiChat.agent.askUserQuestion.skipped')));
+    } else if (answer) {
+      lines.push(`${answerLabel}: ${answer}`);
+    } else {
+      lines.push(`${answerLabel}: ${isMessageDone ? noAnswerLabel : waitingLabel}`);
+    }
+
+    return lines.join('\n');
+  };
+
+  const getToolPartQuestionOutput = (
+    part: ToolCallPart | ToolResultPart,
+    result?: ToolResultPart
+  ) => result?.output ?? (part.type === 'tool-result' ? part.output : undefined);
+
+  const getToolPartQuestionError = (part: ToolCallPart | ToolResultPart, result?: ToolResultPart) =>
+    result?.error ?? (part.type === 'tool-result' ? part.error : undefined);
+
+  const getToolPartBody = (
     message: IMessage,
     part: ToolCallPart | ToolResultPart,
-    index: number,
+    isQuestionTool: boolean,
     result?: ToolResultPart
   ) => {
+    const questionOutput = getToolPartQuestionOutput(part, result);
+    if (isQuestionTool) {
+      return getAskUserQuestionToolBody(
+        part.type === 'tool-call' ? part.input : undefined,
+        questionOutput,
+        getToolPartQuestionError(part, result),
+        message.status !== MessageStatus.Loading
+      );
+    }
+
     const inputText = part.type === 'tool-call' ? getToolInputText(part.input) : '';
     const outputText = renderPartValue(
       result?.error ??
         result?.output ??
         (part.type === 'tool-result' ? part.error ?? part.output : undefined)
     );
-    const body = [inputText, outputText].filter(Boolean).join('\n\n');
-    const hasResult = Boolean(result || part.type === 'tool-result');
-    const hasError = Boolean(result?.error || (part.type === 'tool-result' && part.error));
+    return [inputText, outputText].filter(Boolean).join('\n\n');
+  };
+
+  const getToolPartTitle = (part: ToolCallPart | ToolResultPart, isQuestionTool: boolean) =>
+    isQuestionTool && part.type === 'tool-call'
+      ? getAskUserQuestionToolTitle(part.input)
+      : getToolDisplayName(part);
+
+  const renderToolPart = (
+    message: IMessage,
+    part: ToolCallPart | ToolResultPart,
+    index: number,
+    result?: ToolResultPart
+  ) => {
+    const isQuestionTool = isAskUserQuestionToolName(part.toolName);
+    const questionOutput = getToolPartQuestionOutput(part, result);
+    const body = getToolPartBody(message, part, isQuestionTool, result);
+    const isMissingResult =
+      part.type === 'tool-call' && !result && message.status !== MessageStatus.Loading;
+    const hasResult = Boolean(
+      isQuestionTool || result || part.type === 'tool-result' || isMissingResult
+    );
+    const hasError = Boolean(
+      isMissingResult ||
+        result?.error ||
+        (part.type === 'tool-result' && part.error) ||
+        (isQuestionTool && isAskUserQuestionTimeout(questionOutput))
+    );
+    const ToolIcon = getToolIcon(part.toolName);
 
     return (
-      <details key={`${message.id}-part-${index}`} className="group">
-        <summary className="flex h-6 w-full cursor-pointer list-none items-center gap-3 rounded-md p-1 text-xs text-muted-foreground transition-colors hover:bg-accent/50 [&::-webkit-details-marker]:hidden">
-          <div className="flex min-w-0 flex-1 items-center gap-1.5">
-            <SquareTerminal className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="min-w-0 truncate text-xs text-muted-foreground">
-              {getToolDisplayName(part)}
-            </span>
-            {hasResult ? (
-              hasError ? (
-                <CircleX className="ml-0.5 size-3.5 shrink-0 text-muted-foreground" />
-              ) : (
-                <CircleCheck className="ml-0.5 size-3.5 shrink-0 text-muted-foreground" />
-              )
-            ) : (
-              <Loader2 className="ml-0.5 size-3.5 shrink-0 animate-spin text-muted-foreground" />
-            )}
-          </div>
-          <ChevronDown className="size-3.5 shrink-0 transition-transform group-open:rotate-180" />
-        </summary>
-        {body && (
-          <div className="mt-1 overflow-hidden rounded-lg bg-zinc-950 text-zinc-100">
-            <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-xs leading-5">
-              {body}
-            </pre>
-          </div>
+      <ToolDisclosure
+        key={`${message.id}-part-${index}`}
+        body={body}
+        hasError={hasError}
+        hasResult={hasResult}
+        icon={ToolIcon}
+        title={getToolPartTitle(part, isQuestionTool)}
+      />
+    );
+  };
+
+  const renderAskUserQuestionMessagePart = (
+    message: IMessage,
+    question: AskUserQuestionPart,
+    index: number,
+    result?: ToolResultPart
+  ) => {
+    const input = getAskUserQuestionPartInput(question);
+    const output = result?.output;
+    const isMissingResult = !result && message.status !== MessageStatus.Loading;
+    return (
+      <ToolDisclosure
+        key={`${message.id}-part-${index}`}
+        body={getAskUserQuestionToolBody(
+          input,
+          output,
+          result?.error,
+          message.status !== MessageStatus.Loading
         )}
-      </details>
+        hasError={Boolean(result?.error || isAskUserQuestionTimeout(output) || isMissingResult)}
+        hasResult={Boolean(result || isMissingResult)}
+        icon={MessageCircleQuestion}
+        title={getAskUserQuestionToolTitle(input)}
+      />
+    );
+  };
+
+  const getAskUserQuestionRunItem = (
+    message: IMessage,
+    parts: IAiChatMessagePart[],
+    part: IAiChatMessagePart,
+    index: number,
+    usedToolResultIndexes: Set<number>
+  ): RenderedToolItem | undefined => {
+    const question = normalizeAskUserQuestionPart(part);
+    if (!question) return;
+    if (getCanonicalAskUserQuestionPartIndex(parts, question, index) !== index) return;
+
+    const resultIndex = getAskUserQuestionResultIndex(
+      parts,
+      index,
+      question,
+      usedToolResultIndexes
+    );
+    const result =
+      resultIndex >= 0 && parts[resultIndex]?.type === 'tool-result'
+        ? (parts[resultIndex] as ToolResultPart)
+        : undefined;
+    if (resultIndex >= 0) usedToolResultIndexes.add(resultIndex);
+    if (!result && message.status === MessageStatus.Loading) return;
+
+    return {
+      key: `${message.id}-part-${index}`,
+      node: renderAskUserQuestionMessagePart(message, question, index, result),
+    };
+  };
+
+  const getTargetToolTitle = (part: TargetToolPart) => {
+    if (isRecord(part.input)) {
+      const description = part.input.description;
+      if (typeof description === 'string' && description.trim()) return description.trim();
+    }
+    switch (part.toolName) {
+      case 'Bash':
+        return t('table:aiChat.partTool.bash');
+      case 'Read':
+        return t('table:aiChat.partTool.read');
+      case 'Write':
+        return t('table:aiChat.partTool.write');
+      case 'Edit':
+        return t('table:aiChat.partTool.edit');
+      case 'Glob':
+        return t('table:aiChat.partTool.glob');
+      case 'Grep':
+        return t('table:aiChat.partTool.grep');
+      case 'WebSearch':
+        return t('table:aiChat.partTool.webSearch');
+      case 'Skill':
+        return t('table:aiChat.partTool.skill');
+      case 'AskUserQuestion':
+        return getAskUserQuestionToolTitle(part.input);
+      default:
+        return part.toolName;
+    }
+  };
+
+  const renderTargetToolPart = (message: IMessage, part: TargetToolPart, index: number) => {
+    const isQuestionTool = isAskUserQuestionToolName(part.toolName);
+    const inputText = getToolInputText(part.input);
+    const outputText = renderPartValue(part.error ?? part.output);
+    const body = isQuestionTool
+      ? getAskUserQuestionToolBody(
+          part.input,
+          part.output,
+          part.error,
+          message.status !== MessageStatus.Loading
+        )
+      : [inputText, outputText].filter(Boolean).join('\n\n');
+    const hasExplicitResult =
+      part.state === 'output-available' ||
+      part.state === 'output-error' ||
+      part.output != null ||
+      Boolean(part.error);
+    const isMissingResult = message.status !== MessageStatus.Loading && !hasExplicitResult;
+    const hasResult = isQuestionTool || hasExplicitResult || isMissingResult;
+    const hasError =
+      isMissingResult ||
+      Boolean(part.error) ||
+      part.state === 'error' ||
+      part.state === 'output-error' ||
+      (isQuestionTool && isAskUserQuestionTimeout(part.output));
+    const ToolIcon = getToolIcon(part.toolName);
+
+    return (
+      <ToolDisclosure
+        key={`${message.id}-part-${index}`}
+        body={body}
+        hasError={hasError}
+        hasResult={hasResult}
+        icon={ToolIcon}
+        title={getTargetToolTitle(part)}
+      />
+    );
+  };
+
+  const renderTaskProgressPanel = (
+    task: TaskProgressPart,
+    key: string,
+    className?: string,
+    isLive = true
+  ) => {
+    const completedCount = task.todos.filter(({ status }) => isTaskDone(status)).length;
+    const title = task.title ?? t('table:aiChat.agent.taskProgress.title');
+    const progressPercent = task.todos.length ? (completedCount / task.todos.length) * 100 : 0;
+
+    return (
+      <Collapsible
+        key={key}
+        defaultOpen
+        className={cn(
+          'flex max-h-40 w-full flex-col overflow-hidden rounded-lg border bg-background',
+          className
+        )}
+      >
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="flex items-center gap-3 self-stretch px-3 py-1.5 transition-colors hover:bg-accent/50"
+          >
+            <div className="flex items-center gap-1.5">
+              <ListTodo className="size-3.5 shrink-0 text-muted-foreground" />
+              <span className="text-xs text-foreground">{title}</span>
+              <span className="text-xs text-muted-foreground">
+                {completedCount}/{task.todos.length}
+              </span>
+            </div>
+            {completedCount === task.todos.length ? (
+              <CheckCircle2 className="size-3.5 shrink-0 text-muted-foreground" />
+            ) : isLive ? (
+              <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+            ) : (
+              <Ban className="size-3.5 shrink-0 text-muted-foreground" />
+            )}
+          </button>
+        </CollapsibleTrigger>
+        <div className="relative h-0.5 w-full bg-secondary">
+          <div
+            className="absolute left-0 top-0 h-full bg-muted-foreground transition-all"
+            style={{ width: `${progressPercent}%` }}
+          />
+        </div>
+        <CollapsibleContent>
+          <div className="min-h-0 space-y-1.5 overflow-y-auto px-3 pb-2 pt-0.5">
+            {task.todos.map((todo, todoIndex) => {
+              const done = isTaskDone(todo.status);
+              const running = isLive && isTaskRunning(todo.status);
+              const label = running ? todo.activeForm || todo.content : todo.content;
+              return (
+                <div
+                  key={`${todo.content}-${todo.status}-${todoIndex}`}
+                  className="flex min-w-0 items-center gap-3 rounded-md text-muted-foreground animate-in fade-in-0"
+                >
+                  <div className="flex h-5 items-center justify-center">
+                    {done ? (
+                      <Check className="size-3 shrink-0 text-muted-foreground" />
+                    ) : running ? (
+                      <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
+                    ) : (
+                      <Ban className="size-3 shrink-0 text-muted-foreground" />
+                    )}
+                  </div>
+                  <span className="min-w-0 flex-1 truncate text-xs">{label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+    );
+  };
+
+  const respondGateQuestion = (
+    message: IMessage,
+    question: AskUserQuestionPart,
+    behavior: 'allow' | 'deny',
+    answer?: string,
+    answers?: Record<string, string>
+  ) => {
+    const questionKey = getGateQuestionKey(message.id, question);
+    const firstQuestion = getAskUserQuestionPartItems(question)[0];
+    const updatedAnswers =
+      answers ??
+      (behavior === 'allow' && answer
+        ? {
+            [firstQuestion ? getAskUserQuestionAnswerKey(firstQuestion) : question.question]:
+              answer,
+          }
+        : undefined);
+    setAnsweredGateToolCallIds((previous) => new Set(previous).add(questionKey));
+    void respondBaseChatGate(baseId, message.chatId, {
+      toolCallId: question.toolCallId,
+      behavior,
+      message: answer,
+      updatedInput: updatedAnswers ? { answers: updatedAnswers } : undefined,
+    })
+      .then(({ data }) => {
+        if (data?.success !== true) {
+          throw new Error('Gate response was not accepted');
+        }
+        setGateAnswer('');
+        setGateAnswerSelections({});
+      })
+      .catch(() => {
+        setAnsweredGateToolCallIds((previous) => {
+          const next = new Set(previous);
+          next.delete(questionKey);
+          return next;
+        });
+      });
+  };
+
+  const renderAskUserQuestionPanel = (
+    message: IMessage,
+    question: AskUserQuestionPart,
+    key: string,
+    className?: string
+  ) => {
+    const customAnswer = gateAnswer.trim();
+    const questions = getAskUserQuestionPartItems(question);
+    const title =
+      question.header ||
+      questions.find(({ header }) => header)?.header ||
+      String(
+        t('table:aiChat.agent.askUserQuestion.chooseAnswer', {
+          defaultValue: 'Choose an answer',
+        })
+      );
+    const buildSelectedAnswers = (nextSelections = gateAnswerSelections) =>
+      Object.fromEntries(
+        questions.flatMap((item, index) => {
+          const answer = nextSelections[getAskUserQuestionItemKey(item, index)];
+          return answer ? [[getAskUserQuestionAnswerKey(item), answer]] : [];
+        })
+      );
+    const isAnswerComplete = (nextSelections = gateAnswerSelections) =>
+      questions.every((item, index) => nextSelections[getAskUserQuestionItemKey(item, index)]);
+    const answerQuestion = (item: AskUserQuestionItem, index: number, answer: string) => {
+      if (questions.length === 1) {
+        respondGateQuestion(message, question, 'allow', answer);
+        return;
+      }
+      const nextSelections = {
+        ...gateAnswerSelections,
+        [getAskUserQuestionItemKey(item, index)]: answer,
+      };
+      setGateAnswerSelections(nextSelections);
+      if (isAnswerComplete(nextSelections)) {
+        respondGateQuestion(
+          message,
+          question,
+          'allow',
+          answer,
+          buildSelectedAnswers(nextSelections)
+        );
+      }
+    };
+    const submitCustomAnswer = () => {
+      if (questions.length === 1) {
+        respondGateQuestion(message, question, 'allow', customAnswer);
+        return;
+      }
+      const firstUnansweredIndex = questions.findIndex(
+        (item, index) => !gateAnswerSelections[getAskUserQuestionItemKey(item, index)]
+      );
+      const firstUnansweredQuestion = questions[firstUnansweredIndex];
+      const nextSelections =
+        customAnswer && firstUnansweredQuestion
+          ? {
+              ...gateAnswerSelections,
+              [getAskUserQuestionItemKey(firstUnansweredQuestion, firstUnansweredIndex)]:
+                customAnswer,
+            }
+          : gateAnswerSelections;
+      setGateAnswerSelections(nextSelections);
+      if (!isAnswerComplete(nextSelections)) {
+        setGateAnswer('');
+        return;
+      }
+      respondGateQuestion(
+        message,
+        question,
+        'allow',
+        customAnswer,
+        buildSelectedAnswers(nextSelections)
+      );
+    };
+
+    return (
+      <div key={key} className={cn('max-h-[50vh] w-full overflow-auto outline-none', className)}>
+        <div className="flex w-full flex-col overflow-hidden rounded-lg border bg-card">
+          <div className="relative flex items-center justify-between gap-2 self-stretch px-4 py-3">
+            <div className="flex items-center gap-2">
+              <MessageCircleQuestion className="size-4 shrink-0 text-foreground" />
+              <span className="text-sm font-medium text-foreground">{title}</span>
+            </div>
+            <div className="absolute bottom-0 left-0 h-px w-full bg-border" aria-hidden="true" />
+          </div>
+          <div className="flex flex-col items-start gap-3 self-stretch px-2 py-3 outline-none">
+            {questions.map((item, index) => {
+              const answerKey = getAskUserQuestionItemKey(item, index);
+              const selectedAnswer = gateAnswerSelections[answerKey];
+              return (
+                <div key={answerKey} className="flex w-full flex-col gap-2">
+                  <p className="self-stretch px-2 text-sm font-medium leading-snug text-foreground">
+                    {item.question}
+                  </p>
+                  {item.options.length > 0 && (
+                    <div className="flex flex-col gap-2 self-stretch">
+                      <div className="flex size-full flex-col overflow-hidden rounded-md bg-popover text-popover-foreground focus-visible:outline-none">
+                        <div
+                          className="max-h-[272px] overflow-y-auto overflow-x-hidden"
+                          role="listbox"
+                          aria-label="Suggestions"
+                        >
+                          {item.options.map((option) => (
+                            <button
+                              key={option.label}
+                              type="button"
+                              role="option"
+                              aria-selected={selectedAnswer === option.label}
+                              className={cn(
+                                'relative flex min-h-8 w-full cursor-pointer select-none items-center justify-between gap-1.5 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground',
+                                selectedAnswer === option.label &&
+                                  'bg-accent text-accent-foreground'
+                              )}
+                              onClick={() => answerQuestion(item, index, option.label)}
+                            >
+                              <span className="whitespace-normal break-words leading-5">
+                                {option.label}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            <Input
+              value={gateAnswer}
+              onChange={(event) => {
+                setGateAnswer(event.target.value);
+              }}
+              placeholder={String(t('table:aiChat.agent.askUserQuestion.otherPlaceholder'))}
+              className="h-8 self-stretch text-sm text-foreground placeholder:text-muted-foreground/50"
+            />
+            <div className="flex w-full justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 px-3 text-xs"
+                onClick={() =>
+                  respondGateQuestion(
+                    message,
+                    question,
+                    'deny',
+                    String(t('table:aiChat.showUI.skip'))
+                  )
+                }
+              >
+                <SkipForward className="size-4" />
+                {t('table:aiChat.showUI.skip')}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 gap-1.5 px-3 text-xs"
+                disabled={!customAnswer && !isAnswerComplete()}
+                onClick={submitCustomAnswer}
+              >
+                <Check className="size-4" />
+                {t('table:aiChat.showUI.submit')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
     );
   };
 
@@ -2583,114 +4114,114 @@ export const ChatPanel = () => {
       return renderMarkdownText(part.text, `${message.id}-part-${index}`);
     }
 
-    if (part.type === 'task-progress') {
-      const completedCount = part.todos.filter(({ status }) =>
-        ['completed', 'done'].includes(status)
-      ).length;
-      return (
-        <div
-          key={`${message.id}-part-${index}`}
-          className="overflow-hidden rounded-md border border-border bg-background text-xs"
-        >
-          <div className="flex h-8 items-center gap-2 border-b px-3 font-medium">
-            <LayoutGrid className="size-3.5 text-muted-foreground" />
-            <span>
-              {part.title ?? t('table:aiChat.agent.taskProgress.title')} {completedCount}/
-              {part.todos.length}
-            </span>
-            {completedCount === part.todos.length && (
-              <CheckCircle2 className="size-3.5 text-muted-foreground" />
-            )}
-          </div>
-          <div className="space-y-1.5 px-3 py-2">
-            {part.todos.map((todo) => (
-              <div
-                key={`${todo.content}-${todo.status}`}
-                className="flex min-w-0 items-center gap-2 text-muted-foreground"
-              >
-                <Check className="size-3 shrink-0" />
-                <span className="min-w-0 flex-1 truncate">{todo.content}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      );
-    }
-
-    if (part.type === 'ask-user-question') {
-      return (
-        <div
-          key={`${message.id}-part-${index}`}
-          className="rounded-md border border-border bg-background px-3 py-2 text-xs shadow-sm"
-        >
-          <div className="mb-2 font-medium">{part.question}</div>
-          <div className="flex flex-wrap gap-1.5">
-            {part.options?.map((option) => (
-              <Button
-                key={option}
-                type="button"
-                variant="outline"
-                size="xs"
-                onClick={() => {
-                  void respondBaseChatGate(baseId, message.chatId, {
-                    toolCallId: part.toolCallId,
-                    behavior: 'allow',
-                    updatedInput: {
-                      answers: {
-                        [part.question]: option,
-                      },
-                    },
-                  });
-                }}
-              >
-                {option}
-              </Button>
-            ))}
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              onClick={() => {
-                void respondBaseChatGate(baseId, message.chatId, {
-                  toolCallId: part.toolCallId,
-                  behavior: 'deny',
-                  message: t('common:actions.cancel'),
-                });
-              }}
-            >
-              {t('common:actions.cancel')}
-            </Button>
-          </div>
-        </div>
-      );
-    }
-
     return null;
   };
 
   const renderMessageParts = (message: IMessage) => {
     const parts = message.parts ?? [];
+    const latestTaskProgress = getLatestNormalizedPart(parts, normalizeTaskProgressPart);
     const usedToolResultIndexes = new Set<number>();
-    const rendered = parts.map((part, index) => {
-      if (usedToolResultIndexes.has(index)) return null;
-      if (part.type === 'tool-call') {
-        const resultIndex = parts.findIndex(
-          (item, itemIndex) =>
-            itemIndex > index &&
-            item.type === 'tool-result' &&
-            !usedToolResultIndexes.has(itemIndex) &&
-            (!part.toolCallId || item.toolCallId === part.toolCallId)
+    const askUserQuestionShadowResults: AskUserQuestionShadowResults = {
+      toolCallIds: new Set(),
+      outputTexts: new Set(),
+    };
+    const rendered: ReactNode[] = [];
+    const toolRun: RenderedToolItem[] = [];
+    const appendToolRun = () => {
+      if (toolRun.length === 0) return;
+      const items = [...toolRun];
+      if (items.length > TOOL_BURST_VISIBLE_COUNT) {
+        const visibleStart = items.length - TOOL_BURST_VISIBLE_COUNT;
+        rendered.push(
+          <CollapsedToolRun
+            key={`${message.id}-tool-run-${rendered.length}`}
+            label={String(
+              t('table:aiChat.partTool.moreTools', {
+                count: visibleStart,
+                defaultValue: `还有 ${visibleStart} 个工具`,
+              })
+            )}
+            items={items.slice(0, visibleStart)}
+          />
         );
+        rendered.push(
+          <ToolTimelineGroup
+            key={`${message.id}-tool-run-${rendered.length}-visible`}
+            items={items.slice(visibleStart)}
+          />
+        );
+      } else {
+        rendered.push(
+          <ToolTimelineGroup key={`${message.id}-tool-run-${rendered.length}`} items={items} />
+        );
+      }
+      toolRun.length = 0;
+    };
+
+    parts.forEach((part, index) => {
+      if (usedToolResultIndexes.has(index)) return null;
+      const partType = getPartType(part);
+      if (partType === 'step-start') return null;
+      if (normalizeTaskProgressPart(part)) {
+        markToolResultUsed(parts, index, part, usedToolResultIndexes);
+        return null;
+      }
+      if (isTaskProgressToolResult(part)) return null;
+      if (isAskUserQuestionShadowResultPart(part, askUserQuestionShadowResults)) return null;
+      if (partType === 'ask-user-question') {
+        const item = getAskUserQuestionRunItem(message, parts, part, index, usedToolResultIndexes);
+        if (item) toolRun.push(item);
+        return null;
+      }
+      const targetToolPart = normalizeTargetToolPart(part);
+      if (targetToolPart) {
+        rememberTargetAskUserQuestionResult(askUserQuestionShadowResults, targetToolPart);
+        toolRun.push({
+          key: `${message.id}-part-${index}`,
+          node: renderTargetToolPart(message, targetToolPart, index),
+        });
+        return null;
+      }
+      if (part.type === 'tool-call') {
+        const resultIndex = markToolResultUsed(parts, index, part, usedToolResultIndexes);
         const result =
           resultIndex >= 0 && parts[resultIndex]?.type === 'tool-result'
             ? (parts[resultIndex] as ToolResultPart)
             : undefined;
-        if (resultIndex >= 0) usedToolResultIndexes.add(resultIndex);
-        return renderToolPart(message, part, index, result);
+        rememberToolAskUserQuestionResult(askUserQuestionShadowResults, part, result);
+        toolRun.push({
+          key: `${message.id}-part-${index}`,
+          node: renderToolPart(message, part, index, result),
+        });
+        return null;
       }
-      if (part.type === 'tool-result') return renderToolPart(message, part, index);
-      return renderMessagePart(message, part, index);
+      if (part.type === 'tool-result') {
+        rememberToolAskUserQuestionResult(askUserQuestionShadowResults, part);
+        toolRun.push({
+          key: `${message.id}-part-${index}`,
+          node: renderToolPart(message, part, index),
+        });
+        return null;
+      }
+      appendToolRun();
+      rendered.push(renderMessagePart(message, part, index));
+      return null;
     });
+    appendToolRun();
+    if (
+      latestTaskProgress &&
+      message.status !== MessageStatus.Loading &&
+      latestTaskProgress.value.todos.some(({ status }) => isTaskDone(status))
+    ) {
+      rendered.push(
+        renderTaskProgressPanel(
+          latestTaskProgress.value,
+          `${message.id}-part-${latestTaskProgress.index}-task-final`,
+          'mt-2',
+          false
+        )
+      );
+    }
     return rendered.some(Boolean) ? rendered : null;
   };
 
@@ -2701,6 +4232,13 @@ export const ChatPanel = () => {
     return (
       <span
         key={key}
+        data-context-id={context.id}
+        data-context-type={context.type}
+        data-context-label={context.label}
+        data-context-detail={context.detail}
+        data-context-title={context.label}
+        data-context-view-type={context.viewType}
+        data-context-emoji={context.emoji ?? undefined}
         className="mx-0.5 inline-flex h-6 max-w-full items-center gap-1.5 rounded-md border border-foreground/10 bg-foreground/[0.04] px-1.5 align-middle text-xs"
       >
         {context.type === 'table' && context.emoji ? (
@@ -2857,7 +4395,7 @@ export const ChatPanel = () => {
                         )}
                         {message.status === MessageStatus.Failed && (
                           <span className="flex items-center gap-1 text-destructive">
-                            <Square className="size-3" />
+                            <CircleX className="size-3" />
                             {t('common:noun.unknownError')}
                           </span>
                         )}
@@ -3155,6 +4693,52 @@ export const ChatPanel = () => {
     return null;
   }
 
+  const renderThinkingDots = () => (
+    <div
+      aria-label={String(t('table:aiChat.thinking', { defaultValue: '思考中' }))}
+      className="pointer-events-none absolute left-1/2 top-0 z-40 flex h-7 -translate-x-1/2 -translate-y-6 items-center space-x-1"
+    >
+      {[0, 1, 2].map((item) => (
+        <span
+          key={item}
+          className={cn(
+            'size-1 rounded-full',
+            item === 0 && 'animate-[bounce_1s_infinite] bg-primary/30',
+            item === 1 && 'animate-[bounce_1s_infinite_0.2s] bg-primary/50',
+            item === 2 && 'animate-[bounce_1s_infinite_0.4s] bg-primary'
+          )}
+        />
+      ))}
+    </div>
+  );
+
+  const renderComposerProgress = () => {
+    if (!activeLoadingAssistantMessage) return null;
+    const taskPanel = activeTaskProgress
+      ? renderTaskProgressPanel(
+          activeTaskProgress,
+          `${activeLoadingAssistantMessage.id}-composer-task`
+        )
+      : null;
+    const questionPanel = activeQuestion
+      ? renderAskUserQuestionPanel(
+          activeLoadingAssistantMessage,
+          activeQuestion,
+          `${activeLoadingAssistantMessage.id}-composer-question`
+        )
+      : null;
+
+    return (
+      <>
+        {taskPanel && <div className="absolute inset-x-0 bottom-full z-20 mb-1">{taskPanel}</div>}
+        {questionPanel && (
+          <div className="absolute inset-x-0 bottom-full z-30 mb-1">{questionPanel}</div>
+        )}
+        {renderThinkingDots()}
+      </>
+    );
+  };
+
   const renderComposer = () => (
     <div className="shrink-0 bg-background px-4 py-3">
       <input
@@ -3191,97 +4775,110 @@ export const ChatPanel = () => {
           </div>
         </div>
       )}
-      <div
-        ref={composerRef}
-        className={cn(
-          'relative rounded-xl border bg-background px-3 pb-3 pt-2 transition-[border-color,box-shadow] duration-500 focus-within:border-ring/70',
-          isComposerShadowActive &&
-            'shadow-[inset_0_0_0_1px_rgb(15_23_42/0.16),inset_0_0_22px_rgb(15_23_42/0.08)] dark:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.14),inset_0_0_22px_rgb(255_255_255/0.08)]'
-        )}
-      >
-        {renderContextPicker()}
-        <div className="relative">
-          {!input.trim() && contexts.length === 0 && attachments.length === 0 && (
-            <span
-              key={composerPlaceholder}
-              className="pointer-events-none absolute left-0 top-px inline-block h-7 text-sm leading-7 text-muted-foreground/50 motion-safe:duration-300 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1"
-            >
-              {composerPlaceholder}
-            </span>
+      <div className="relative">
+        {renderComposerProgress()}
+        <div
+          ref={composerRef}
+          className={cn(
+            'relative rounded-xl border bg-background px-3 pb-3 pt-2 transition-[border-color,box-shadow] duration-500 focus-within:border-ring/70',
+            isComposerShadowActive &&
+              'shadow-[inset_0_0_0_1px_rgb(15_23_42/0.16),inset_0_0_22px_rgb(15_23_42/0.08)] dark:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.14),inset_0_0_22px_rgb(255_255_255/0.08)]'
           )}
-          <div
-            ref={editorRef}
-            role="textbox"
-            aria-multiline="true"
-            tabIndex={0}
-            contentEditable
-            suppressContentEditableWarning
-            className="max-h-[196px] min-h-[112px] cursor-text select-text overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words pt-px text-sm leading-7 [overflow-wrap:anywhere] focus:outline-none"
-            onInput={handleEditorInput}
-            onKeyDown={handleEditorKeyDown}
-            onKeyUp={saveEditorSelection}
-            onMouseUp={saveEditorSelection}
-            onFocus={saveEditorSelection}
-            onClick={handleEditorClick}
-          />
-        </div>
-        <div className="flex items-center justify-between gap-2 pt-2">
-          <div className="flex min-w-0 items-center gap-1">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="size-7 rounded-md"
-                  title={t('common:actions.add')}
-                >
-                  <Plus className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="start"
-                onCloseAutoFocus={(event) => {
-                  if (!keepEditorFocusAfterMenuCloseRef.current) return;
-                  keepEditorFocusAfterMenuCloseRef.current = false;
-                  event.preventDefault();
-                  const range = savedEditorRangeRef.current;
-                  if (range && isRangeInEditor(range)) {
-                    window.requestAnimationFrame(() => focusEditorRange(range.cloneRange()));
-                  }
-                }}
+        >
+          {renderContextPicker()}
+          <div className="relative">
+            {!input.trim() && contexts.length === 0 && attachments.length === 0 && (
+              <span
+                key={composerPlaceholder}
+                className="pointer-events-none absolute left-0 top-px inline-block h-7 text-sm leading-7 text-muted-foreground/50 motion-safe:duration-300 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1"
               >
-                <DropdownMenuItem
-                  className="cursor-pointer"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Paperclip className="mr-2 size-4" />
-                  {t('table:aiChat.addAttachment')}
-                </DropdownMenuItem>
-                <DropdownMenuItem className="cursor-pointer" onClick={insertContextMentionTrigger}>
-                  <AtSign className="mr-2 size-4" />
-                  {t('table:aiChat.context.button')}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                {composerPlaceholder}
+              </span>
+            )}
+            <div
+              ref={editorRef}
+              role="textbox"
+              aria-multiline="true"
+              tabIndex={0}
+              contentEditable
+              suppressContentEditableWarning
+              className="max-h-[196px] min-h-[112px] cursor-text select-text overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words pt-px text-sm leading-7 text-foreground caret-foreground [overflow-wrap:anywhere] focus:outline-none"
+              onInput={handleEditorInput}
+              onKeyDown={handleEditorKeyDown}
+              onKeyUp={saveEditorSelection}
+              onMouseUp={saveEditorSelection}
+              onFocus={saveEditorSelection}
+              onClick={handleEditorClick}
+              onCopy={handleEditorCopy}
+              onPaste={handleEditorPaste}
+            />
           </div>
-          <div className="ml-auto flex items-center gap-1">
-            {renderModelPicker()}
-            <Button
-              size="icon"
-              className="size-7 rounded-full"
-              disabled={
-                !selectedModel?.key ||
-                isAttachmentUploading ||
-                (!isGenerating &&
-                  !input.trim() &&
-                  attachments.length === 0 &&
-                  contexts.length === 0)
-              }
-              onClick={() => (isGenerating ? stopGenerating() : void sendMessage())}
-              title={isGenerating ? t('common:actions.cancel') : t('common:actions.submit')}
-            >
-              {isGenerating ? <Square className="size-4" /> : <ArrowUp className="size-4" />}
-            </Button>
+          <div className="flex items-center justify-between gap-2 pt-2">
+            <div className="flex min-w-0 items-center gap-1">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="size-7 rounded-md"
+                    title={t('common:actions.add')}
+                  >
+                    <Plus className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="start"
+                  onCloseAutoFocus={(event) => {
+                    if (!keepEditorFocusAfterMenuCloseRef.current) return;
+                    keepEditorFocusAfterMenuCloseRef.current = false;
+                    event.preventDefault();
+                    const range = savedEditorRangeRef.current;
+                    if (range && isRangeInEditor(range)) {
+                      window.requestAnimationFrame(() => focusEditorRange(range.cloneRange()));
+                    }
+                  }}
+                >
+                  <DropdownMenuItem
+                    className="cursor-pointer"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Paperclip className="mr-2 size-4" />
+                    {t('table:aiChat.addAttachment')}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="cursor-pointer"
+                    onClick={insertContextMentionTrigger}
+                  >
+                    <AtSign className="mr-2 size-4" />
+                    {t('table:aiChat.context.button')}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+            <div className="ml-auto flex items-center gap-1">
+              {renderModelPicker()}
+              <Button
+                size="icon"
+                className="size-7 rounded-full"
+                disabled={
+                  !selectedModel?.key ||
+                  isAttachmentUploading ||
+                  (!isGenerating &&
+                    !input.trim() &&
+                    attachments.length === 0 &&
+                    contexts.length === 0)
+                }
+                onClick={() => (isGenerating ? stopGenerating() : void sendMessage())}
+                aria-label={isGenerating ? 'Stop' : 'Send'}
+                title={isGenerating ? t('common:actions.cancel') : t('common:actions.submit')}
+              >
+                {isGenerating ? (
+                  <div className="size-2.5 rounded-[1.5px] bg-primary-foreground" />
+                ) : (
+                  <ArrowUp className="size-4" />
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -3418,6 +5015,7 @@ export const ChatPanel = () => {
         bounds="window"
         dragHandleClassName="chat-panel-drag-handle"
         cancel="button,input,textarea,[contenteditable=true],[role=menuitem]"
+        resizeHandleStyles={FLOATING_RESIZE_HANDLE_STYLES}
         className="z-50 rounded-md border bg-background shadow-2xl"
         onDragStop={(_, data) =>
           setFloatingRect({

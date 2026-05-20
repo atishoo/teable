@@ -946,7 +946,17 @@
     "title": "Asistente de IA",
     "agent": {
       "askUserQuestion": {
-        "otherPlaceholder": "O escribe tu respuesta…"
+        "chooseAnswer": "Elige una respuesta",
+        "otherPlaceholder": "O escribe tu respuesta…",
+        "asked": "Preguntado",
+        "skipped": "Omitido",
+        "question": "Pregunta",
+        "answer": "Respuesta",
+        "timedOut": "Se agotó el tiempo esperando la respuesta del usuario",
+        "waiting": "Esperando la elección del usuario",
+        "noAnswer": "No se recibió respuesta",
+        "previousQuestion": "Pregunta anterior",
+        "nextQuestion": "Siguiente pregunta"
       }
     },
     "tool": {
@@ -973,6 +983,10 @@
     },
     "action": {
       "locateResource": "Localizar"
+    },
+    "showUI": {
+      "skip": "Omitir",
+      "submit": "Enviar"
     },
     "newChat": "Nuevo chat",
     "expand": "Expandir",

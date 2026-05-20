@@ -957,7 +957,17 @@
     "title": "Assistente AI",
     "agent": {
       "askUserQuestion": {
-        "otherPlaceholder": "Oppure digita la tua risposta…"
+        "chooseAnswer": "Scegli una risposta",
+        "otherPlaceholder": "Oppure digita la tua risposta…",
+        "asked": "Chiesto",
+        "skipped": "Saltato",
+        "question": "Domanda",
+        "answer": "Risposta",
+        "timedOut": "Tempo scaduto in attesa della risposta dell'utente",
+        "waiting": "In attesa della scelta dell'utente",
+        "noAnswer": "Nessuna risposta ricevuta",
+        "previousQuestion": "Domanda precedente",
+        "nextQuestion": "Domanda successiva"
       }
     },
     "tool": {
@@ -984,6 +994,10 @@
     },
     "action": {
       "locateResource": "Localizza"
+    },
+    "showUI": {
+      "skip": "Salta",
+      "submit": "Invia"
     },
     "newChat": "Nuovo Chat",
     "expand": "Espandi",

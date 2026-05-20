@@ -932,7 +932,17 @@
     "title": "ИИ-ассистент",
     "agent": {
       "askUserQuestion": {
-        "otherPlaceholder": "Или введите ответ…"
+        "chooseAnswer": "Выберите ответ",
+        "otherPlaceholder": "Или введите ответ…",
+        "asked": "Задано",
+        "skipped": "Пропущено",
+        "question": "Вопрос",
+        "answer": "Ответ",
+        "timedOut": "Истекло время ожидания ответа пользователя",
+        "waiting": "Ожидание выбора пользователя",
+        "noAnswer": "Ответ не получен",
+        "previousQuestion": "Предыдущий вопрос",
+        "nextQuestion": "Следующий вопрос"
       }
     },
     "tool": {
@@ -959,6 +969,10 @@
     },
     "action": {
       "locateResource": "Найти"
+    },
+    "showUI": {
+      "skip": "Пропустить",
+      "submit": "Отправить"
     },
     "newChat": "Новый чат",
     "expand": "Развернуть",

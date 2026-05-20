@@ -931,7 +931,17 @@
     "title": "AIアシスタント",
     "agent": {
       "askUserQuestion": {
-        "otherPlaceholder": "または回答を入力…"
+        "chooseAnswer": "回答を選択",
+        "otherPlaceholder": "または回答を入力…",
+        "asked": "質問済み",
+        "skipped": "スキップ済み",
+        "question": "質問",
+        "answer": "回答",
+        "timedOut": "ユーザーの回答待ちがタイムアウトしました",
+        "waiting": "ユーザーの選択を待機中",
+        "noAnswer": "回答を受信していません",
+        "previousQuestion": "前の質問",
+        "nextQuestion": "次の質問"
       }
     },
     "tool": {
@@ -958,6 +968,10 @@
     },
     "action": {
       "locateResource": "検索"
+    },
+    "showUI": {
+      "skip": "スキップ",
+      "submit": "送信"
     },
     "newChat": "新しいチャット",
     "expand": "展開",

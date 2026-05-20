@@ -951,7 +951,17 @@
     "title": "ШІ-асистент",
     "agent": {
       "askUserQuestion": {
-        "otherPlaceholder": "Або введіть відповідь…"
+        "chooseAnswer": "Виберіть відповідь",
+        "otherPlaceholder": "Або введіть відповідь…",
+        "asked": "Запитано",
+        "skipped": "Пропущено",
+        "question": "Питання",
+        "answer": "Відповідь",
+        "timedOut": "Час очікування відповіді користувача минув",
+        "waiting": "Очікування вибору користувача",
+        "noAnswer": "Відповідь не отримано",
+        "previousQuestion": "Попереднє питання",
+        "nextQuestion": "Наступне питання"
       }
     },
     "tool": {
@@ -978,6 +988,10 @@
     },
     "action": {
       "locateResource": "Знайти"
+    },
+    "showUI": {
+      "skip": "Пропустити",
+      "submit": "Надіслати"
     },
     "newChat": "Новий чат",
     "expand": "Розгорнути",

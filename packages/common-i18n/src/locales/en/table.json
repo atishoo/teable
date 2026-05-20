@@ -1221,9 +1221,15 @@
   "aiChat": {
     "agent": {
       "askUserQuestion": {
+        "chooseAnswer": "Choose an answer",
         "otherPlaceholder": "Or type your answer…",
         "asked": "Asked",
         "skipped": "Skipped",
+        "question": "Question",
+        "answer": "Answer",
+        "timedOut": "Timed out waiting for user answer",
+        "waiting": "Waiting for user choice",
+        "noAnswer": "No answer received",
         "previousQuestion": "Previous question",
         "nextQuestion": "Next question"
       },

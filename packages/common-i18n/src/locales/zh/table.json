@@ -1223,9 +1223,15 @@
   "aiChat": {
     "agent": {
       "askUserQuestion": {
+        "chooseAnswer": "选择答案",
         "otherPlaceholder": "或输入自定义回答…",
         "asked": "询问",
         "skipped": "已跳过",
+        "question": "问题",
+        "answer": "答案",
+        "timedOut": "等待用户回答超时",
+        "waiting": "等待用户选择",
+        "noAnswer": "没有收到回答",
         "previousQuestion": "上一个问题",
         "nextQuestion": "下一个问题"
       },
