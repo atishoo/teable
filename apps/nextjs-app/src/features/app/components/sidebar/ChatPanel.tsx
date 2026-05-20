@@ -917,6 +917,9 @@ const isTaskDone = (status: string) =>
 const isTaskRunning = (status: string) =>
   ['active', 'in_progress', 'running', 'input-available'].includes(status);
 
+const isTaskPending = (status: string) =>
+  ['pending', 'todo', 'queued', 'waiting', 'input-required'].includes(status);
+
 const isTaskProgressToolResult = (part: IAiChatMessagePart) =>
   part.type === 'tool-result' &&
   typeof part.output === 'string' &&
@@ -4054,6 +4057,7 @@ export const ChatPanel = () => {
             {task.todos.map((todo, todoIndex) => {
               const done = isTaskDone(todo.status);
               const running = isLive && isTaskRunning(todo.status);
+              const pending = isLive && isTaskPending(todo.status);
               const label = running ? todo.activeForm || todo.content : todo.content;
               return (
                 <div
@@ -4065,6 +4069,8 @@ export const ChatPanel = () => {
                       <Check className="size-3 shrink-0 text-muted-foreground" />
                     ) : running ? (
                       <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
+                    ) : pending ? (
+                      <Clock3 className="size-3 shrink-0 text-muted-foreground" />
                     ) : (
                       <Ban className="size-3 shrink-0 text-muted-foreground" />
                     )}
@@ -4508,7 +4514,10 @@ export const ChatPanel = () => {
         viewportRef={messageViewportRef}
         onScroll={updateScrollBottomState}
       >
-        <div className="w-full min-w-0 space-y-5 p-4">
+        <div
+          className="w-full min-w-0 space-y-5 p-4"
+          style={{ paddingBottom: activeTaskProgress ? 192 : undefined }}
+        >
           {messages.length === 0 && (
             <div className="flex min-h-[360px] flex-col items-center justify-center px-4 text-center">
               <Cuppy className="mb-5 size-14 text-muted-foreground" />
