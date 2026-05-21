@@ -8,7 +8,6 @@ import {
 } from '@teable/openapi';
 import type { ISettingVo } from '@teable/openapi';
 import {
-  Badge,
   Button,
   Card,
   CardContent,
@@ -76,13 +75,6 @@ const SandboxAgentPage: NextPageWithLayout<ISandboxAgentPageProps> = ({ settingS
 
   const runtime = status?.runtimeConfig;
   const available = Boolean(setting?.sandboxAgentAvailable);
-  const connectionBadgeText = isLoading
-    ? '正在检测'
-    : status?.reachable
-      ? '连接正常'
-      : available
-        ? '连接异常'
-        : '未接入沙箱';
 
   return (
     <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
@@ -111,11 +103,6 @@ const SandboxAgentPage: NextPageWithLayout<ISandboxAgentPageProps> = ({ settingS
                 {isLoading ? '检查中' : status?.reachable ? '在线' : '不可达'}
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <Badge variant={isLoading || status?.reachable ? 'secondary' : 'destructive'}>
-                {connectionBadgeText}
-              </Badge>
-            </CardContent>
           </Card>
 
           <Card>
