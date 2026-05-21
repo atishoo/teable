@@ -106,7 +106,7 @@ const SandboxAgentPage: NextPageWithLayout<ISandboxAgentPageProps> = ({ settingS
             </CardHeader>
             <CardContent>
               <Badge variant={status?.reachable ? 'secondary' : 'destructive'}>
-                {available ? '已配置地址' : '未配置地址'}
+                {available ? '服务地址已配置' : '服务地址未配置'}
               </Badge>
             </CardContent>
           </Card>
