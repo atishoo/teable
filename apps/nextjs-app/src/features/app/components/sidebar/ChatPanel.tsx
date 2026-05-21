@@ -1599,6 +1599,7 @@ export const ChatPanel = () => {
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const [loadingElapsedNow, setLoadingElapsedNow] = useState(Date.now());
   const [expandedToolRunKeys, setExpandedToolRunKeys] = useState<Set<string>>(new Set());
+  const [composerProgressHeight, setComposerProgressHeight] = useState(0);
   const controllerRef = useRef<AbortController | null>(null);
   const manualStopRef = useRef(false);
   const messageEndRef = useRef<HTMLDivElement>(null);
@@ -1609,6 +1610,9 @@ export const ChatPanel = () => {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const savedEditorRangeRef = useRef<Range>();
   const messageViewportRef = useRef<HTMLDivElement>(null);
+  const taskProgressPanelRef = useRef<HTMLDivElement | null>(null);
+  const questionProgressPanelRef = useRef<HTMLDivElement | null>(null);
+  const progressMeasureFrameRef = useRef<number | null>(null);
   const filePreviewDialogRef = useRef<IFilePreviewDialogRef>(null);
   const attachmentDragDepthRef = useRef(0);
   const attachmentObjectUrlsRef = useRef(new Set<string>());
@@ -1720,6 +1724,68 @@ export const ChatPanel = () => {
     setGateAnswer('');
     setGateAnswerSelections({});
   }, [activeQuestion?.question, activeQuestion?.toolCallId]);
+
+  const measureComposerProgressHeight = useCallback(() => {
+    if (progressMeasureFrameRef.current) {
+      window.cancelAnimationFrame(progressMeasureFrameRef.current);
+    }
+
+    progressMeasureFrameRef.current = window.requestAnimationFrame(() => {
+      progressMeasureFrameRef.current = null;
+      const taskHeight = taskProgressPanelRef.current?.getBoundingClientRect().height ?? 0;
+      const questionHeight = questionProgressPanelRef.current?.getBoundingClientRect().height ?? 0;
+      const nextHeight = Math.ceil(Math.max(taskHeight, questionHeight));
+      setComposerProgressHeight((previous) => (previous === nextHeight ? previous : nextHeight));
+    });
+  }, []);
+
+  const setTaskProgressPanelNode = useCallback(
+    (node: HTMLDivElement | null) => {
+      taskProgressPanelRef.current = node;
+      if (node) {
+        measureComposerProgressHeight();
+      }
+    },
+    [measureComposerProgressHeight]
+  );
+
+  const setQuestionProgressPanelNode = useCallback(
+    (node: HTMLDivElement | null) => {
+      questionProgressPanelRef.current = node;
+      if (node) {
+        measureComposerProgressHeight();
+      }
+    },
+    [measureComposerProgressHeight]
+  );
+
+  useEffect(() => {
+    if (!activeTaskProgress && !activeQuestion) {
+      setComposerProgressHeight(0);
+      return;
+    }
+
+    measureComposerProgressHeight();
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined'
+        ? undefined
+        : new ResizeObserver(measureComposerProgressHeight);
+    if (taskProgressPanelRef.current) {
+      resizeObserver?.observe(taskProgressPanelRef.current);
+    }
+    if (questionProgressPanelRef.current) {
+      resizeObserver?.observe(questionProgressPanelRef.current);
+    }
+
+    return () => {
+      if (progressMeasureFrameRef.current) {
+        window.cancelAnimationFrame(progressMeasureFrameRef.current);
+        progressMeasureFrameRef.current = null;
+      }
+      resizeObserver?.disconnect();
+    };
+  }, [activeTaskProgress, activeQuestion, measureComposerProgressHeight]);
+
   const attachmentMap = useMemo(
     () => new Map(attachments.map((attachment) => [attachment.id, attachment])),
     [attachments]
@@ -4510,10 +4576,7 @@ export const ChatPanel = () => {
         viewportRef={messageViewportRef}
         onScroll={updateScrollBottomState}
       >
-        <div
-          className="w-full min-w-0 space-y-5 p-4"
-          style={{ paddingBottom: activeTaskProgress ? 192 : undefined }}
-        >
+        <div className="w-full min-w-0 space-y-5 p-4">
           {messages.length === 0 && (
             <div className="flex min-h-[360px] flex-col items-center justify-center px-4 text-center">
               <Cuppy className="mb-5 size-14 text-muted-foreground" />
@@ -4943,16 +5006,36 @@ export const ChatPanel = () => {
           `${activeLoadingAssistantMessage.id}-composer-question`
         )
       : null;
+    const hasProgressPanel = Boolean(taskPanel || questionPanel);
+    const fallbackHeight = questionPanel ? 260 : taskPanel ? 160 : 0;
+    const progressHeight = composerProgressHeight || fallbackHeight;
+
+    if (!hasProgressPanel) return null;
 
     return (
-      <>
-        {taskPanel && <div className="absolute inset-x-0 bottom-full z-20 mb-1">{taskPanel}</div>}
-        {questionPanel && (
-          <div className="absolute inset-x-0 bottom-full z-30 mb-1">{questionPanel}</div>
-        )}
-        {renderThinkingDots()}
-      </>
+      <div
+        className="relative shrink-0 px-4"
+        style={{ height: progressHeight ? progressHeight + 4 : undefined }}
+      >
+        <div className="relative h-full">
+          {taskPanel && (
+            <div ref={setTaskProgressPanelNode} className="absolute inset-x-0 bottom-1 z-20">
+              {taskPanel}
+            </div>
+          )}
+          {questionPanel && (
+            <div ref={setQuestionProgressPanelNode} className="absolute inset-x-0 bottom-1 z-30">
+              {questionPanel}
+            </div>
+          )}
+        </div>
+      </div>
     );
+  };
+
+  const renderComposerThinking = () => {
+    if (!activeLoadingAssistantMessage) return null;
+    return renderThinkingDots();
   };
 
   const renderComposer = () => (
@@ -4992,7 +5075,7 @@ export const ChatPanel = () => {
         </div>
       )}
       <div className="relative">
-        {renderComposerProgress()}
+        {renderComposerThinking()}
         <div
           ref={composerRef}
           className={cn(
@@ -5189,6 +5272,7 @@ export const ChatPanel = () => {
           </Button>
         </div>
         {renderMessages()}
+        {renderComposerProgress()}
         {renderComposer()}
       </aside>
     </FilePreviewProvider>

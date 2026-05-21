@@ -240,6 +240,7 @@ import {
   parseModelKey,
 } from '@/features/app/blocks/admin/setting/components/ai-config/utils';
 import { BaseNodeMore } from '@/features/app/blocks/base/base-side-bar/BaseNodeMore';
+import { useAI } from '@/features/app/hooks/useAI';
 import { useDisableAIAction } from '@/features/app/hooks/useDisableAIAction';
 
 export interface WorkFlowPanelRef {
@@ -9181,6 +9182,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
   const tr = usePanelTranslate();
   const queryClient = useQueryClient();
   const { aiAutomation: aiAutomationEnabled } = useDisableAIAction();
+  const { chatEnable: aiChatEnabled } = useAI();
   const [workflowName, setWorkflowName] = useState('');
   const [nodes, setNodes] = useState<IWorkflowNode[]>([]);
   const [edges, setEdges] = useState<IWorkflowEdge[]>([]);
@@ -10386,6 +10388,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
     const updateScriptDependencies = (value: ScriptDependency[]) =>
       updateNodeConfig('dependencies', value.length ? value : undefined);
     const configureScriptWithAI = () => {
+      if (!aiChatEnabled) return;
       if (typeof window === 'undefined') return;
       const label = `${scriptNodeIndex}. ${getNodeLabel(selectedNode, tr)}`;
       window.dispatchEvent(
@@ -10865,6 +10868,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
                 <Button
                   className="h-9 w-full justify-center gap-2 font-medium"
                   variant="outline"
+                  disabled={!aiChatEnabled}
                   onClick={configureScriptWithAI}
                 >
                   <MessageSquareCode className="size-4" />
@@ -10873,7 +10877,12 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
               ) : (
                 <button
                   type="button"
-                  className="w-full rounded-md border bg-background p-4 text-left transition-colors hover:bg-accent/40 active:bg-accent"
+                  className={cn(
+                    'w-full rounded-md border bg-background p-4 text-left transition-colors hover:bg-accent/40 active:bg-accent',
+                    !aiChatEnabled &&
+                      'cursor-not-allowed opacity-60 hover:bg-background active:bg-background'
+                  )}
+                  disabled={!aiChatEnabled}
                   onClick={configureScriptWithAI}
                 >
                   <div className="flex items-start gap-3">
