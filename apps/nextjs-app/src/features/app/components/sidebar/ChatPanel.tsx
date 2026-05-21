@@ -739,8 +739,18 @@ const isAskUserQuestionTimeout = (output: unknown) =>
       getStringValue(output.message)?.toLowerCase() === 'gate timeout')) ||
   (typeof output === 'string' && output.toLowerCase().includes('gate timeout'));
 
+const isAskUserQuestionSkipText = (value: unknown) => {
+  if (typeof value !== 'string') return false;
+  return ['跳过', '已跳过', 'skip', 'skipped', 'skipped by user'].includes(
+    value.trim().toLowerCase()
+  );
+};
+
 const isAskUserQuestionSkipped = (output: unknown) =>
-  isRecord(output) && output.status === 'skipped';
+  (isRecord(output) && output.status === 'skipped') || isAskUserQuestionSkipText(output);
+
+const isAskUserQuestionUnfinished = (output: unknown) =>
+  isAskUserQuestionTimeout(output) || isAskUserQuestionSkipped(output);
 
 const getAskUserQuestionAnswerFromText = (text: string) => {
   const quotedAnswers = Array.from(text.matchAll(/"[^"]+"\s*=\s*"([^"]+)"/g)).map(
@@ -758,13 +768,6 @@ const isAskUserQuestionProtocolOutput = (value: unknown) =>
   typeof value.status === 'string' &&
   ['answered', 'skipped', 'timeout'].includes(value.status) &&
   typeof value.question === 'string';
-
-const isAskUserQuestionSkipText = (value: unknown) => {
-  if (typeof value !== 'string') return false;
-  return ['跳过', '已跳过', 'skip', 'skipped', 'skipped by user'].includes(
-    value.trim().toLowerCase()
-  );
-};
 
 const isResolvedAskUserQuestionOutput = (value: unknown) =>
   isAskUserQuestionAnswerText(value) ||
@@ -3744,9 +3747,6 @@ export const ChatPanel = () => {
         defaultValue: 'Timed out waiting for user answer',
       })
     );
-    const waitingLabel = String(
-      t('table:aiChat.agent.askUserQuestion.waiting', { defaultValue: 'Waiting for user choice' })
-    );
     const noAnswerLabel = String(
       t('table:aiChat.agent.askUserQuestion.noAnswer', { defaultValue: 'No answer received' })
     );
@@ -3766,8 +3766,8 @@ export const ChatPanel = () => {
       lines.push(String(t('table:aiChat.agent.askUserQuestion.skipped')));
     } else if (answer) {
       lines.push(`${answerLabel}: ${answer}`);
-    } else {
-      lines.push(`${answerLabel}: ${isMessageDone ? noAnswerLabel : waitingLabel}`);
+    } else if (isMessageDone) {
+      lines.push(`${answerLabel}: ${noAnswerLabel}`);
     }
 
     return lines.join('\n');
@@ -3846,14 +3846,12 @@ export const ChatPanel = () => {
     const body = getToolPartBody(message, part, isQuestionTool, result);
     const isMissingResult =
       part.type === 'tool-call' && !result && message.status !== MessageStatus.Loading;
-    const hasResult = Boolean(
-      isQuestionTool || result || part.type === 'tool-result' || isMissingResult
-    );
+    const hasResult = Boolean(result || part.type === 'tool-result' || isMissingResult);
     const hasError = Boolean(
       isMissingResult ||
         result?.error ||
         (part.type === 'tool-result' && part.error) ||
-        (isQuestionTool && isAskUserQuestionTimeout(questionOutput))
+        (isQuestionTool && isAskUserQuestionUnfinished(questionOutput))
     );
     const meta = getToolPartMeta(part, isQuestionTool);
 
@@ -3888,7 +3886,7 @@ export const ChatPanel = () => {
           result?.error,
           message.status !== MessageStatus.Loading
         )}
-        hasError={Boolean(result?.error || isAskUserQuestionTimeout(output) || isMissingResult)}
+        hasError={Boolean(result?.error || isAskUserQuestionUnfinished(output) || isMissingResult)}
         hasResult={Boolean(result || isMissingResult)}
         icon={MessageCircleQuestion}
         title={getAskUserQuestionToolTitle(input)}
@@ -3918,8 +3916,6 @@ export const ChatPanel = () => {
         ? (parts[resultIndex] as ToolResultPart)
         : undefined;
     if (resultIndex >= 0) usedToolResultIndexes.add(resultIndex);
-    if (!result && message.status === MessageStatus.Loading) return;
-
     return {
       key: `${message.id}-part-${index}`,
       node: renderAskUserQuestionMessagePart(message, question, index, result),
@@ -3984,13 +3980,13 @@ export const ChatPanel = () => {
       part.output != null ||
       Boolean(part.error);
     const isMissingResult = message.status !== MessageStatus.Loading && !hasExplicitResult;
-    const hasResult = isQuestionTool || hasExplicitResult || isMissingResult;
+    const hasResult = Boolean(hasExplicitResult || isMissingResult);
     const hasError =
       isMissingResult ||
       Boolean(part.error) ||
       part.state === 'error' ||
       part.state === 'output-error' ||
-      (isQuestionTool && isAskUserQuestionTimeout(part.output));
+      (isQuestionTool && isAskUserQuestionUnfinished(part.output));
     const meta = getTargetToolMeta(part, isQuestionTool);
 
     return (
