@@ -1157,8 +1157,12 @@ export class AiService {
       '- The available logic node is: condition.',
       '- Do not mention scheduledTime or emailReceived as supported nodes in this project.',
       '- For AI-created automation, prefer creating the trigger first and then using a script action for custom logic. Use createRecord/getRecords/updateRecord/sendEmail/aiGenerate/httpRequest only when the user explicitly asks for visual primitive nodes.',
-      '- For script actions, config.code should export a default async function or define async function run(ctx). The script can use input, ctx, output.set(key, value), fetch, process.env.PUBLIC_ORIGIN, and process.env.AUTOMATION_TOKEN.',
+      '- For script actions, config.code must be top-level JavaScript statements. Do not use export default, module.exports, or wrap the script in async function(ctx). The script can use input, ctx, output.set(key, value), fetch, process.env.PUBLIC_ORIGIN, and process.env.AUTOMATION_TOKEN.',
+      '- In script actions, read trigger output through input.trigger. Do not hardcode trigger node ids for the trigger payload. If previous action outputs are needed, run teable automation get-script-input and copy exact keys.',
+      '- Keep generated automation script source ASCII unless the user explicitly requires localized literal text. After generate-script, fetch the workflow and verify the saved script is valid JavaScript, uses exact field ids, and contains no replacement or control characters before testing or activating.',
       '- Before creating or updating automation scripts with Teable CLI, read teable automation --help and the specific command help, then use the documented setup-trigger/generate-script/test-node flow.',
+      '- Before activating an automation, modifying real records for verification, or sending real external/email side effects outside a user-approved test, ask the user with AskUserQuestion.',
+      '- If the user wants a field to auto-generate content from other fields with AI, prefer AI field configuration instead of automation. Read teable get-ai-config --help and teable get-ai-config, create or update the target field with aiConfig, then call teable trigger-ai-fill to verify generation. Only create an automation for this scenario when the user explicitly asks for workflow nodes.',
       '- For record API operations, always use field ids, set fieldKeyType to id, and prefer typecast true for create/update.',
       '- For statistics, prefer the table aggregation API instead of fetching all records and aggregating manually.',
     ].join('\n');
