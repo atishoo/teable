@@ -92,8 +92,11 @@ export class SettingOpenApiService {
       this.normalizeInstanceProviderNames(updateSettingRo.aiConfig as Record<string, unknown>);
     }
     const setting = await this.settingService.updateSetting(updateSettingRo);
-    if (updateSettingRo.sandboxAgentConfig) {
-      await syncSandboxAgentConfig(getSandboxAgentUrl(), updateSettingRo.sandboxAgentConfig);
+    if (Object.prototype.hasOwnProperty.call(updateSettingRo, SettingKey.SANDBOX_AGENT_CONFIG)) {
+      await syncSandboxAgentConfig(
+        getSandboxAgentUrl(),
+        updateSettingRo.sandboxAgentConfig ?? undefined
+      );
     }
     return this.withSandboxAgentAvailability(setting);
   }

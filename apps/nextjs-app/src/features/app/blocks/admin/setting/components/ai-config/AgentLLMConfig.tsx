@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from '@teable/ui-lib/shadcn';
 import { toast } from '@teable/ui-lib/shadcn/ui/sonner';
-import { CheckCircle2, Loader2, Plus, Trash2 } from 'lucide-react';
+import { CheckCircle2, Loader2, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 type SandboxAgentConfig = NonNullable<ISettingVo['sandboxAgentConfig']>;
@@ -24,15 +24,11 @@ type SandboxAgentModel = NonNullable<SandboxAgentConfig['models']>[string][numbe
 
 interface IAgentLLMConfigProps {
   sandboxAgentConfig: ISettingVo['sandboxAgentConfig'];
-  setSandboxAgentConfig: (data: SandboxAgentConfig) => Promise<void>;
+  setSandboxAgentConfig: (data: SandboxAgentConfig | null) => Promise<void>;
 }
 
-const DEFAULT_MODEL: SandboxAgentModel = {
-  id: 'glm-5.1',
-  name: 'GLM-5.1',
-};
-
 const EFFORT_OPTIONS = [
+  { value: 'auto', label: '自动' },
   { value: 'low', label: '低' },
   { value: 'medium', label: '中' },
   { value: 'high', label: '高' },
@@ -43,7 +39,7 @@ type AgentEffort = (typeof EFFORT_OPTIONS)[number]['value'];
 const getModels = (config: ISettingVo['sandboxAgentConfig']) => {
   const agent = config?.defaultAgent ?? 'claude';
   const models = config?.models?.[agent] ?? config?.models?.claude;
-  return models?.length ? models : [DEFAULT_MODEL];
+  return models?.length ? models : [];
 };
 
 const getModelKey = (model: SandboxAgentModel) => model.modelKey ?? model.id;
@@ -60,9 +56,9 @@ export const AgentLLMConfig = ({
   const [streamIdleTimeout, setStreamIdleTimeout] = useState('900');
   const [maxIdleTime, setMaxIdleTime] = useState('1800');
   const [vcpus, setVcpus] = useState('2');
-  const [models, setModels] = useState<SandboxAgentModel[]>([DEFAULT_MODEL]);
-  const [defaultModel, setDefaultModel] = useState(DEFAULT_MODEL.id);
-  const [defaultEffort, setDefaultEffort] = useState<AgentEffort>('high');
+  const [models, setModels] = useState<SandboxAgentModel[]>([]);
+  const [defaultModel, setDefaultModel] = useState('');
+  const [defaultEffort, setDefaultEffort] = useState<AgentEffort>('auto');
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testedSignature, setTestedSignature] = useState('');
@@ -77,10 +73,12 @@ export const AgentLLMConfig = ({
     setMaxIdleTime(String(sandboxAgentConfig?.maxIdleTime ?? 1800));
     setVcpus(String(sandboxAgentConfig?.vcpus ?? 2));
     setModels(nextModels);
-    setDefaultModel(sandboxAgentConfig?.defaultModel ?? getModelKey(nextModels[0]));
+    setDefaultModel(
+      sandboxAgentConfig?.defaultModel ?? (nextModels[0] ? getModelKey(nextModels[0]) : '')
+    );
     const effort = sandboxAgentConfig?.defaultEffort;
     setDefaultEffort(
-      EFFORT_OPTIONS.some((option) => option.value === effort) ? (effort as AgentEffort) : 'high'
+      EFFORT_OPTIONS.some((option) => option.value === effort) ? (effort as AgentEffort) : 'auto'
     );
     setTestedSignature('');
     setTestMessage('');
@@ -204,6 +202,20 @@ export const AgentLLMConfig = ({
       toast.success('Agent LLM 配置已保存并同步到沙箱');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Agent LLM 配置保存失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleClear = async () => {
+    setSaving(true);
+    try {
+      await setSandboxAgentConfig(null);
+      setTestedSignature('');
+      setTestMessage('');
+      toast.success('Agent LLM 配置已清除并同步到沙箱');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Agent LLM 配置清除失败');
     } finally {
       setSaving(false);
     }
@@ -341,13 +353,17 @@ export const AgentLLMConfig = ({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    disabled={models.length === 1}
                     onClick={() => removeModel(index)}
                   >
                     <Trash2 className="size-4" />
                   </Button>
                 </div>
               ))}
+              {!models.length && (
+                <div className="rounded-md border border-dashed px-3 py-4 text-sm text-muted-foreground">
+                  暂未配置模型，添加模型并测试通过后才能启用 AI 聊天。
+                </div>
+              )}
             </div>
           </div>
 
@@ -356,7 +372,7 @@ export const AgentLLMConfig = ({
               <Label htmlFor="agent-default-model">默认模型</Label>
               <Select name="agentDefaultModel" value={defaultModel} onValueChange={setDefaultModel}>
                 <SelectTrigger id="agent-default-model" aria-label="默认模型">
-                  <SelectValue />
+                  <SelectValue placeholder="请选择默认模型" />
                 </SelectTrigger>
                 <SelectContent>
                   {modelOptions.map((model) => (
@@ -368,6 +384,15 @@ export const AgentLLMConfig = ({
               </Select>
             </div>
             <div className="flex items-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={testing || saving || !sandboxAgentConfig}
+                onClick={handleClear}
+              >
+                <RotateCcw className="mr-2 size-4" />
+                清除配置
+              </Button>
               <Button
                 type="button"
                 variant="outline"

@@ -330,7 +330,7 @@ export const updateSettingRoSchema = z.object({
   appConfig: appConfigSchema.optional(),
   brandName: z.string().optional(),
   canaryConfig: canaryConfigSchema.optional(),
-  sandboxAgentConfig: sandboxAgentConfigSchema.optional(),
+  sandboxAgentConfig: sandboxAgentConfigSchema.nullable().optional(),
   notifyMailTransportConfig: mailTransportConfigSchema.nullable().optional(),
   automationMailTransportConfig: mailTransportConfigSchema.nullable().optional(),
   imConfig: imConfigSchema.nullable().optional(),
