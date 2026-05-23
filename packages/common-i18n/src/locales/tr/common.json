@@ -802,6 +802,17 @@
               "fetch": "HTTP API çağır"
             }
           },
+          "flowChartFallback": {
+            "start": "Başlat",
+            "readInput": "Girdiyi oku",
+            "checkCondition": "Koşulu kontrol et",
+            "iterateData": "Verileri yinele",
+            "buildPayload": "Yük oluştur",
+            "sendRequest": "İstek gönder",
+            "writeOutput": "Çıktıyı yaz",
+            "runScript": "Betiği çalıştır",
+            "end": "Bitir"
+          },
           "tags": {
             "email": "E-posta",
             "custom": "Özel"

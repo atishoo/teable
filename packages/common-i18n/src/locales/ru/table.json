@@ -967,6 +967,31 @@
         "iframeFailed": "Не удалось захватить: iframe недоступен"
       }
     },
+    "partTool": {
+      "bash": "Выполнить команду",
+      "read": "Прочитать файл",
+      "write": "Создать файл",
+      "edit": "Изменить файл",
+      "ls": "Показать файлы",
+      "glob": "Найти файлы",
+      "grep": "Искать в файлах",
+      "webSearch": "Искать в интернете",
+      "skill": "Загрузка навыка",
+      "bashTarget": "Выполнить команду: {{target}}",
+      "readTarget": "Прочитать {{target}}",
+      "writeTarget": "Создать {{target}}",
+      "editTarget": "Изменить {{target}}",
+      "globTarget": "Найти файлы {{target}}",
+      "grepTarget": "Искать {{target}}",
+      "webSearchTarget": "Искать в интернете: {{target}}",
+      "lsTarget": "Показать {{target}}",
+      "foundFiles": "Найдено файлов: {{count}}",
+      "moreTools": "+{{count}} инструментов",
+      "moreItems": "+{{count}} еще",
+      "fallbackName": "Инструмент",
+      "questionCount_one": "{{count}} вопрос",
+      "questionCount_other": "{{count}} вопросов"
+    },
     "action": {
       "locateResource": "Найти"
     },

@@ -20,13 +20,14 @@ export class NextService implements OnModuleInit, OnModuleDestroy {
     const nodeEnv = this.configService.get<string>('NODE_ENV');
     const port = this.configService.get<number>('PORT');
     const nextJsDir = this.configService.get<string>('NEXTJS_DIR');
+    const disableTurbopack = process.env.NEXT_DEV_TURBOPACK === 'false';
     try {
       this.server = createServer({
         dev: nodeEnv !== 'production',
         port: port,
         dir: nextJsDir,
         hostname: 'localhost',
-        turbopack: true,
+        ...(disableTurbopack ? { webpack: true } : { turbopack: true }),
       });
       await this.server.prepare();
     } catch (error) {

@@ -1366,6 +1366,17 @@ export type I18nTranslations = {
                                 "fetch": string;
                             };
                         };
+                        "flowChartFallback": {
+                            "start": string;
+                            "readInput": string;
+                            "checkCondition": string;
+                            "iterateData": string;
+                            "buildPayload": string;
+                            "sendRequest": string;
+                            "writeOutput": string;
+                            "runScript": string;
+                            "end": string;
+                        };
                         "tags": {
                             "email": string;
                             "custom": string;
@@ -5454,6 +5465,31 @@ export type I18nTranslations = {
                 };
                 "retrying": string;
             };
+            "partTool": {
+                "bash": string;
+                "read": string;
+                "write": string;
+                "edit": string;
+                "ls": string;
+                "glob": string;
+                "grep": string;
+                "webSearch": string;
+                "skill": string;
+                "bashTarget": string;
+                "readTarget": string;
+                "writeTarget": string;
+                "editTarget": string;
+                "globTarget": string;
+                "grepTarget": string;
+                "webSearchTarget": string;
+                "lsTarget": string;
+                "foundFiles": string;
+                "moreTools": string;
+                "moreItems": string;
+                "fallbackName": string;
+                "questionCount_one": string;
+                "questionCount_other": string;
+            };
             "action": {
                 "locateResource": string;
             };
@@ -5556,22 +5592,6 @@ export type I18nTranslations = {
                 "medium": string;
                 "high": string;
                 "max": string;
-            };
-            "partTool": {
-                "bash": string;
-                "read": string;
-                "write": string;
-                "edit": string;
-                "glob": string;
-                "grep": string;
-                "webSearch": string;
-                "skill": string;
-                "foundFiles": string;
-                "moreTools": string;
-                "moreItems": string;
-                "fallbackName": string;
-                "questionCount_one": string;
-                "questionCount_other": string;
             };
             "retry": {
                 "interrupted": string;

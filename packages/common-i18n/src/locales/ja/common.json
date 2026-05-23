@@ -845,6 +845,17 @@
               "fetch": "HTTP API を呼び出す"
             }
           },
+          "flowChartFallback": {
+            "start": "開始",
+            "readInput": "入力を読む",
+            "checkCondition": "条件を確認",
+            "iterateData": "データを反復",
+            "buildPayload": "ペイロード作成",
+            "sendRequest": "リクエスト送信",
+            "writeOutput": "出力を書き込み",
+            "runScript": "スクリプト実行",
+            "end": "終了"
+          },
           "tags": {
             "email": "メール",
             "custom": "カスタム"

@@ -1149,6 +1149,17 @@
               "fetch": "调用 HTTP API"
             }
           },
+          "flowChartFallback": {
+            "start": "开始",
+            "readInput": "读取输入",
+            "checkCondition": "判断条件",
+            "iterateData": "遍历数据",
+            "buildPayload": "构建数据",
+            "sendRequest": "发送请求",
+            "writeOutput": "写入输出",
+            "runScript": "运行脚本",
+            "end": "结束"
+          },
           "tags": {
             "email": "邮件",
             "custom": "自定义"

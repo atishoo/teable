@@ -801,6 +801,17 @@
               "fetch": "Вызов HTTP API"
             }
           },
+          "flowChartFallback": {
+            "start": "Начало",
+            "readInput": "Прочитать ввод",
+            "checkCondition": "Проверить условие",
+            "iterateData": "Перебрать данные",
+            "buildPayload": "Создать payload",
+            "sendRequest": "Отправить запрос",
+            "writeOutput": "Записать вывод",
+            "runScript": "Выполнить скрипт",
+            "end": "Конец"
+          },
           "tags": {
             "email": "Эл. почта",
             "custom": "Пользовательский"

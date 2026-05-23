@@ -986,6 +986,31 @@
         "iframeFailed": "Не вдалося знімати: iframe недоступний"
       }
     },
+    "partTool": {
+      "bash": "Виконати команду",
+      "read": "Прочитати файл",
+      "write": "Створити файл",
+      "edit": "Редагувати файл",
+      "ls": "Показати файли",
+      "glob": "Знайти файли",
+      "grep": "Шукати у файлах",
+      "webSearch": "Шукати в інтернеті",
+      "skill": "Завантаження навички",
+      "bashTarget": "Виконати команду: {{target}}",
+      "readTarget": "Прочитати {{target}}",
+      "writeTarget": "Створити {{target}}",
+      "editTarget": "Редагувати {{target}}",
+      "globTarget": "Знайти файли {{target}}",
+      "grepTarget": "Шукати {{target}}",
+      "webSearchTarget": "Шукати в інтернеті: {{target}}",
+      "lsTarget": "Показати {{target}}",
+      "foundFiles": "Знайдено файлів: {{count}}",
+      "moreTools": "+{{count}} інструментів",
+      "moreItems": "+{{count}} ще",
+      "fallbackName": "Інструмент",
+      "questionCount_one": "{{count}} питання",
+      "questionCount_other": "{{count}} питань"
+    },
     "action": {
       "locateResource": "Знайти"
     },

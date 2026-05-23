@@ -967,6 +967,31 @@
         "iframeFailed": "Échec de la capture : iframe non accessible"
       }
     },
+    "partTool": {
+      "bash": "Exécuter une commande",
+      "read": "Lire le fichier",
+      "write": "Créer le fichier",
+      "edit": "Modifier le fichier",
+      "ls": "Lister les fichiers",
+      "glob": "Rechercher des fichiers",
+      "grep": "Rechercher dans les fichiers",
+      "webSearch": "Rechercher sur le web",
+      "skill": "Chargement de la compétence",
+      "bashTarget": "Exécuter la commande : {{target}}",
+      "readTarget": "Lire {{target}}",
+      "writeTarget": "Créer {{target}}",
+      "editTarget": "Modifier {{target}}",
+      "globTarget": "Rechercher les fichiers {{target}}",
+      "grepTarget": "Rechercher {{target}}",
+      "webSearchTarget": "Rechercher sur le web : {{target}}",
+      "lsTarget": "Lister {{target}}",
+      "foundFiles": "{{count}} fichiers trouvés",
+      "moreTools": "+{{count}} autres outils",
+      "moreItems": "+{{count}} autres",
+      "fallbackName": "Outil",
+      "questionCount_one": "{{count}} question",
+      "questionCount_other": "{{count}} questions"
+    },
     "action": {
       "locateResource": "Localiser"
     },

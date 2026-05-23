@@ -988,6 +988,31 @@
         "iframeFailed": "Aufnahme fehlgeschlagen: iframe nicht zugänglich"
       }
     },
+    "partTool": {
+      "bash": "Befehl ausführen",
+      "read": "Datei lesen",
+      "write": "Datei erstellen",
+      "edit": "Datei bearbeiten",
+      "ls": "Dateien auflisten",
+      "glob": "Dateien suchen",
+      "grep": "Dateiinhalte durchsuchen",
+      "webSearch": "Web durchsuchen",
+      "skill": "Skill laden",
+      "bashTarget": "Befehl ausführen: {{target}}",
+      "readTarget": "{{target}} lesen",
+      "writeTarget": "{{target}} erstellen",
+      "editTarget": "{{target}} bearbeiten",
+      "globTarget": "{{target}} Dateien suchen",
+      "grepTarget": "{{target}} suchen",
+      "webSearchTarget": "Web durchsuchen: {{target}}",
+      "lsTarget": "{{target}} auflisten",
+      "foundFiles": "{{count}} Dateien gefunden",
+      "moreTools": "+{{count}} weitere Tools",
+      "moreItems": "+{{count}} weitere",
+      "fallbackName": "Tool",
+      "questionCount_one": "{{count}} Frage",
+      "questionCount_other": "{{count}} Fragen"
+    },
     "action": {
       "locateResource": "Suchen"
     },

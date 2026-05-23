@@ -243,6 +243,7 @@ type AskUserQuestionShadowResults = {
   toolCallIds: Set<string>;
   outputTexts: Set<string>;
 };
+type ToolNameLabels = Record<string, string>;
 type EditorPastePayload = {
   nodes: Node[];
   contexts: ChatContext[];
@@ -391,12 +392,122 @@ const getToolInputText = (input: unknown) => {
   return typeof input === 'undefined' ? '' : JSON.stringify(input, null, 2);
 };
 
-const getToolDisplayName = (part: ToolCallPart | ToolResultPart) => {
-  if (part.type === 'tool-call' && isRecord(part.input)) {
-    const description = part.input.description;
-    if (typeof description === 'string' && description.trim()) return description.trim();
+const TOOL_NAME_I18N_KEYS: Record<string, string> = {
+  bash: 'bash',
+  read: 'read',
+  write: 'write',
+  edit: 'edit',
+  ls: 'ls',
+  glob: 'glob',
+  grep: 'grep',
+  websearch: 'webSearch',
+};
+
+const getToolInputPath = (input: unknown) => {
+  if (!isRecord(input)) return;
+  return (
+    getStringValue(input.file_path) ??
+    getStringValue(input.path) ??
+    getStringValue(input.filePath) ??
+    getStringValue(input.target)
+  );
+};
+
+const getToolPathName = (path: string) => {
+  return path.replace(/\\/g, '/').split('/').filter(Boolean).pop() ?? path;
+};
+
+const shortenToolTarget = (target: string) => {
+  const normalized = target.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= 64) return normalized;
+  return `${normalized.slice(0, 61)}...`;
+};
+
+const formatToolTargetLabel = (template: string | undefined, target: string) => {
+  if (!template) return;
+  return template.replace('{{target}}', shortenToolTarget(target));
+};
+
+const TOOL_TARGET_LABEL_CONFIGS: Record<
+  string,
+  {
+    labelKey: string;
+    getTarget: (input: Record<string, unknown>) => string | undefined;
   }
-  return part.toolName;
+> = {
+  bash: {
+    labelKey: 'bashTarget',
+    getTarget: (input) => getStringValue(input.command),
+  },
+  read: {
+    labelKey: 'readTarget',
+    getTarget: (input) => {
+      const path = getToolInputPath(input);
+      return path ? getToolPathName(path) : undefined;
+    },
+  },
+  write: {
+    labelKey: 'writeTarget',
+    getTarget: (input) => {
+      const path = getToolInputPath(input);
+      return path ? getToolPathName(path) : undefined;
+    },
+  },
+  edit: {
+    labelKey: 'editTarget',
+    getTarget: (input) => {
+      const path = getToolInputPath(input);
+      return path ? getToolPathName(path) : undefined;
+    },
+  },
+  ls: {
+    labelKey: 'lsTarget',
+    getTarget: (input) => {
+      const path = getToolInputPath(input);
+      return path ? getToolPathName(path) : undefined;
+    },
+  },
+  glob: {
+    labelKey: 'globTarget',
+    getTarget: (input) => getStringValue(input.pattern),
+  },
+  grep: {
+    labelKey: 'grepTarget',
+    getTarget: (input) => getStringValue(input.pattern),
+  },
+  websearch: {
+    labelKey: 'webSearchTarget',
+    getTarget: (input) => getStringValue(input.query),
+  },
+};
+
+const getToolTargetLabel = (
+  part: ToolCallPart | ToolResultPart,
+  normalizedName: string,
+  toolNameLabels: ToolNameLabels
+) => {
+  if (part.type !== 'tool-call' || !isRecord(part.input)) return;
+  const config = TOOL_TARGET_LABEL_CONFIGS[normalizedName];
+  const target = config?.getTarget(part.input);
+  if (!config || !target) return;
+  return formatToolTargetLabel(toolNameLabels[config.labelKey], target);
+};
+
+const getToolDisplayName = (
+  part: ToolCallPart | ToolResultPart,
+  toolNameLabels: ToolNameLabels
+) => {
+  const normalizedName = part.toolName.replace(/[\s_-]/g, '').toLowerCase();
+  const description =
+    part.type === 'tool-call' && isRecord(part.input) && typeof part.input.description === 'string'
+      ? part.input.description.trim()
+      : '';
+  if (normalizedName === 'bash' && description) return description;
+  const targetLabel = getToolTargetLabel(part, normalizedName, toolNameLabels);
+  if (targetLabel) return targetLabel;
+  if (description) return description;
+  const key = TOOL_NAME_I18N_KEYS[normalizedName];
+  return toolNameLabels[key ?? normalizedName] ?? toolNameLabels.fallbackName ?? part.toolName;
 };
 
 const getSkillNameFromPath = (input: unknown) => {
@@ -1554,6 +1665,33 @@ export const ChatPanel = () => {
   const tables = useTables();
   const views = useViews();
   const { treeItems } = useBaseNodeContext();
+  const toolNameLabels = useMemo<ToolNameLabels>(() => {
+    const translate = t as unknown as (key: string) => unknown;
+    const getLabel = (key: string, fallback: string) => {
+      const label = String(translate(key));
+      return label === key ? fallback : label;
+    };
+    return {
+      bash: getLabel('table:aiChat.partTool.bash', 'Run command'),
+      read: getLabel('table:aiChat.partTool.read', 'Read file'),
+      write: getLabel('table:aiChat.partTool.write', 'Create file'),
+      edit: getLabel('table:aiChat.partTool.edit', 'Edit file'),
+      ls: getLabel('table:aiChat.partTool.ls', 'List files'),
+      glob: getLabel('table:aiChat.partTool.glob', 'Find files'),
+      grep: getLabel('table:aiChat.partTool.grep', 'Search in files'),
+      webSearch: getLabel('table:aiChat.partTool.webSearch', 'Search web'),
+      todowrite: getLabel('table:aiChat.agent.taskProgress.title', 'Task progress'),
+      fallbackName: getLabel('table:aiChat.partTool.fallbackName', 'Tool'),
+      bashTarget: getLabel('table:aiChat.partTool.bashTarget', 'Run command: {{target}}'),
+      readTarget: getLabel('table:aiChat.partTool.readTarget', 'Read {{target}}'),
+      writeTarget: getLabel('table:aiChat.partTool.writeTarget', 'Create {{target}}'),
+      editTarget: getLabel('table:aiChat.partTool.editTarget', 'Edit {{target}}'),
+      globTarget: getLabel('table:aiChat.partTool.globTarget', 'Find {{target}} files'),
+      grepTarget: getLabel('table:aiChat.partTool.grepTarget', 'Search {{target}}'),
+      webSearchTarget: getLabel('table:aiChat.partTool.webSearchTarget', 'Search web: {{target}}'),
+      lsTarget: getLabel('table:aiChat.partTool.lsTarget', 'List {{target}}'),
+    };
+  }, [t]);
   const {
     status,
     close,
@@ -3361,6 +3499,9 @@ export const ChatPanel = () => {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['ai-chat-messages', baseId, chatId] }),
           queryClient.invalidateQueries({ queryKey: ['ai-chat-history', baseId] }),
+          queryClient.invalidateQueries({ queryKey: ['workflow', baseId] }),
+          queryClient.invalidateQueries({ queryKey: ['workflow-run', baseId] }),
+          queryClient.invalidateQueries({ queryKey: ['workflow-run-summary', baseId] }),
         ]);
         setIsGenerating(false);
         controllerRef.current = null;
@@ -3875,7 +4016,7 @@ export const ChatPanel = () => {
   const getToolPartTitle = (part: ToolCallPart | ToolResultPart, isQuestionTool: boolean) =>
     isQuestionTool && part.type === 'tool-call'
       ? getAskUserQuestionToolTitle(part.input)
-      : getToolDisplayName(part);
+      : getToolDisplayName(part, toolNameLabels);
 
   const getLoadSkillMeta = (input: unknown): ToolDisplayMeta | undefined => {
     const skillName = getSkillNameFromPath(input);

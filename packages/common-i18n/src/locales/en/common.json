@@ -1152,6 +1152,17 @@
               "fetch": "Call HTTP APIs"
             }
           },
+          "flowChartFallback": {
+            "start": "Start",
+            "readInput": "Read input",
+            "checkCondition": "Check condition",
+            "iterateData": "Iterate data",
+            "buildPayload": "Build payload",
+            "sendRequest": "Send request",
+            "writeOutput": "Write output",
+            "runScript": "Run script",
+            "end": "End"
+          },
           "tags": {
             "email": "Email",
             "custom": "Custom"

@@ -976,6 +976,31 @@
         "nextQuestion": "Sonraki soru"
       }
     },
+    "partTool": {
+      "bash": "Komut çalıştır",
+      "read": "Dosya oku",
+      "write": "Dosya oluştur",
+      "edit": "Dosya düzenle",
+      "ls": "Dosyaları listele",
+      "glob": "Dosya ara",
+      "grep": "Dosyalarda ara",
+      "webSearch": "Web'de ara",
+      "skill": "Yetenek yükleniyor",
+      "bashTarget": "Komut çalıştır: {{target}}",
+      "readTarget": "{{target}} oku",
+      "writeTarget": "{{target}} oluştur",
+      "editTarget": "{{target}} düzenle",
+      "globTarget": "{{target}} dosyalarını ara",
+      "grepTarget": "{{target}} ara",
+      "webSearchTarget": "Web'de ara: {{target}}",
+      "lsTarget": "{{target}} listele",
+      "foundFiles": "{{count}} dosya bulundu",
+      "moreTools": "+{{count}} araç daha",
+      "moreItems": "+{{count}} daha",
+      "fallbackName": "Araç",
+      "questionCount_one": "{{count}} soru",
+      "questionCount_other": "{{count}} soru"
+    },
     "showUI": {
       "skip": "Atla",
       "submit": "Gönder"

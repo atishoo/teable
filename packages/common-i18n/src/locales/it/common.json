@@ -843,6 +843,17 @@
               "fetch": "Chiamare API HTTP"
             }
           },
+          "flowChartFallback": {
+            "start": "Inizio",
+            "readInput": "Leggi input",
+            "checkCondition": "Verifica condizione",
+            "iterateData": "Itera dati",
+            "buildPayload": "Crea payload",
+            "sendRequest": "Invia richiesta",
+            "writeOutput": "Scrivi output",
+            "runScript": "Esegui script",
+            "end": "Fine"
+          },
           "tags": {
             "email": "Email",
             "custom": "Personalizzato"

@@ -843,6 +843,17 @@
               "fetch": "Appeler des API HTTP"
             }
           },
+          "flowChartFallback": {
+            "start": "Début",
+            "readInput": "Lire l'entrée",
+            "checkCondition": "Vérifier la condition",
+            "iterateData": "Parcourir les données",
+            "buildPayload": "Créer la charge utile",
+            "sendRequest": "Envoyer la requête",
+            "writeOutput": "Écrire la sortie",
+            "runScript": "Exécuter le script",
+            "end": "Fin"
+          },
           "tags": {
             "email": "E-mail",
             "custom": "Personnalisé"

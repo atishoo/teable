@@ -791,6 +791,17 @@
               "fetch": "Виклик HTTP API"
             }
           },
+          "flowChartFallback": {
+            "start": "Початок",
+            "readInput": "Прочитати ввід",
+            "checkCondition": "Перевірити умову",
+            "iterateData": "Перебрати дані",
+            "buildPayload": "Створити payload",
+            "sendRequest": "Надіслати запит",
+            "writeOutput": "Записати вивід",
+            "runScript": "Виконати скрипт",
+            "end": "Кінець"
+          },
           "tags": {
             "email": "Ел. пошта",
             "custom": "Власне"

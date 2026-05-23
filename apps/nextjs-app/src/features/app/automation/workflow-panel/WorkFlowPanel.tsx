@@ -182,6 +182,7 @@ import {
   ScrollBar,
 } from '@teable/ui-lib/shadcn';
 import {
+  ArrowDown,
   ArrowDownUp,
   ArrowRight,
   Check,
@@ -195,6 +196,7 @@ import {
   Bell,
   Eye,
   EyeOff,
+  Flag,
   Hash,
   Link2,
   Loader2,
@@ -211,6 +213,8 @@ import {
   Search,
   Send,
   ShieldCheck,
+  Scan,
+  SquareCode,
   SquareMousePointer,
   TriangleAlert,
   Trash2,
@@ -222,6 +226,7 @@ import {
   forwardRef,
   type ChangeEvent,
   type ComponentType,
+  type MouseEvent,
   type PointerEvent,
   type ReactNode,
   type SVGProps,
@@ -369,6 +374,24 @@ type NodeTestResult = {
 };
 
 type WorkflowRunStep = NonNullable<IWorkflowRunVo['steps']>[number];
+
+type ScriptFlowChartNode = {
+  id: string;
+  type?: string;
+  label: string;
+};
+
+type ScriptFlowChartEdge = {
+  source: string;
+  target: string;
+  label?: string;
+};
+
+type ScriptFlowChart = {
+  nodes: ScriptFlowChartNode[];
+  edges: ScriptFlowChartEdge[];
+  codeHash?: string;
+};
 
 type TestResultRow = {
   label: string;
@@ -1444,6 +1467,18 @@ const getRunStepInputRows = (
   appendRunStepGeneralInputRows(context);
   if (step.type === 'httpRequest') appendRunStepRequestInputRows(context);
   if (step.type === 'sendEmail') appendRunStepMailInputRows(context);
+  if (step.type === 'script') {
+    if (typeof input.code === 'string' && input.code.trim()) {
+      rows.push({
+        label: panelText(tr, 'nodes.script.editor.codeTab', 'Code'),
+        value: input.code,
+      });
+    }
+    const flowChart = normalizeScriptFlowChart(input.flowChart);
+    if (flowChart) {
+      rows.push(getOutputValueRow('flowChart', input.flowChart));
+    }
+  }
   rows.push(...buildAIGenerateTestInputRows(input, tr));
   appendRunStepConditionInputRows(context);
   rows.push({
@@ -1916,6 +1951,33 @@ const hasText = (value: unknown) => {
   return typeof value === 'string' ? Boolean(value.trim()) : value !== undefined && value !== null;
 };
 
+const normalizeScriptFlowChart = (value: unknown): ScriptFlowChart | undefined => {
+  if (!isPlainRecord(value) || !Array.isArray(value.nodes) || !Array.isArray(value.edges)) return;
+  const nodes = value.nodes
+    .filter(isPlainRecord)
+    .map((item) => ({
+      id: typeof item.id === 'string' ? item.id : '',
+      type: typeof item.type === 'string' ? item.type : undefined,
+      label: typeof item.label === 'string' ? item.label : '',
+    }))
+    .filter((item) => item.id && item.label);
+  if (!nodes.length) return;
+  const nodeIds = new Set(nodes.map((item) => item.id));
+  const edges = value.edges
+    .filter(isPlainRecord)
+    .map((item) => ({
+      source: typeof item.source === 'string' ? item.source : '',
+      target: typeof item.target === 'string' ? item.target : '',
+      label: typeof item.label === 'string' ? item.label : undefined,
+    }))
+    .filter((item) => nodeIds.has(item.source) && nodeIds.has(item.target));
+  return {
+    nodes,
+    edges,
+    codeHash: typeof value.codeHash === 'string' ? value.codeHash : undefined,
+  };
+};
+
 const hasFilterValue = (value: unknown) => {
   if (Array.isArray(value)) return value.length > 0;
   if (isPlainRecord(value)) {
@@ -2285,6 +2347,133 @@ const rowsToRecord = (rows: { key: string; value: string }[]) => {
 const SCRIPT_CODE_PLACEHOLDER =
   'Write JavaScript here. Use ctx to read previous steps and return a result.';
 const DEFAULT_SCRIPT_DEPENDENCY: ScriptDependency = { name: '', version: 'latest' };
+
+const stripScriptComments = (code: string) =>
+  code
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .map((line) => line.replace(/\/\/.*$/, '').trim())
+    .filter(Boolean)
+    .join('\n');
+
+const isScriptPlaceholderCode = (code: string) => {
+  const trimmed = code.trim();
+  if (!trimmed) return true;
+  if (trimmed === '// Add your code here' || trimmed === SCRIPT_CODE_PLACEHOLDER) return true;
+  return !stripScriptComments(code);
+};
+
+const createLinearScriptFlowChart = (nodes: ScriptFlowChartNode[]): ScriptFlowChart => ({
+  nodes,
+  edges: nodes.slice(0, -1).map((node, index) => ({
+    source: node.id,
+    target: nodes[index + 1].id,
+  })),
+});
+
+const SCRIPT_FLOW_LABEL_RULES: {
+  match: (label: string) => boolean;
+  key: string;
+  fallback: string;
+}[] = [
+  { match: (label) => label === 'start', key: 'start', fallback: 'Start' },
+  { match: (label) => label === 'end', key: 'end', fallback: 'End' },
+  {
+    match: (label) => label.includes('read') && label.includes('trigger'),
+    key: 'readInput',
+    fallback: 'Read input',
+  },
+  {
+    match: (label) => label.includes('condition') || label.includes('check'),
+    key: 'checkCondition',
+    fallback: 'Check condition',
+  },
+  {
+    match: (label) => label.includes('iterate') || label.includes('loop'),
+    key: 'iterateData',
+    fallback: 'Iterate data',
+  },
+  {
+    match: (label) => label.includes('payload') || label.includes('body'),
+    key: 'buildPayload',
+    fallback: 'Build payload',
+  },
+  {
+    match: (label) => label.includes('request') || label.includes('http'),
+    key: 'sendRequest',
+    fallback: 'Send request',
+  },
+  {
+    match: (label) => label.includes('output') || label.includes('return'),
+    key: 'writeOutput',
+    fallback: 'Write output',
+  },
+  { match: (label) => label.includes('script'), key: 'runScript', fallback: 'Run script' },
+];
+
+const getLocalizedScriptFlowChartLabel = (label: string, tr: PanelTranslate) => {
+  const normalized = label.trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!normalized) return label;
+  const rule = SCRIPT_FLOW_LABEL_RULES.find((item) => item.match(normalized));
+  if (rule) return tr(`nodes.script.flowChartFallback.${rule.key}`, rule.fallback);
+  return label;
+};
+
+const localizeScriptFlowChart = (flowChart: ScriptFlowChart, tr: PanelTranslate) => ({
+  ...flowChart,
+  nodes: flowChart.nodes.map((node) => ({
+    ...node,
+    label: getLocalizedScriptFlowChartLabel(node.label, tr),
+  })),
+});
+
+const getFallbackScriptFlowChart = (
+  code: string,
+  tr: PanelTranslate
+): ScriptFlowChart | undefined => {
+  if (isScriptPlaceholderCode(code)) return;
+  const normalized = code.toLowerCase();
+  const steps: ScriptFlowChartNode[] = [];
+  const pushStep = (id: string, type: string, labelKey: string, labelDefault: string) => {
+    if (steps.some((item) => item.id === id)) return;
+    steps.push({ id, type, label: tr(`nodes.script.flowChartFallback.${labelKey}`, labelDefault) });
+  };
+
+  if (/\b(?:input|ctx)\b/.test(normalized)) {
+    pushStep('readInput', 'step', 'readInput', 'Read input');
+  }
+  if (/\b(?:if|switch)\b|\?/.test(normalized)) {
+    pushStep('checkCondition', 'condition', 'checkCondition', 'Check condition');
+  }
+  if (/\b(?:for|while|foreach|map)\b/.test(normalized)) {
+    pushStep('iterateData', 'loop', 'iterateData', 'Iterate data');
+  }
+  if (/\b(?:payload|body|json\.stringify)\b/.test(normalized)) {
+    pushStep('buildPayload', 'step', 'buildPayload', 'Build payload');
+  }
+  if (/\b(?:fetch|axios|httprequest)\b/.test(normalized)) {
+    pushStep('sendRequest', 'step', 'sendRequest', 'Send request');
+  }
+  if (/\b(?:output\.set|return)\b/.test(normalized)) {
+    pushStep('writeOutput', 'step', 'writeOutput', 'Write output');
+  }
+  if (!steps.length) {
+    pushStep('runScript', 'step', 'runScript', 'Run script');
+  }
+
+  return createLinearScriptFlowChart([
+    { id: 'start', type: 'start', label: tr('nodes.script.flowChartFallback.start', 'Start') },
+    ...steps.slice(0, 10),
+    { id: 'end', type: 'end', label: tr('nodes.script.flowChartFallback.end', 'End') },
+  ]);
+};
+
+const getDisplayScriptFlowChart = (config: unknown, tr: PanelTranslate) => {
+  if (!isPlainRecord(config)) return;
+  const flowChart = normalizeScriptFlowChart(config.flowChart);
+  if (flowChart) return localizeScriptFlowChart(flowChart, tr);
+  return getFallbackScriptFlowChart(typeof config.code === 'string' ? config.code : '', tr);
+};
 
 const normalizeScriptDependencies = (value: unknown): ScriptDependency[] => {
   if (!Array.isArray(value)) return [];
@@ -7601,21 +7790,233 @@ const ScriptCodeEditor = (props: {
   return <div ref={editorRef} className="size-full min-h-0" />;
 };
 
+const getScriptFlowAccentClassName = (type?: string) => {
+  switch (type) {
+    case 'condition':
+      return 'bg-amber-500';
+    case 'loop':
+    case 'tryCatch':
+      return 'bg-purple-500';
+    default:
+      return 'bg-blue-500';
+  }
+};
+
+const SCRIPT_FLOW_COMPACT_LAYOUT = {
+  viewportClassName: '',
+  contentClassName: 'px-3 py-4',
+  boundaryClassName: 'h-6 min-w-24 max-w-32 px-5 text-xs',
+  boundaryIconClassName: 'size-3',
+  stepClassName: 'h-10 w-[220px]',
+  stepAccentClassName: 'w-1',
+  stepContentClassName: 'gap-2 px-3 py-2',
+  stepIconClassName: 'size-3',
+  stepLabelClassName: 'text-xs',
+  connectorClassName: 'h-5',
+  connectorLineClassName: 'h-3',
+  connectorIconClassName: 'size-3.5',
+};
+
+const SCRIPT_FLOW_FULL_LAYOUT = {
+  viewportClassName: 'rounded-md border',
+  contentClassName: 'px-10 py-10',
+  boundaryClassName: 'h-14 min-w-56 max-w-72 px-8 text-xl',
+  boundaryIconClassName: 'size-5',
+  stepClassName: 'h-28 w-[380px]',
+  stepAccentClassName: 'w-1.5',
+  stepContentClassName: 'gap-4 px-6 py-5',
+  stepIconClassName: 'size-5',
+  stepLabelClassName: 'text-xl',
+  connectorClassName: 'h-16',
+  connectorLineClassName: 'h-10',
+  connectorIconClassName: 'size-5',
+};
+
+const ScriptFlowChartPreview = (props: {
+  flowChart: ScriptFlowChart;
+  compact?: boolean;
+  onExpand?: () => void;
+}) => {
+  const { flowChart, compact, onExpand } = props;
+  const { t } = useTranslation('common');
+  const [zoom, setZoom] = useState(1);
+  const layout = compact ? SCRIPT_FLOW_COMPACT_LAYOUT : SCRIPT_FLOW_FULL_LAYOUT;
+  const expandLabel = String(t('actions.expand'));
+  const zoomInLabel = String(t('actions.zoomIn'));
+  const zoomOutLabel = String(t('actions.zoomOut'));
+  const resetLabel = String(t('actions.view'));
+  const edgeBySource = new Map(flowChart.edges.map((edge) => [edge.source, edge]));
+  const compactHeight = Math.min(440, 320 + Math.max(0, flowChart.nodes.length - 5) * 44);
+  const previewHeight = compact ? compactHeight : '100%';
+  const fitScale = compact ? 1 : Math.min(1, 5 / Math.max(flowChart.nodes.length, 1));
+  const displayZoom = Number((zoom * fitScale).toFixed(2));
+  const updateZoom = (delta: number) => {
+    setZoom((current) => Math.min(1.35, Math.max(0.75, Number((current + delta).toFixed(2)))));
+  };
+  const handleControlClick = (event: MouseEvent<HTMLButtonElement>, action: () => void) => {
+    event.preventDefault();
+    event.stopPropagation();
+    action();
+  };
+
+  return (
+    <div
+      className={cn('relative min-w-0 overflow-hidden bg-background', layout.viewportClassName)}
+      style={{
+        height: previewHeight,
+        backgroundImage: 'radial-gradient(circle, rgba(148, 163, 184, 0.32) 1px, transparent 1px)',
+        backgroundSize: '16px 16px',
+      }}
+    >
+      <div
+        className={cn(
+          'flex h-full min-w-0 flex-col items-center justify-center',
+          layout.contentClassName
+        )}
+        style={{ transform: `scale(${displayZoom})`, transition: 'transform 120ms ease' }}
+      >
+        {flowChart.nodes.map((node, index) => {
+          const edge = edgeBySource.get(node.id);
+          const isBoundary = node.type === 'start' || node.type === 'end';
+          return (
+            <div key={node.id} className="flex shrink-0 flex-col items-center">
+              {isBoundary ? (
+                <div
+                  className={cn(
+                    'flex items-center justify-center gap-1.5 rounded-full border border-border bg-muted/50 text-muted-foreground',
+                    layout.boundaryClassName
+                  )}
+                  title={node.label}
+                >
+                  <Flag className={cn('shrink-0', layout.boundaryIconClassName)} />
+                  <span className="truncate font-medium">{node.label}</span>
+                </div>
+              ) : (
+                <div
+                  className={cn(
+                    'flex items-center rounded-lg border border-border bg-background shadow-sm',
+                    layout.stepClassName
+                  )}
+                  title={node.label}
+                >
+                  <div
+                    className={cn(
+                      'h-full shrink-0 rounded-l-lg',
+                      layout.stepAccentClassName,
+                      getScriptFlowAccentClassName(node.type)
+                    )}
+                  />
+                  <div className={cn('flex min-w-0 items-center', layout.stepContentClassName)}>
+                    <SquareCode
+                      className={cn(
+                        'shrink-0 text-blue-600 dark:text-blue-400',
+                        layout.stepIconClassName
+                      )}
+                    />
+                    <span className={cn('truncate font-semibold', layout.stepLabelClassName)}>
+                      {node.label}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {index < flowChart.nodes.length - 1 && (
+                <div
+                  className={cn(
+                    'relative flex flex-col items-center justify-center text-muted-foreground',
+                    layout.connectorClassName
+                  )}
+                >
+                  <div className={cn('w-px bg-border', layout.connectorLineClassName)} />
+                  <ArrowDown className={cn('-mt-1', layout.connectorIconClassName)} />
+                  {edge?.label && (
+                    <span
+                      className="absolute left-3 top-1 max-w-20 truncate rounded-full bg-background px-1 text-[10px] leading-4"
+                      title={edge.label}
+                    >
+                      {edge.label}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {compact ? (
+        onExpand ? (
+          <button
+            type="button"
+            className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            title={expandLabel}
+            aria-label={expandLabel}
+            onClick={(event) => handleControlClick(event, onExpand)}
+          >
+            <Maximize2 className="size-4" />
+          </button>
+        ) : null
+      ) : null}
+      <div className="absolute bottom-2 left-2 overflow-hidden rounded-md border bg-background shadow-sm">
+        <button
+          type="button"
+          className="flex size-7 items-center justify-center border-b text-foreground transition-colors hover:bg-muted"
+          title={zoomInLabel}
+          aria-label={zoomInLabel}
+          onClick={(event) => handleControlClick(event, () => updateZoom(0.1))}
+        >
+          <Plus className="size-4" />
+        </button>
+        <button
+          type="button"
+          className="flex size-7 items-center justify-center border-b text-foreground transition-colors hover:bg-muted"
+          title={zoomOutLabel}
+          aria-label={zoomOutLabel}
+          onClick={(event) => handleControlClick(event, () => updateZoom(-0.1))}
+        >
+          <Minus className="size-4" />
+        </button>
+        <button
+          type="button"
+          className="flex size-7 items-center justify-center text-foreground transition-colors hover:bg-muted"
+          title={resetLabel}
+          aria-label={resetLabel}
+          onClick={(event) => handleControlClick(event, () => setZoom(1))}
+        >
+          <Scan className="size-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const ScriptEditorDialog = (props: {
   value: string;
   dependencies: ScriptDependency[];
+  flowChart?: ScriptFlowChart;
   testResult?: NodeTestResult;
   isTesting?: boolean;
   canRunTest?: boolean;
   placeholder?: string;
-  trigger?: ReactNode;
+  trigger?: ReactNode | null;
+  open?: boolean;
+  defaultTab?: 'preview' | 'code';
+  onOpenChange?: (open: boolean) => void;
   onChange: (value: string) => void;
   onDependenciesChange: (value: ScriptDependency[]) => void;
   onRunTest?: () => void;
 }) => {
   const tr = usePanelTranslate();
-  const [tab, setTab] = useState<'preview' | 'code'>('code');
-  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<'preview' | 'code'>(props.defaultTab ?? 'code');
+  const [innerOpen, setInnerOpen] = useState(false);
+  const open = props.open ?? innerOpen;
+  const setOpen = (value: boolean) => {
+    setInnerOpen(value);
+    props.onOpenChange?.(value);
+  };
+  useEffect(() => {
+    if (open) {
+      setTab(props.defaultTab ?? 'code');
+    }
+  }, [open, props.defaultTab]);
   const dependencyRows = props.dependencies.length
     ? props.dependencies
     : [DEFAULT_SCRIPT_DEPENDENCY];
@@ -7689,15 +8090,17 @@ const ScriptEditorDialog = (props: {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {props.trigger ?? (
-          <Button className="h-7 gap-1 px-1.5 text-xs font-normal" size="sm" variant="ghost">
-            <Maximize2 className="size-3.5" />
-            {tr('actions.edit', 'Edit')}
-          </Button>
-        )}
-      </DialogTrigger>
-      <DialogContent className="flex h-[min(86vh,820px)] max-h-[calc(100vh-3rem)] w-[min(88vw,1400px)] max-w-[1400px] flex-col overflow-hidden">
+      {props.trigger !== null && (
+        <DialogTrigger asChild>
+          {props.trigger ?? (
+            <Button className="h-7 gap-1 px-1.5 text-xs font-normal" size="sm" variant="ghost">
+              <Maximize2 className="size-3.5" />
+              {tr('actions.edit', 'Edit')}
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
+      <DialogContent className="flex h-[min(91vh,1040px)] max-h-[calc(100vh-3rem)] w-[min(90vw,1600px)] max-w-[1600px] flex-col overflow-hidden">
         <DialogTitle>{tr('nodes.script.editor.title', 'Script editor')}</DialogTitle>
         <DialogDescription className="sr-only">
           {tr('nodes.script.editor.description', 'Edit and test the script action.')}
@@ -7794,11 +8197,17 @@ const ScriptEditorDialog = (props: {
               </div>
             </div>
             {tab === 'preview' ? (
-              <div className="flex flex-1 items-center justify-center p-6 text-sm text-muted-foreground">
-                {props.value.trim()
-                  ? tr('nodes.script.editor.noPreview', 'No flow preview')
-                  : tr('nodes.script.editor.writeCodeForPreview', 'Write code to preview flow')}
-              </div>
+              props.flowChart ? (
+                <div className="min-h-0 flex-1 overflow-hidden p-6">
+                  <ScriptFlowChartPreview flowChart={props.flowChart} />
+                </div>
+              ) : (
+                <div className="flex flex-1 items-center justify-center p-6 text-sm text-muted-foreground">
+                  {props.value.trim()
+                    ? tr('nodes.script.editor.noPreview', 'No flow preview')
+                    : tr('nodes.script.editor.writeCodeForPreview', 'Write code to preview flow')}
+                </div>
+              )
             ) : (
               <div className="min-h-0 flex-1 overflow-hidden bg-background">
                 <ScriptCodeEditor
@@ -9187,6 +9596,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
   const [nodes, setNodes] = useState<IWorkflowNode[]>([]);
   const [edges, setEdges] = useState<IWorkflowEdge[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string>();
+  const [scriptPreviewEditorNodeId, setScriptPreviewEditorNodeId] = useState<string>();
   const [isSaving, setIsSaving] = useState(false);
   const [nodeTestResults, setNodeTestResults] = useState<Record<string, NodeTestResult>>({});
   const [nodeTestPending, setNodeTestPending] = useState<{
@@ -9304,16 +9714,25 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
 
   useEffect(() => {
     if (!workflow) return;
-    if (loadedWorkflowIdRef.current === workflow.id) return;
     const nextName = workflow.name ?? t('noun.automation');
     const nextNodes = workflow.nodes ?? [];
     const nextEdges = workflow.edges ?? [];
+    const nextSignature = getWorkflowDraftSignature(nextName, nextNodes, nextEdges);
+    const isSameWorkflow = loadedWorkflowIdRef.current === workflow.id;
+    const savedSignature = lastSavedDraftSignatureRef.current;
+    const currentSignature = getWorkflowDraftSignature(workflowName, nodes, edges);
+    const hasLocalUnsavedChanges =
+      isSameWorkflow && Boolean(savedSignature) && currentSignature !== savedSignature;
+    if (isSameWorkflow && (hasLocalUnsavedChanges || savedSignature === nextSignature)) return;
+
     loadedWorkflowIdRef.current = workflow.id;
-    lastSavedDraftSignatureRef.current = getWorkflowDraftSignature(nextName, nextNodes, nextEdges);
+    lastSavedDraftSignatureRef.current = nextSignature;
     setWorkflowName(nextName);
     setNodes(nextNodes);
     setEdges(nextEdges);
-    setSelectedNodeId(undefined);
+    setSelectedNodeId((current) =>
+      isSameWorkflow && nextNodes.some((node) => node.id === current) ? current : undefined
+    );
     setNodeTestResults(
       Object.fromEntries(
         nextNodes
@@ -9321,7 +9740,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
           .filter((item): item is readonly [string, NodeTestResult] => Boolean(item[1]))
       )
     );
-  }, [workflow, t]);
+  }, [edges, nodes, t, workflow, workflowName]);
 
   useEffect(() => {
     return () => {
@@ -10384,9 +10803,19 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
     const aiOutputType = config.outputType === 'json' ? 'json' : 'string';
     const scriptCode = typeof config.code === 'string' ? config.code : '';
     const scriptDependencies = normalizeScriptDependencies(config.dependencies);
+    const scriptFlowChart = getDisplayScriptFlowChart(config, tr);
     const scriptNodeIndex = (graphNodeIndexMap.get(selectedNode.id) ?? 0) + 1;
     const updateScriptDependencies = (value: ScriptDependency[]) =>
       updateNodeConfig('dependencies', value.length ? value : undefined);
+    const updateScriptCode = (value: string) => {
+      updateNode(selectedNode.id, {
+        config: omitUndefined({
+          ...(selectedNode.config ?? {}),
+          code: value,
+          flowChart: undefined,
+        }),
+      });
+    };
     const configureScriptWithAI = () => {
       if (!aiChatEnabled) return;
       if (typeof window === 'undefined') return;
@@ -10403,7 +10832,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
                 `workflowId: ${workflowId}`,
                 `nodeId: ${selectedNode.id}`,
                 `nodeType: ${selectedNode.type}`,
-                `recommendedAction: update this exact script node config.code and config.dependencies, then test it when possible.`,
+                `recommendedAction: update this exact script node config.code, config.dependencies, and config.flowChart, then test it when possible.`,
                 `${tr('nodes.script.aiConfig.currentConfig', 'Current config')}: ${formatScriptEditorValue(
                   selectedNode.config ?? {}
                 )}`,
@@ -10928,6 +11357,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
                 <ScriptEditorDialog
                   value={scriptCode}
                   dependencies={scriptDependencies}
+                  flowChart={scriptFlowChart}
                   testResult={selectedNodeResult}
                   isTesting={isSelectedNodeTestPending}
                   canRunTest={isSelectedNodeComplete && !isSelectedNodeTestPending}
@@ -10944,7 +11374,7 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
                       </Button>
                     )
                   }
-                  onChange={(value) => updateNodeConfig('code', value)}
+                  onChange={updateScriptCode}
                   onDependenciesChange={updateScriptDependencies}
                   onRunTest={() => void handleTestSelectedNode()}
                 />
@@ -11259,6 +11689,8 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
   const renderWorkflowNode = (node: IWorkflowNode, index: number) => {
     const status = getNodeStatus(node);
     const StatusIcon = status.Icon;
+    const scriptFlowChart =
+      node.type === 'script' ? getDisplayScriptFlowChart(node.config, tr) : undefined;
     const nodeDescription = getWorkflowCanvasNodeDescription(
       node,
       knownTables,
@@ -11278,14 +11710,12 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
         : node.category === 'logic'
           ? 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-300'
           : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300';
-    return (
-      <button
+    const nodeHeader = (
+      <div
         className={cn(
-          'flex h-[90px] w-[370px] max-w-full select-none items-center gap-3 rounded-lg border bg-background p-4 text-left shadow-sm transition hover:border-primary/60 hover:shadow-md',
-          selectedNodeId === node.id && 'border-blue-500 shadow-md ring-1 ring-blue-500/40'
+          'flex w-full min-w-0 items-center gap-3 self-stretch',
+          scriptFlowChart && 'p-4 pb-3'
         )}
-        type="button"
-        onClick={() => setSelectedNodeId(node.id)}
       >
         <NodeIconBadge className="size-10" iconClassName="size-5" type={node.type} />
         <div className="flex min-w-0 flex-1 flex-col gap-1 overflow-hidden">
@@ -11314,6 +11744,93 @@ const WorkFlowPanel = forwardRef<WorkFlowPanelRef, WorkFlowPanelProps>((props, r
             </Tooltip>
           </TooltipProvider>
         </div>
+      </div>
+    );
+
+    if (scriptFlowChart) {
+      const scriptCode = typeof node.config?.code === 'string' ? node.config.code : '';
+      const scriptDependencies = normalizeScriptDependencies(node.config?.dependencies);
+      const scriptNodeResult = getAnyNodeTestResult(node, nodeTestResults);
+      const isScriptNodeTesting = nodeTestPending?.nodeId === node.id;
+      const updateScriptNodeCode = (value: string) => {
+        updateNode(node.id, {
+          config: omitUndefined({
+            ...(node.config ?? {}),
+            code: value,
+            flowChart: undefined,
+          }),
+        });
+      };
+      const updateScriptNodeDependencies = (value: ScriptDependency[]) => {
+        updateNode(node.id, {
+          config: omitUndefined({
+            ...(node.config ?? {}),
+            dependencies: value.length ? value : undefined,
+          }),
+        });
+      };
+
+      return (
+        <>
+          <div
+            role="button"
+            tabIndex={0}
+            className={cn(
+              'flex w-[560px] max-w-full select-none flex-col overflow-hidden rounded-lg border bg-background text-left shadow-sm transition hover:border-primary/60 hover:shadow-md',
+              selectedNodeId === node.id && 'border-blue-500 shadow-md ring-1 ring-blue-500/40'
+            )}
+            onClick={() => setSelectedNodeId(node.id)}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.preventDefault();
+              setSelectedNodeId(node.id);
+            }}
+          >
+            {nodeHeader}
+            <div className="w-full border-t">
+              <ScriptFlowChartPreview
+                flowChart={scriptFlowChart}
+                compact
+                onExpand={() => {
+                  setSelectedNodeId(node.id);
+                  setScriptPreviewEditorNodeId(node.id);
+                }}
+              />
+            </div>
+          </div>
+          <ScriptEditorDialog
+            value={scriptCode}
+            dependencies={scriptDependencies}
+            flowChart={scriptFlowChart}
+            testResult={scriptNodeResult}
+            isTesting={isScriptNodeTesting}
+            canRunTest={isWorkflowNodeComplete(node) && !isScriptNodeTesting}
+            placeholder={tr('nodes.script.editor.codePlaceholder', SCRIPT_CODE_PLACEHOLDER)}
+            trigger={null}
+            open={scriptPreviewEditorNodeId === node.id}
+            defaultTab="preview"
+            onOpenChange={(open) => setScriptPreviewEditorNodeId(open ? node.id : undefined)}
+            onChange={updateScriptNodeCode}
+            onDependenciesChange={updateScriptNodeDependencies}
+            onRunTest={() => {
+              setSelectedNodeId(node.id);
+              void handleTestSelectedNode();
+            }}
+          />
+        </>
+      );
+    }
+
+    return (
+      <button
+        className={cn(
+          'flex h-[90px] w-[370px] max-w-full select-none items-center gap-3 rounded-lg border bg-background p-4 text-left shadow-sm transition hover:border-primary/60 hover:shadow-md',
+          selectedNodeId === node.id && 'border-blue-500 shadow-md ring-1 ring-blue-500/40'
+        )}
+        type="button"
+        onClick={() => setSelectedNodeId(node.id)}
+      >
+        {nodeHeader}
       </button>
     );
   };

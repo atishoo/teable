@@ -966,6 +966,31 @@
         "iframeFailed": "キャプチャに失敗：iframe にアクセスできません"
       }
     },
+    "partTool": {
+      "bash": "コマンドを実行",
+      "read": "ファイルを読み取り",
+      "write": "ファイルを作成",
+      "edit": "ファイルを編集",
+      "ls": "ファイルを一覧表示",
+      "glob": "ファイルを検索",
+      "grep": "ファイル内を検索",
+      "webSearch": "Webを検索",
+      "skill": "スキルを読み込み中",
+      "bashTarget": "コマンドを実行: {{target}}",
+      "readTarget": "{{target}} を読み取り",
+      "writeTarget": "{{target}} を作成",
+      "editTarget": "{{target}} を編集",
+      "globTarget": "{{target}} ファイルを検索",
+      "grepTarget": "{{target}} を検索",
+      "webSearchTarget": "Webを検索: {{target}}",
+      "lsTarget": "{{target}} を一覧表示",
+      "foundFiles": "{{count}} 個のファイルが見つかりました",
+      "moreTools": "+{{count}} 個のツール",
+      "moreItems": "+{{count}} 件",
+      "fallbackName": "ツール",
+      "questionCount_one": "{{count}} 件の質問",
+      "questionCount_other": "{{count}} 件の質問"
+    },
     "action": {
       "locateResource": "検索"
     },
