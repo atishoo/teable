@@ -2,6 +2,7 @@ import { DeepThinking, Eye, ImageGeneration, Audio } from '@teable/icons';
 import type {
   IGatewayModel,
   IImageModelDefination,
+  IAIConfig,
   IModelConfig,
   ISimpleLLMProvider,
   ITextModelDefination,
@@ -114,6 +115,57 @@ export const generateModelKeyList = (llmProviders: ISimpleLLMProvider[] | LLMPro
       });
     })
     .flat();
+};
+
+export const syncChatModelWithProviders = (
+  chatModel: IAIConfig['chatModel'],
+  previousProviders: LLMProvider[],
+  nextProviders: LLMProvider[]
+): IAIConfig['chatModel'] => {
+  if (!chatModel) return chatModel;
+
+  const previousModelKeys = new Set(
+    generateModelKeyList(previousProviders).map(({ modelKey }) => modelKey)
+  );
+  const nextModelKeys = new Set(
+    generateModelKeyList(nextProviders).map(({ modelKey }) => modelKey)
+  );
+  const renamedModelKeys = new Map<string, string>();
+
+  if (previousProviders.length === nextProviders.length) {
+    previousProviders.forEach((previousProvider, index) => {
+      const nextProvider = nextProviders[index];
+      if (
+        !nextProvider ||
+        (previousProvider.type === nextProvider.type && previousProvider.name === nextProvider.name)
+      ) {
+        return;
+      }
+
+      const nextModels = new Set(parseProviderModels(nextProvider.models));
+      parseProviderModels(previousProvider.models).forEach((model) => {
+        if (!nextModels.has(model)) return;
+        renamedModelKeys.set(
+          `${previousProvider.type}@${model}@${previousProvider.name}`,
+          `${nextProvider.type}@${model}@${nextProvider.name}`
+        );
+      });
+    });
+  }
+
+  const syncModelKey = (modelKey?: string) => {
+    if (!modelKey) return modelKey;
+    const renamedModelKey = renamedModelKeys.get(modelKey);
+    if (renamedModelKey) return renamedModelKey;
+    return previousModelKeys.has(modelKey) && !nextModelKeys.has(modelKey) ? undefined : modelKey;
+  };
+
+  return {
+    ...chatModel,
+    lg: syncModelKey(chatModel.lg),
+    md: syncModelKey(chatModel.md),
+    sm: syncModelKey(chatModel.sm),
+  };
 };
 
 /**

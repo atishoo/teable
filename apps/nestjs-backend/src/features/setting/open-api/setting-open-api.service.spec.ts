@@ -80,6 +80,105 @@ describe('SettingOpenApiService', () => {
       })
     );
   });
+
+  it('preserves configured LLM provider names when saving settings', async () => {
+    const updateSettingMock = vi.fn(async (setting) => setting);
+    const service = new SettingOpenApiService(
+      undefined as never,
+      undefined as never,
+      { provider: 'local' } as never,
+      undefined as never,
+      undefined as never,
+      { updateSetting: updateSettingMock } as never,
+      undefined as never
+    );
+    const chatModelKey = `${LLMProviderType.OPENAI}@gpt-4o@${providerName}`;
+
+    await service.updateSetting({
+      aiConfig: {
+        llmProviders: [
+          {
+            type: LLMProviderType.OPENAI,
+            name: providerName,
+            apiKey,
+            baseUrl: openAIBaseUrl,
+            models: 'gpt-4o',
+          },
+        ],
+        chatModel: {
+          lg: chatModelKey,
+          md: chatModelKey,
+        },
+      },
+    });
+
+    expect(updateSettingMock).toHaveBeenCalledWith({
+      aiConfig: {
+        llmProviders: [
+          {
+            type: LLMProviderType.OPENAI,
+            name: providerName,
+            apiKey,
+            baseUrl: openAIBaseUrl,
+            models: 'gpt-4o',
+          },
+        ],
+        chatModel: {
+          lg: chatModelKey,
+          md: chatModelKey,
+        },
+      },
+    });
+  });
+
+  it('appends the brand logo hash to the favicon URL', async () => {
+    const findUniqueMock = vi.fn().mockResolvedValue({ hash: 'hash/value' });
+    const service = Object.create(SettingOpenApiService.prototype) as SettingOpenApiService;
+    (
+      service as unknown as {
+        getPublicSetting: () => Promise<{ brandLogo: string }>;
+        prismaService: {
+          txClient: () => {
+            attachments: {
+              findUnique: typeof findUniqueMock;
+            };
+          };
+        };
+      }
+    ).getPublicSetting = vi.fn().mockResolvedValue({
+      brandLogo: '/api/attachments/read/public/logo/brand',
+    });
+    (
+      service as unknown as {
+        prismaService: {
+          txClient: () => {
+            attachments: {
+              findUnique: typeof findUniqueMock;
+            };
+          };
+        };
+      }
+    ).prismaService = {
+      txClient: () => ({
+        attachments: {
+          findUnique: findUniqueMock,
+        },
+      }),
+    };
+
+    await expect(service.getFaviconUrl('/images/favicon/favicon.svg')).resolves.toBe(
+      '/api/attachments/read/public/logo/brand?v=hash%2Fvalue'
+    );
+    expect(findUniqueMock).toHaveBeenCalledWith({
+      where: {
+        token: 'brand',
+        deletedTime: null,
+      },
+      select: {
+        hash: true,
+      },
+    });
+  });
 });
 
 describe('SettingOpenApiService.testLLM image generation', () => {

@@ -163,40 +163,56 @@ export const vertexByokCredentialSchema = z.object({
 
 export type IVertexByokCredential = z.infer<typeof vertexByokCredentialSchema>;
 
-export const aiConfigSchema = z.object({
-  llmProviders: z.array(llmProviderSchema).default([]),
-  embeddingModel: z.string().optional(),
-  translationModel: z.string().optional(),
-  chatModel: chatModelSchema.nullable().optional(),
-  // AI Gateway models (admin-maintained, recommended for Cloud)
-  gatewayModels: z.array(gatewayModelSchema).optional(),
-  capabilities: z
-    .object({
-      disableActions: z.array(z.string()).optional(),
-      disableModelSelection: z.boolean().optional(),
-    })
-    .optional(),
-  // Vercel AI Gateway configuration
-  aiGatewayApiKey: z.string().nullable().optional(),
-  // AI Gateway base URL (defaults to Vercel's gateway if not set)
-  aiGatewayBaseUrl: z.url().nullable().optional(),
-  // Attachment transfer test results (from dual-mode testing)
-  attachmentTest: attachmentTestSchema.nullable().optional(),
-  // Attachment transfer mode: 'url' (default) or 'base64'
-  attachmentTransferMode: attachmentTransferModeSchema.nullable().optional(),
-  // Multiple AI Gateway API keys for concurrency scaling via key rotation
-  aiGatewayApiKeys: z.array(z.string()).optional(),
-  // Vertex AI BYOK credential (free quota optimization for Google models)
-  vertexByokCredential: vertexByokCredentialSchema.optional(),
-  // Named concurrency groups: each group owns a set of API keys and task types
-  concurrencyGroups: z.array(concurrencyGroupSchema).optional(),
-  // Default concurrency slots per API key (applies when groups don't specify perKey)
-  concurrencyPerKey: z.number().min(1).max(100).optional(),
-});
+export const aiConfigSchema = z
+  .object({
+    llmProviders: z.array(llmProviderSchema).default([]),
+    embeddingModel: z.string().optional(),
+    translationModel: z.string().optional(),
+    chatModel: chatModelSchema.nullable().optional(),
+    // AI Gateway models (admin-maintained, recommended for Cloud)
+    gatewayModels: z.array(gatewayModelSchema).optional(),
+    capabilities: z
+      .object({
+        disableActions: z.array(z.string()).optional(),
+        disableModelSelection: z.boolean().optional(),
+      })
+      .optional(),
+    // Vercel AI Gateway configuration
+    aiGatewayApiKey: z.string().nullable().optional(),
+    // AI Gateway base URL (defaults to Vercel's gateway if not set)
+    aiGatewayBaseUrl: z.url().nullable().optional(),
+    // Attachment transfer test results (from dual-mode testing)
+    attachmentTest: attachmentTestSchema.nullable().optional(),
+    // Attachment transfer mode: 'url' (default) or 'base64'
+    attachmentTransferMode: attachmentTransferModeSchema.nullable().optional(),
+    // Multiple AI Gateway API keys for concurrency scaling via key rotation
+    aiGatewayApiKeys: z.array(z.string()).optional(),
+    // Vertex AI BYOK credential (free quota optimization for Google models)
+    vertexByokCredential: vertexByokCredentialSchema.optional(),
+    // Named concurrency groups: each group owns a set of API keys and task types
+    concurrencyGroups: z.array(concurrencyGroupSchema).optional(),
+    // Default concurrency slots per API key (applies when groups don't specify perKey)
+    concurrencyPerKey: z.number().min(1).max(100).optional(),
+  })
+  .superRefine(({ llmProviders }, ctx) => {
+    const providerKeys = new Set<string>();
+    llmProviders.forEach(({ type, name }, index) => {
+      const providerKey = `${type}:${name.trim().toLowerCase()}`;
+      if (providerKeys.has(providerKey)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Provider name must be unique for the selected provider type',
+          path: ['llmProviders', index, 'name'],
+        });
+        return;
+      }
+      providerKeys.add(providerKey);
+    });
+  });
 
 export type IAIConfig = z.infer<typeof aiConfigSchema>;
 
-export const aiConfigVoSchema = aiConfigSchema.extend({
+export const aiConfigVoSchema = aiConfigSchema.safeExtend({
   enable: z.boolean().optional(),
 });
 

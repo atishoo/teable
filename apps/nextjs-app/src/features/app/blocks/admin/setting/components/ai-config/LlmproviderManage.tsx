@@ -115,7 +115,7 @@ export const LLMProviderManage = ({
           return (
             <div
               className="group rounded-lg border p-4 pr-3 hover:border-primary/50"
-              key={provider.name}
+              key={providerKey}
             >
               {/* Provider header */}
               <div className="flex items-center justify-between">

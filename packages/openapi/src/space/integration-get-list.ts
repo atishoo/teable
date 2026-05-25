@@ -10,7 +10,7 @@ export enum IntegrationType {
 
 export const GET_INTEGRATION_LIST = '/space/{spaceId}/integration';
 
-export const aiIntegrationConfigSchema = aiConfigSchema.extend({
+export const aiIntegrationConfigSchema = aiConfigSchema.safeExtend({
   appConfig: appConfigSchema.optional(),
 });
 

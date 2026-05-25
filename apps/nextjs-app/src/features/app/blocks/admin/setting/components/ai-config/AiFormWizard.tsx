@@ -27,6 +27,7 @@ import {
   generateGatewayModelKeyList,
   normalizeLLMProviderModelConfigs,
   parseModelKey,
+  syncChatModelWithProviders,
 } from './utils';
 
 // Props to control whether to show pricing-related UI
@@ -148,10 +149,17 @@ export function AIConfigFormWizard({
 
   const updateProviders = useCallback(
     (providers: LLMProvider[]) => {
+      const currentValues = form.getValues();
       const normalizedProviders = providers.map(normalizeLLMProviderModelConfigs);
+      const syncedChatModel = syncChatModelWithProviders(
+        currentValues.chatModel,
+        currentValues.llmProviders ?? [],
+        normalizedProviders
+      );
       form.setValue('llmProviders', normalizedProviders);
+      form.setValue('chatModel', syncedChatModel);
       form.trigger('llmProviders');
-      onSubmit({ ...form.getValues(), llmProviders: normalizedProviders });
+      onSubmit({ ...currentValues, llmProviders: normalizedProviders, chatModel: syncedChatModel });
     },
     [form, onSubmit]
   );

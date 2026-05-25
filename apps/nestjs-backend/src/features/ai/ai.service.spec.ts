@@ -70,4 +70,29 @@ describe('AiService.getModelConfig', () => {
       'AI model config invalid. Select a valid AI model before running.'
     );
   });
+
+  it('uses the matching provider that contains the requested model', async () => {
+    const result = await service.getModelConfig(`${LLMProviderType.OPENAI}@gpt-4o@default`, [
+      {
+        type: LLMProviderType.OPENAI,
+        name: 'default',
+        models: 'gpt-3.5-turbo',
+        baseUrl: 'https://space.example/v1',
+        apiKey: 'space-key',
+      },
+      {
+        type: LLMProviderType.OPENAI,
+        name: 'default',
+        models: 'gpt-4o',
+        baseUrl: 'https://instance.example/v1',
+        apiKey: 'instance-key',
+        isInstance: true,
+      },
+    ]);
+
+    expect(result).toMatchObject({
+      baseUrl: 'https://instance.example/v1',
+      apiKey: 'instance-key',
+    });
+  });
 });

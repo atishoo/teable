@@ -58,9 +58,8 @@ import {
 } from './sandbox-agent.client';
 import { getAdaptedProviderOptions, getTaskModelKey, modelProviders } from './util';
 
-// Fixed name for all instance (platform-provided) providers in modelKey.
-// Instance models always end with @teable (e.g. "aiGateway@model@teable", "anthropic@model@teable").
-// BYOK (space-configured) providers keep their custom name (e.g. "openai@model@my-custom").
+// Fixed provider name used by AI Gateway and legacy instance model keys.
+// Custom admin providers keep their configured name; use provider.isInstance to distinguish them.
 export const INSTANCE_PROVIDER_NAME = 'teable';
 
 export type ILanguageModelV2 = Exclude<LanguageModel, string>;
@@ -237,11 +236,17 @@ export class AiService {
       };
     }
 
-    // Standard provider lookup
-    const providerConfig = llmProviders.find(
+    const matchingProviders = llmProviders.filter(
       (p) =>
         p.name.toLowerCase() === name.toLowerCase() && p.type.toLowerCase() === type.toLowerCase()
     );
+    const providerConfig =
+      matchingProviders.find((provider) =>
+        provider.models
+          .split(',')
+          .map((providerModel) => providerModel.trim())
+          .includes(model)
+      ) ?? matchingProviders[0];
 
     if (!providerConfig) {
       throw new CustomHttpException(
@@ -419,11 +424,11 @@ export class AiService {
         // Include gateway models from admin config (space config doesn't have gateway models)
         gatewayModels: aiConfig.gatewayModels,
         llmProviders: [
-          ...aiIntegrationConfig.llmProviders,
           ...aiConfig.llmProviders.map((provider) => ({
             ...provider,
             isInstance: true,
           })),
+          ...aiIntegrationConfig.llmProviders,
         ],
         chatModel: {
           sm: sm || lg,
@@ -1829,15 +1834,17 @@ export class AiService {
       (p) =>
         p.name.toLowerCase() === name.toLowerCase() &&
         p.type.toLowerCase() === type.toLowerCase() &&
-        p.models.includes(model)
+        p.models
+          .split(',')
+          .map((providerModel) => providerModel.trim())
+          .includes(model)
     );
     return !!providerConfig;
   }
 
   /**
-   * Check if a model is an instance (platform-provided) model.
-   * Instance models use the "@teable" provider name suffix (e.g. "aiGateway@model@teable").
-   * BYOK (user-configured) models have a custom provider name.
+   * Legacy suffix check for AI Gateway and older instance model keys.
+   * Prefer provider.isInstance when the provider list is available.
    */
   checkInstanceAIModel(modelKey: string): boolean {
     return modelKey.endsWith(`@${INSTANCE_PROVIDER_NAME}`);

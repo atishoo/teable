@@ -20,6 +20,7 @@ import type { IModelTestResult } from '../../../admin/setting/components/ai-conf
 import {
   normalizeLLMProviderModelConfigs,
   parseModelKey,
+  syncChatModelWithProviders,
 } from '../../../admin/setting/components/ai-config/utils';
 
 interface IAIConfigProps {
@@ -91,10 +92,17 @@ export const AIConfig = (props: IAIConfigProps) => {
   );
 
   const onProvidersUpdate = (providers: LLMProvider[]) => {
+    const currentValues = form.getValues();
     const normalizedProviders = providers.map(normalizeLLMProviderModelConfigs);
+    const syncedChatModel = syncChatModelWithProviders(
+      currentValues.chatModel,
+      currentValues.llmProviders ?? [],
+      normalizedProviders
+    );
     form.setValue('llmProviders', normalizedProviders);
+    form.setValue('chatModel', syncedChatModel);
     form.trigger('llmProviders');
-    onSubmit({ ...form.getValues(), llmProviders: normalizedProviders });
+    onSubmit({ ...currentValues, llmProviders: normalizedProviders, chatModel: syncedChatModel });
   };
 
   const onTest = async (data: ITestLLMRo) => testIntegrationLLM(spaceId, data);

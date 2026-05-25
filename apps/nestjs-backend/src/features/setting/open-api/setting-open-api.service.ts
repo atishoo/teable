@@ -45,7 +45,6 @@ import { type IStorageConfig, StorageConfig } from '../../../configs/storage';
 import { CustomHttpException } from '../../../custom.exception';
 import type { IClsStore } from '../../../types/cls';
 import { resolveBuildVersion } from '../../../utils/build-version';
-import { INSTANCE_PROVIDER_NAME } from '../../ai/ai.service';
 import { getSandboxAgentUrl, syncSandboxAgentConfig } from '../../ai/sandbox-agent.client';
 import { getAdaptedProviderOptions, modelProviders } from '../../ai/util';
 import { AttachmentsStorageService } from '../../attachments/attachments-storage.service';
@@ -57,6 +56,7 @@ import { verifyTransport } from '../../mail-sender/mail-helpers';
 import { SettingService } from '../setting.service';
 
 const unknownErrorMsg = 'unknown error';
+const brandLogoToken = 'brand';
 
 // Test file tokens from builtin-assets-init
 const actTestImageToken = 'actTestImage';
@@ -86,11 +86,6 @@ export class SettingOpenApiService {
   }
 
   async updateSetting(updateSettingRo: Partial<ISettingVo>): Promise<ISettingVo> {
-    // Instance providers must use "teable" as name so modelKeys end with @teable,
-    // allowing a simple suffix check to distinguish instance vs BYOK models.
-    if (updateSettingRo.aiConfig) {
-      this.normalizeInstanceProviderNames(updateSettingRo.aiConfig as Record<string, unknown>);
-    }
     const setting = await this.settingService.updateSetting(updateSettingRo);
     if (Object.prototype.hasOwnProperty.call(updateSettingRo, SettingKey.SANDBOX_AGENT_CONFIG)) {
       await syncSandboxAgentConfig(
@@ -110,38 +105,32 @@ export class SettingOpenApiService {
     };
   }
 
-  /**
-   * Rewrite all provider names to "teable" and update chatModel keys accordingly.
-   * Admin-configured providers are always instance-level; the @teable suffix
-   * lets the rest of the system distinguish them from BYOK (space-level) providers.
-   */
-  private normalizeInstanceProviderNames(aiConfig: Record<string, unknown>): void {
-    const name = INSTANCE_PROVIDER_NAME;
-    const providers = aiConfig.llmProviders as Array<Record<string, unknown>> | undefined;
-    if (providers) {
-      for (const provider of providers) {
-        provider.name = name;
-      }
-    }
-    const chatModel = aiConfig.chatModel as Record<string, string | undefined> | undefined;
-    if (chatModel) {
-      for (const tier of ['lg', 'md', 'sm']) {
-        const key = chatModel[tier];
-        if (key && key.includes('@')) {
-          const parts = key.split('@');
-          parts[parts.length - 1] = name;
-          chatModel[tier] = parts.join('@');
-        }
-      }
-    }
-  }
-
   async getServerBrand(): Promise<{ brandName: string; brandLogo: string }> {
     const logoPath = join(StorageAdapter.getDir(UploadType.Logo), EMAIL_LOGO_TOKEN);
     return {
       brandName: 'Teable',
       brandLogo: getPublicFullStorageUrl(logoPath),
     };
+  }
+
+  async getFaviconUrl(defaultFaviconUrl: string): Promise<string> {
+    const { brandLogo } = await this.getPublicSetting();
+    if (!brandLogo) return defaultFaviconUrl;
+
+    const attachment = await this.prismaService.txClient().attachments.findUnique({
+      where: {
+        token: brandLogoToken,
+        deletedTime: null,
+      },
+      select: {
+        hash: true,
+      },
+    });
+
+    if (!attachment?.hash) return brandLogo;
+
+    const separator = brandLogo.includes('?') ? '&' : '?';
+    return `${brandLogo}${separator}v=${encodeURIComponent(attachment.hash)}`;
   }
 
   /**
@@ -207,8 +196,8 @@ export class SettingOpenApiService {
   }
 
   async uploadLogo(file: Express.Multer.File) {
-    const token = 'brand';
-    const path = join(StorageAdapter.getDir(UploadType.Logo), 'brand');
+    const token = brandLogoToken;
+    const path = join(StorageAdapter.getDir(UploadType.Logo), brandLogoToken);
     const bucket = StorageAdapter.getBucket(UploadType.Logo);
 
     const { hash } = await this.storageAdapter.uploadFileWidthPath(bucket, path, file.path, {

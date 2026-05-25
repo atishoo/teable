@@ -7,6 +7,7 @@ import {
   Patch,
   Post,
   Put,
+  Res,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -33,12 +34,16 @@ import {
   testApiKeyRoSchema,
   ITestApiKeyRo,
 } from '@teable/openapi';
+import type { Response } from 'express';
 import { IThresholdConfig, ThresholdConfig } from '../../../configs/threshold.config';
 import { ZodValidationPipe } from '../../../zod.validation.pipe';
 import { Permissions } from '../../auth/decorators/permissions.decorator';
 import { Public } from '../../auth/decorators/public.decorator';
 import { TurnstileService } from '../../auth/turnstile/turnstile.service';
 import { SettingOpenApiService } from './setting-open-api.service';
+
+const defaultFaviconUrl = '/images/favicon/favicon.svg';
+const faviconCacheControl = 'no-store, max-age=0';
 
 @Controller('api/admin/setting')
 export class SettingOpenApiController {
@@ -71,6 +76,14 @@ export class SettingOpenApiController {
       resetPasswordSendMailRate: this.thresholdConfig.resetPasswordSendMailRate,
       signupVerificationSendCodeMailRate: this.thresholdConfig.signupVerificationSendCodeMailRate,
     };
+  }
+
+  @Public()
+  @Get('favicon')
+  async getFavicon(@Res() res: Response) {
+    const faviconUrl = await this.settingOpenApiService.getFaviconUrl(defaultFaviconUrl);
+    res.setHeader('Cache-Control', faviconCacheControl);
+    return res.redirect(302, faviconUrl);
   }
 
   @Patch()
