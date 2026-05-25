@@ -18,6 +18,7 @@ interface SwitchListProps {
   disableActions: string[];
   instanceDisableActions?: string[];
   sandboxConfigured?: boolean;
+  aiFieldDisabledReason?: string;
   onChange: (value: { disableActions: string[] }) => void;
 }
 
@@ -45,7 +46,13 @@ const TooltipWrap = ({
 };
 
 const SwitchList = (props: SwitchListProps) => {
-  const { onChange, disableActions, instanceDisableActions = [], sandboxConfigured } = props;
+  const {
+    onChange,
+    disableActions,
+    instanceDisableActions = [],
+    sandboxConfigured,
+    aiFieldDisabledReason,
+  } = props;
   const { t } = useTranslation('common');
 
   const AIFeatureListNameMap = useMemo(() => {
@@ -67,14 +74,17 @@ const SwitchList = (props: SwitchListProps) => {
       name: AIFeatureListNameMap[item],
       key: item,
       description: AIFeatureListDescriptionMap[item],
+      disabledReason: item === AIActions.AIField ? aiFieldDisabledReason : undefined,
       disabled:
         !SwitchableActions.includes(item) ||
         instanceDisableActions.includes(item) ||
+        (item === AIActions.AIField && Boolean(aiFieldDisabledReason)) ||
         (item === AIActions.AIChat && sandboxConfigured === false),
     }));
   }, [
     AIFeatureListDescriptionMap,
     AIFeatureListNameMap,
+    aiFieldDisabledReason,
     instanceDisableActions,
     sandboxConfigured,
   ]);
@@ -100,7 +110,7 @@ const SwitchList = (props: SwitchListProps) => {
 
   return (
     <>
-      {AIFeatureListWithOptions.map(({ name, description, disabled, key }) => (
+      {AIFeatureListWithOptions.map(({ name, description, disabledReason, disabled, key }) => (
         <div className="flex items-center justify-between" key={key}>
           <div className="flex items-center gap-x-1">
             <Label
@@ -112,6 +122,11 @@ const SwitchList = (props: SwitchListProps) => {
             <TooltipWrap description={description}>
               <CircleHelp className="size-4 cursor-pointer text-muted-foreground" />
             </TooltipWrap>
+            {disabledReason && (
+              <TooltipWrap description={disabledReason}>
+                <TriangleAlert className="size-4 cursor-pointer text-yellow-500" />
+              </TooltipWrap>
+            )}
             {key === AIActions.AIChat && sandboxConfigured === false && (
               <TooltipWrap description={t('admin.setting.ai.actions.aiChat.sandboxWarning')}>
                 <TriangleAlert className="size-4 cursor-pointer text-yellow-500" />
@@ -124,7 +139,8 @@ const SwitchList = (props: SwitchListProps) => {
               onCheckItemHandler(key, open);
             }}
             checked={
-              key === AIActions.AIChat && sandboxConfigured === false
+              (key === AIActions.AIField && Boolean(aiFieldDisabledReason)) ||
+              (key === AIActions.AIChat && sandboxConfigured === false)
                 ? false
                 : !disableActions?.includes(key) && !instanceDisableActions.includes(key)
             }
@@ -140,11 +156,13 @@ export const AIControlCard = ({
   disableActions,
   instanceDisableActions,
   sandboxConfigured,
+  aiFieldDisabledReason,
   onChange,
 }: {
   disableActions: string[];
   instanceDisableActions?: string[];
   sandboxConfigured?: boolean;
+  aiFieldDisabledReason?: string;
   onChange: (value: { disableActions: string[] }) => void;
 }) => {
   const { t } = useTranslation('common');
@@ -159,6 +177,7 @@ export const AIControlCard = ({
             disableActions={disableActions}
             instanceDisableActions={instanceDisableActions}
             sandboxConfigured={sandboxConfigured}
+            aiFieldDisabledReason={aiFieldDisabledReason}
           />
         </div>
       </CardContent>

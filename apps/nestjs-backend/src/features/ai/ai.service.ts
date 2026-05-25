@@ -486,20 +486,21 @@ export class AiService {
     const aiChatDisabledByConfig =
       !this.getSandboxAgentUrl() ||
       !this.isSandboxAgentEnabledForSpace(sandboxAgentConfig, spaceId);
-    let aiAutomationDisabledByConfig = true;
+    let textModelDisabledByConfig = true;
     try {
       const config = await this.getAIConfig(baseId);
-      aiAutomationDisabledByConfig = !config.chatModel?.lg;
+      textModelDisabledByConfig = !config.chatModel?.lg;
     } catch {
-      aiAutomationDisabledByConfig = true;
+      textModelDisabledByConfig = true;
     }
 
     // merge both: instance-level disableActions should always be respected
     const merged = [
       ...disableAIActionsFromInstanceAiSetting,
       ...disableAIActionsFromSpaceIntegration,
+      ...(textModelDisabledByConfig ? [AIActions.AIField] : []),
       ...(aiChatDisabledByConfig ? [AIActions.AIChat] : []),
-      ...(aiAutomationDisabledByConfig ? [AIActions.AIAutomation] : []),
+      ...(textModelDisabledByConfig ? [AIActions.AIAutomation] : []),
     ];
     return {
       disableActions: [...new Set(merged)],

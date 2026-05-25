@@ -191,11 +191,6 @@ export const AgentLLMConfig = ({
       toast.error('至少需要配置一个 Agent 模型');
       return;
     }
-    if (testedSignature !== getConfigSignature(config)) {
-      toast.error('请先测试通过当前 Agent LLM 配置');
-      return;
-    }
-
     setSaving(true);
     try {
       await setSandboxAgentConfig(config);
@@ -223,7 +218,7 @@ export const AgentLLMConfig = ({
 
   const testStatusText = testPassed
     ? testMessage || '测试通过'
-    : testMessage || (testedSignature ? '配置已变更，请重新测试' : '测试通过后可保存 Agent 配置');
+    : testMessage || (testedSignature ? '配置已变更，可重新测试' : '测试连接可用于保存前校验配置');
 
   return (
     <Card>
@@ -329,10 +324,7 @@ export const AgentLLMConfig = ({
             </div>
             <div className="space-y-2">
               {models.map((model, index) => (
-                <div
-                  key={`${model.id}-${index}`}
-                  className="grid gap-2 md:grid-cols-[1fr_1fr_auto]"
-                >
+                <div key={index} className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
                   <Input
                     id={`agent-model-id-${index}`}
                     name={`agentModelId${index}`}
@@ -361,7 +353,7 @@ export const AgentLLMConfig = ({
               ))}
               {!models.length && (
                 <div className="rounded-md border border-dashed px-3 py-4 text-sm text-muted-foreground">
-                  暂未配置模型，添加模型并测试通过后才能启用 AI 聊天。
+                  暂未配置模型，添加模型后可保存 Agent 配置。
                 </div>
               )}
             </div>
@@ -406,11 +398,7 @@ export const AgentLLMConfig = ({
                 )}
                 测试连接
               </Button>
-              <Button
-                type="submit"
-                disabled={!testPassed || testing || saving}
-                onClick={handleSave}
-              >
+              <Button type="submit" disabled={saving} onClick={handleSave}>
                 {saving && <Loader2 className="mr-2 size-4 animate-spin" />}
                 保存 Agent 配置
               </Button>

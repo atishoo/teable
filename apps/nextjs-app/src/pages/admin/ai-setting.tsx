@@ -46,6 +46,11 @@ const AISetting: NextPageWithLayout<IAISettingPageProps> = ({ settingServerData 
   );
   const aiConfig = setting.aiConfig ?? { llmProviders: [], gatewayModels: [] };
   const disableActions = aiConfig.capabilities?.disableActions ?? [];
+  const llmConfigured = Boolean(
+    aiConfig.chatModel?.lg &&
+      ((aiConfig.aiGatewayApiKey && aiConfig.gatewayModels?.some((model) => model.enabled)) ||
+        aiConfig.llmProviders?.length)
+  );
 
   return (
     <div className="flex h-screen flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden p-4 sm:p-8">
@@ -66,6 +71,9 @@ const AISetting: NextPageWithLayout<IAISettingPageProps> = ({ settingServerData 
       <AIControlCard
         disableActions={disableActions}
         sandboxConfigured={sandboxConfigured}
+        aiFieldDisabledReason={
+          llmConfigured ? undefined : '请先完成 LLM API、模型池和默认文本模型配置'
+        }
         onChange={(value) =>
           mutateUpdateSetting({
             [SettingKey.AI_CONFIG]: {
