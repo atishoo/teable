@@ -1,6 +1,12 @@
 /* eslint-disable sonarjs/no-duplicate-string */
 import type { INestApplication } from '@nestjs/common';
-import type { IButtonFieldCellValue, IFieldRo, IFieldVo, ISelectFieldOptions } from '@teable/core';
+import type {
+  IButtonFieldCellValue,
+  IButtonFieldOptions,
+  IFieldRo,
+  IFieldVo,
+  ISelectFieldOptions,
+} from '@teable/core';
 import {
   CellFormat,
   Colors,
@@ -9,7 +15,19 @@ import {
   generateWorkflowId,
   Relationship,
 } from '@teable/core';
-import { axios, buttonClick, buttonReset, updateRecords, type ITableFullVo } from '@teable/openapi';
+import {
+  axios,
+  buttonClick,
+  buttonReset,
+  createWorkflow,
+  createWorkflowAction,
+  deleteWorkflow,
+  updateWorkflow,
+  updateRecords,
+  updateWorkflowActive,
+  type ITableFullVo,
+} from '@teable/openapi';
+import { X_TEABLE_V2_HEADER } from '../src/features/canary/interceptors/v2-indicator.interceptor';
 import {
   convertField,
   createField,
@@ -27,7 +45,6 @@ import {
   updateRecord,
   updateRecordByApi,
 } from './utils/init-app';
-import { X_TEABLE_V2_HEADER } from '../src/features/canary/interceptors/v2-indicator.interceptor';
 
 describe('OpenAPI RecordController (e2e)', () => {
   let app: INestApplication;
@@ -1103,6 +1120,198 @@ describe('OpenAPI RecordController (e2e)', () => {
       expect(buttonClick(table.id, table.records[0].id, field.id)).rejects.toThrow();
     });
 
+    it('should sync button workflow options when activating button click automation', async () => {
+      let workflowId: string | undefined;
+      try {
+        const field = await createField(table.id, {
+          type: FieldType.Button,
+          options: {
+            label: 'Button',
+            color: Colors.Teal,
+          },
+        });
+        const nextField = await createField(table.id, {
+          type: FieldType.Button,
+          options: {
+            label: 'Next Button',
+            color: Colors.Teal,
+          },
+        });
+        const workflow = await createWorkflow(baseId, {
+          name: 'Button workflow',
+          trigger: {
+            type: 'buttonClick',
+            config: {
+              tableId: table.id,
+              watchFieldIds: [field.id],
+            },
+          },
+        }).then((res) => res.data);
+        workflowId = workflow.id;
+        const triggerNode = workflow.nodes[0];
+        expect(triggerNode).toBeDefined();
+        if (!triggerNode) return;
+        await createWorkflowAction(baseId, workflow.id, {
+          type: 'script',
+          parentNodeId: triggerNode.id,
+          config: {
+            code: 'output.set("ok", true);',
+          },
+        });
+        await updateWorkflowActive(baseId, workflow.id, { method: 'activate' });
+
+        const syncedField = await getField(table.id, field.id);
+        const options = syncedField.options as IButtonFieldOptions;
+        expect(options.workflow).toEqual({
+          id: workflow.id,
+          name: workflow.name,
+          isActive: true,
+        });
+
+        const res = await buttonClick(table.id, table.records[0].id, field.id);
+        const value = res.data.record.fields[field.id] as IButtonFieldCellValue;
+        expect(value.count).toEqual(1);
+
+        await updateWorkflow(baseId, workflow.id, {
+          nodes: [
+            {
+              ...triggerNode,
+              config: {
+                tableId: table.id,
+                watchFieldIds: [nextField.id],
+              },
+            },
+          ],
+          edges: workflow.edges,
+        });
+        await updateWorkflowActive(baseId, workflow.id, { method: 'deactivate' });
+
+        const updatedRecord = await getRecord(table.id, table.records[0].id);
+        expect(updatedRecord.fields[field.id]).toBeUndefined();
+      } finally {
+        if (workflowId) {
+          await deleteWorkflow(baseId, workflowId).catch(() => undefined);
+        }
+      }
+    });
+
+    it('should reject duplicated button click automation binding', async () => {
+      let workflowId: string | undefined;
+      try {
+        const field = await createField(table.id, {
+          type: FieldType.Button,
+          options: {
+            label: 'Button',
+            color: Colors.Teal,
+          },
+        });
+        const trigger = {
+          type: 'buttonClick',
+          config: {
+            tableId: table.id,
+            watchFieldIds: [field.id],
+          },
+        };
+        const workflow = await createWorkflow(baseId, {
+          name: 'Button workflow',
+          trigger,
+        }).then((res) => res.data);
+        workflowId = workflow.id;
+
+        await expect(
+          createWorkflow(baseId, {
+            name: 'Duplicated button workflow',
+            trigger,
+          })
+        ).rejects.toThrow();
+
+        const syncedField = await getField(table.id, field.id);
+        const options = syncedField.options as IButtonFieldOptions;
+        expect(options.workflow?.id).toEqual(workflow.id);
+      } finally {
+        if (workflowId) {
+          await deleteWorkflow(baseId, workflowId).catch(() => undefined);
+        }
+      }
+    });
+
+    it('should reject reactivating old active button binding through workflow update', async () => {
+      let workflowId: string | undefined;
+      let conflictingWorkflowId: string | undefined;
+      try {
+        const activeField = await createField(table.id, {
+          type: FieldType.Button,
+          options: {
+            label: 'Active Button',
+            color: Colors.Teal,
+          },
+        });
+        const draftField = await createField(table.id, {
+          type: FieldType.Button,
+          options: {
+            label: 'Draft Button',
+            color: Colors.Teal,
+          },
+        });
+        const workflow = await createWorkflow(baseId, {
+          name: 'Old active button workflow',
+          trigger: {
+            type: 'buttonClick',
+            config: {
+              tableId: table.id,
+              watchFieldIds: [activeField.id],
+            },
+          },
+        }).then((res) => res.data);
+        workflowId = workflow.id;
+        const triggerNode = workflow.nodes[0];
+        expect(triggerNode).toBeDefined();
+        if (!triggerNode) return;
+        await createWorkflowAction(baseId, workflow.id, {
+          type: 'script',
+          parentNodeId: triggerNode.id,
+          config: {
+            code: 'output.set("ok", true);',
+          },
+        });
+        await updateWorkflowActive(baseId, workflow.id, { method: 'activate' });
+        await updateWorkflow(baseId, workflow.id, {
+          nodes: [
+            {
+              ...triggerNode,
+              config: {
+                tableId: table.id,
+                watchFieldIds: [draftField.id],
+              },
+            },
+          ],
+          edges: workflow.edges,
+        });
+        await updateWorkflowActive(baseId, workflow.id, { method: 'deactivate' });
+
+        const conflictingWorkflow = await createWorkflow(baseId, {
+          name: 'Conflicting button workflow',
+          trigger: {
+            type: 'buttonClick',
+            config: {
+              tableId: table.id,
+              watchFieldIds: [activeField.id],
+            },
+          },
+        }).then((res) => res.data);
+        conflictingWorkflowId = conflictingWorkflow.id;
+
+        await expect(updateWorkflow(baseId, workflow.id, { isActive: true })).rejects.toThrow();
+      } finally {
+        if (conflictingWorkflowId) {
+          await deleteWorkflow(baseId, conflictingWorkflowId).catch(() => undefined);
+        }
+        if (workflowId) {
+          await deleteWorkflow(baseId, workflowId).catch(() => undefined);
+        }
+      }
+    });
+
     it('should not click a button field with exceed max count', async () => {
       const field = await createField(table.id, {
         type: FieldType.Button,
@@ -1358,9 +1567,10 @@ describe('OpenAPI RecordController (e2e)', () => {
       let table: ITableFullVo;
 
       const updateRecordsV1 = async (tableId: string, body: Record<string, unknown>) => {
+        const legacyCanaryHeader = 'x-canary';
         return await axios.patch(`/table/${tableId}/record`, body, {
           headers: {
-            'x-canary': 'false',
+            [legacyCanaryHeader]: 'false',
           },
         });
       };

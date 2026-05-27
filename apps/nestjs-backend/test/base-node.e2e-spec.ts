@@ -1,6 +1,7 @@
 /* eslint-disable sonarjs/no-duplicate-string */
 import type { INestApplication } from '@nestjs/common';
-import { FieldType, Relationship, Role, ViewType } from '@teable/core';
+import type { IButtonFieldOptions } from '@teable/core';
+import { Colors, FieldType, Relationship, Role, ViewType } from '@teable/core';
 import type { IBaseNodeTableResourceMeta, IBaseNodeVo } from '@teable/openapi';
 import {
   axios,
@@ -165,6 +166,73 @@ describe('BaseNodeController (e2e) /api/base/:baseId/node', () => {
       expect(response.data.resourceId).toBeDefined();
 
       nodesToCleanup.push(response.data.id);
+    });
+
+    it('should sync and deduplicate button workflow binding through base node route', async () => {
+      const tableNode = await createBaseNode(baseId, {
+        resourceType: BaseNodeResourceType.Table,
+        name: 'Button Workflow Table',
+        fields: [
+          { name: 'Name', type: FieldType.SingleLineText },
+          {
+            name: 'Action',
+            type: FieldType.Button,
+            options: {
+              label: 'Run',
+              color: Colors.Teal,
+            },
+          },
+        ],
+        views: [{ name: 'Grid view', type: ViewType.Grid }],
+      });
+      nodesToCleanup.push(tableNode.data.id);
+
+      const fields = await getFields(tableNode.data.resourceId);
+      const buttonField = fields.find((field) => field.name === 'Action');
+      expect(buttonField).toBeDefined();
+      if (!buttonField) return;
+
+      const workflowNode = await createBaseNode(baseId, {
+        resourceType: BaseNodeResourceType.Workflow,
+        name: 'Button Workflow',
+        trigger: {
+          type: 'buttonClick',
+          config: {
+            tableId: tableNode.data.resourceId,
+            watchFieldIds: [buttonField.id],
+          },
+        },
+      });
+      nodesToCleanup.push(workflowNode.data.id);
+
+      const syncedField = (await getFields(tableNode.data.resourceId)).find(
+        (field) => field.id === buttonField.id
+      );
+      expect((syncedField?.options as IButtonFieldOptions).workflow).toEqual({
+        id: workflowNode.data.resourceId,
+        name: 'Button Workflow',
+        isActive: false,
+      });
+
+      const duplicateError = await getError(() =>
+        duplicateBaseNode(baseId, workflowNode.data.id, { name: 'Duplicated Button Workflow' })
+      );
+      expect(duplicateError?.status).toBeGreaterThanOrEqual(400);
+
+      await updateBaseNode(baseId, workflowNode.data.id, { name: 'Renamed Button Workflow' });
+      const renamedField = (await getFields(tableNode.data.resourceId)).find(
+        (field) => field.id === buttonField.id
+      );
+      expect((renamedField?.options as IButtonFieldOptions).workflow?.name).toBe(
+        'Renamed Button Workflow'
+      );
+
+      await deleteBaseNode(baseId, workflowNode.data.id);
+      nodesToCleanup.pop();
+      const deletedField = (await getFields(tableNode.data.resourceId)).find(
+        (field) => field.id === buttonField.id
+      );
+      expect((deletedField?.options as IButtonFieldOptions).workflow).toBeNull();
     });
 
     it('should expose create-table canary headers when creating a table node', async () => {

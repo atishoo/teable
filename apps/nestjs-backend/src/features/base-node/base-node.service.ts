@@ -7,7 +7,8 @@ import {
   getUniqName,
   HttpErrorCode,
 } from '@teable/core';
-import { Prisma, PrismaService } from '@teable/db-main-prisma';
+import { PrismaService } from '@teable/db-main-prisma';
+import type { Prisma } from '@teable/db-main-prisma';
 import type {
   IMoveBaseNodeRo,
   IBaseNodeVo,
@@ -46,8 +47,9 @@ import type { IPerformanceCacheStore } from '../../performance-cache/types';
 import { ShareDbService } from '../../share-db/share-db.service';
 import type { IClsStore } from '../../types/cls';
 import { updateOrder } from '../../utils/update-order';
-import type { IV2Decision } from '../canary/canary.service';
+import { AutomationService } from '../automation/automation.service';
 import { CanaryService } from '../canary/canary.service';
+import type { IV2Decision } from '../canary/canary.service';
 import { DashboardService } from '../dashboard/dashboard.service';
 import { TableOpenApiV2Service } from '../table/open-api/table-open-api-v2.service';
 import { TableOpenApiService } from '../table/open-api/table-open-api.service';
@@ -82,7 +84,8 @@ export class BaseNodeService {
     private readonly tableOpenApiService: TableOpenApiService,
     private readonly tableOpenApiV2Service: TableOpenApiV2Service,
     private readonly tableDuplicateService: TableDuplicateService,
-    private readonly dashboardService: DashboardService
+    private readonly dashboardService: DashboardService,
+    private readonly automationService: AutomationService
   ) {}
 
   private get userId() {
@@ -534,37 +537,44 @@ export class BaseNodeService {
         return { id: dashboard.id, name: dashboard.name };
       }
       case BaseNodeResourceType.Workflow: {
-        const workflowRo = ro as ICreateWorkflowNodeRo;
-        const trigger = workflowRo.trigger as
-          | { type?: string; config?: Record<string, unknown> }
-          | undefined;
-        const nodes = trigger
-          ? [
-              {
-                id: generateWorkflowTriggerId(),
-                type: trigger.type ?? 'buttonClick',
-                category: 'trigger',
-                name: trigger.type ?? 'buttonClick',
-                config: trigger.config ?? {},
-              },
-            ]
-          : [];
-        return this.prismaService.txClient().workflow.create({
-          data: {
-            id: generateWorkflowId(),
-            baseId,
-            name: workflowRo.name,
-            trigger: workflowRo.trigger as Prisma.InputJsonValue | undefined,
-            nodes: nodes as Prisma.InputJsonValue,
-            edges: [] as Prisma.InputJsonValue,
-            isActive: workflowRo.isActive ?? false,
-            createdBy: this.userId,
-          },
-          select: {
-            id: true,
-            name: true,
-            isActive: true,
-          },
+        return await this.prismaService.$tx(async () => {
+          const workflowRo = ro as ICreateWorkflowNodeRo;
+          const trigger = workflowRo.trigger as
+            | { type?: string; config?: Record<string, unknown> }
+            | undefined;
+          const nodes = trigger
+            ? [
+                {
+                  id: generateWorkflowTriggerId(),
+                  type: trigger.type ?? 'buttonClick',
+                  category: 'trigger',
+                  name: trigger.type ?? 'buttonClick',
+                  config: trigger.config ?? {},
+                },
+              ]
+            : [];
+          const workflow = await this.prismaService.txClient().workflow.create({
+            data: {
+              id: generateWorkflowId(),
+              baseId,
+              name: workflowRo.name,
+              trigger: workflowRo.trigger as Prisma.InputJsonValue | undefined,
+              nodes: nodes as Prisma.InputJsonValue,
+              edges: [] as Prisma.InputJsonValue,
+              isActive: workflowRo.isActive ?? false,
+              createdBy: this.userId,
+            },
+            select: {
+              id: true,
+              name: true,
+              isActive: true,
+            },
+          });
+          await this.automationService.syncButtonWorkflowBinding(baseId, workflow.id, {
+            checkDraft: true,
+            checkActive: workflow.isActive,
+          });
+          return workflow;
         });
       }
       default:
@@ -705,53 +715,61 @@ export class BaseNodeService {
         return { id: dashboard.id, name: dashboard.name };
       }
       case BaseNodeResourceType.Workflow: {
-        const workflow = await this.prismaService.workflow
-          .findFirstOrThrow({
-            where: { baseId, id, deletedTime: null },
+        return await this.prismaService.$tx(async () => {
+          const workflow = await this.prismaService
+            .txClient()
+            .workflow.findFirstOrThrow({
+              where: { baseId, id, deletedTime: null },
+              select: {
+                name: true,
+                trigger: true,
+                nodes: true,
+                edges: true,
+                activeSnapshot: true,
+                activeTime: true,
+                activeBy: true,
+                isActive: true,
+              },
+            })
+            .catch(() => {
+              throw new CustomHttpException('Workflow not found', HttpErrorCode.NOT_FOUND, {
+                localization: {
+                  i18nKey: 'httpErrors.baseNode.notFound',
+                },
+              });
+            });
+          const workflows = await this.prismaService.txClient().workflow.findMany({
+            where: { baseId, deletedTime: null },
+            select: { name: true },
+          });
+          const duplicated = await this.prismaService.txClient().workflow.create({
+            data: {
+              id: generateWorkflowId(),
+              baseId,
+              name: getUniqName(
+                workflow.name,
+                workflows.map((item) => item.name)
+              ),
+              trigger: workflow.trigger as Prisma.InputJsonValue | undefined,
+              nodes: workflow.nodes as Prisma.InputJsonValue | undefined,
+              edges: workflow.edges as Prisma.InputJsonValue | undefined,
+              activeSnapshot: workflow.activeSnapshot as Prisma.InputJsonValue | undefined,
+              activeTime: workflow.activeTime,
+              activeBy: workflow.activeBy,
+              isActive: workflow.isActive,
+              createdBy: this.userId,
+            },
             select: {
+              id: true,
               name: true,
-              trigger: true,
-              nodes: true,
-              edges: true,
-              activeSnapshot: true,
-              activeTime: true,
-              activeBy: true,
               isActive: true,
             },
-          })
-          .catch(() => {
-            throw new CustomHttpException('Workflow not found', HttpErrorCode.NOT_FOUND, {
-              localization: {
-                i18nKey: 'httpErrors.baseNode.notFound',
-              },
-            });
           });
-        const workflows = await this.prismaService.workflow.findMany({
-          where: { baseId, deletedTime: null },
-          select: { name: true },
-        });
-        return this.prismaService.workflow.create({
-          data: {
-            id: generateWorkflowId(),
-            baseId,
-            name: getUniqName(
-              workflow.name,
-              workflows.map((item) => item.name)
-            ),
-            trigger: workflow.trigger as Prisma.InputJsonValue | undefined,
-            nodes: workflow.nodes as Prisma.InputJsonValue | undefined,
-            edges: workflow.edges as Prisma.InputJsonValue | undefined,
-            activeSnapshot: workflow.activeSnapshot as Prisma.InputJsonValue | undefined,
-            activeTime: workflow.activeTime,
-            activeBy: workflow.activeBy,
-            isActive: workflow.isActive,
-            createdBy: this.userId,
-          },
-          select: {
-            id: true,
-            name: true,
-            isActive: true,
-          },
+          await this.automationService.syncButtonWorkflowBinding(baseId, duplicated.id, {
+            checkDraft: true,
+            checkActive: workflow.isActive,
+          });
+          return duplicated;
         });
       }
       default:
@@ -828,21 +846,25 @@ export class BaseNodeService {
         break;
       case BaseNodeResourceType.Workflow:
         if (name) {
-          await this.prismaService.workflow
-            .update({
-              where: { id },
-              data: {
-                name,
-                lastModifiedBy: this.userId,
-              },
-            })
-            .catch(() => {
-              throw new CustomHttpException('Workflow not found', HttpErrorCode.NOT_FOUND, {
-                localization: {
-                  i18nKey: 'httpErrors.baseNode.notFound',
+          await this.prismaService.$tx(async () => {
+            await this.prismaService
+              .txClient()
+              .workflow.update({
+                where: { id },
+                data: {
+                  name,
+                  lastModifiedBy: this.userId,
                 },
+              })
+              .catch(() => {
+                throw new CustomHttpException('Workflow not found', HttpErrorCode.NOT_FOUND, {
+                  localization: {
+                    i18nKey: 'httpErrors.baseNode.notFound',
+                  },
+                });
               });
-            });
+            await this.automationService.syncButtonWorkflowBinding(baseId, id);
+          });
         }
         break;
       default:
@@ -941,17 +963,7 @@ export class BaseNodeService {
         await this.dashboardService.deleteDashboard(baseId, id);
         break;
       case BaseNodeResourceType.Workflow:
-        if (permanent) {
-          await this.prismaService.workflow.delete({ where: { id } });
-        } else {
-          await this.prismaService.workflow.update({
-            where: { id },
-            data: {
-              deletedTime: new Date(),
-              lastModifiedBy: this.userId,
-            },
-          });
-        }
+        await this.automationService.deleteWorkflowResource(baseId, id, permanent);
         break;
       default:
         throw new CustomHttpException(
@@ -965,7 +977,6 @@ export class BaseNodeService {
         );
     }
   }
-
   async move(baseId: string, nodeId: string, ro: IMoveBaseNodeRo): Promise<IBaseNodeVo> {
     this.setIgnoreBaseNodeListener();
 

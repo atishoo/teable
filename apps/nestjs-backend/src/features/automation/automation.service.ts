@@ -4,13 +4,14 @@ import { Injectable } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import {
   FieldKeyType,
+  FieldType,
   generateWorkflowActionId,
   generateWorkflowDecisionId,
   generateWorkflowId,
   generateWorkflowTriggerId,
   HttpErrorCode,
 } from '@teable/core';
-import type { IRecord } from '@teable/core';
+import type { IButtonFieldOptions, IConvertFieldRo, IRecord } from '@teable/core';
 import { Prisma, PrismaService } from '@teable/db-main-prisma';
 import {
   AIActions,
@@ -35,6 +36,7 @@ import { Events, RecordCreateEvent, RecordUpdateEvent } from '../../event-emitte
 import type { ButtonClickEvent } from '../../event-emitter/events/table/button.event';
 import type { IClsStore } from '../../types/cls';
 import { AiService } from '../ai/ai.service';
+import { FieldConvertingService } from '../field/field-calculate/field-converting.service';
 import { MailSenderService } from '../mail-sender/mail-sender.service';
 import { RecordOpenApiService } from '../record/open-api/record-open-api.service';
 import { RecordService } from '../record/record.service';
@@ -55,6 +57,27 @@ interface IWorkflowRunListQuery {
 interface IWorkflowSnapshot {
   nodes: IWorkflowNode[];
   edges: IWorkflowEdge[];
+}
+
+interface IWorkflowButtonBindingSource {
+  id: string;
+  name: string | null;
+  baseId: string;
+  trigger?: unknown;
+  nodes?: unknown;
+  edges?: unknown;
+  activeSnapshot?: unknown;
+  isActive: boolean;
+}
+
+interface IWorkflowButtonBinding {
+  tableId: string;
+  fieldIds: Set<string>;
+}
+
+interface IButtonWorkflowBindingSyncOptions {
+  checkDraft?: boolean;
+  checkActive?: boolean;
 }
 
 interface IRuntimeContext {
@@ -108,6 +131,7 @@ export class AutomationService {
     private readonly recordService: RecordService,
     private readonly mailSenderService: MailSenderService,
     private readonly aiService: AiService,
+    private readonly fieldConvertingService: FieldConvertingService,
     private readonly cls: ClsService<IClsStore>
   ) {}
 
@@ -121,20 +145,24 @@ export class AutomationService {
   }
 
   async create(baseId: string, ro: IWorkflowRo) {
-    const nodes = ro.nodes ?? this.nodesFromTrigger(ro.trigger);
-    const workflow = await this.prismaService.workflow.create({
-      data: {
-        id: generateWorkflowId(),
-        name: ro.name ?? '新自动化',
-        description: ro.description,
-        baseId,
-        trigger: this.getTriggerFromNodes(nodes) as Prisma.InputJsonValue | undefined,
-        nodes: nodes as Prisma.InputJsonValue,
-        edges: (ro.edges ?? []) as Prisma.InputJsonValue,
-        createdBy: this.userId(),
-      },
+    return await this.prismaService.$tx(async () => {
+      const nodes = ro.nodes ?? this.nodesFromTrigger(ro.trigger);
+      const workflow = await this.prismaService.txClient().workflow.create({
+        data: {
+          id: generateWorkflowId(),
+          name: ro.name ?? '新自动化',
+          description: ro.description,
+          baseId,
+          trigger: this.getTriggerFromNodes(nodes) as Prisma.InputJsonValue | undefined,
+          nodes: nodes as Prisma.InputJsonValue,
+          edges: (ro.edges ?? []) as Prisma.InputJsonValue,
+          createdBy: this.userId(),
+        },
+      });
+      await this.assertButtonWorkflowBindingAvailable(workflow, { checkDraft: true });
+      await this.syncButtonWorkflowFields(workflow);
+      return this.toVo(workflow);
     });
-    return this.toVo(workflow);
   }
 
   async get(baseId: string, workflowId: string) {
@@ -143,77 +171,130 @@ export class AutomationService {
   }
 
   async update(baseId: string, workflowId: string, ro: IUpdateWorkflowRo) {
-    await this.findWorkflow(baseId, workflowId);
-    const nodes = ro.nodes;
-    const data: Prisma.WorkflowUpdateInput = {
-      ...(ro.name === undefined ? {} : { name: ro.name }),
-      ...(ro.description === undefined ? {} : { description: ro.description }),
-      ...(nodes === undefined ? {} : { nodes: nodes as Prisma.InputJsonValue }),
-      ...(ro.edges === undefined ? {} : { edges: ro.edges as Prisma.InputJsonValue }),
-      ...(nodes === undefined
-        ? {}
-        : { trigger: this.getTriggerFromNodes(nodes) as Prisma.InputJsonValue | undefined }),
-      ...(ro.isActive === undefined ? {} : { isActive: ro.isActive }),
-      lastModifiedBy: this.userId(),
-    };
-    const workflow = await this.prismaService.workflow.update({ where: { id: workflowId }, data });
-    return this.toVo(workflow);
+    return await this.prismaService.$tx(async () => {
+      await this.findWorkflow(baseId, workflowId);
+      const nodes = ro.nodes;
+      const data: Prisma.WorkflowUpdateInput = {
+        ...(ro.name === undefined ? {} : { name: ro.name }),
+        ...(ro.description === undefined ? {} : { description: ro.description }),
+        ...(nodes === undefined ? {} : { nodes: nodes as Prisma.InputJsonValue }),
+        ...(ro.edges === undefined ? {} : { edges: ro.edges as Prisma.InputJsonValue }),
+        ...(nodes === undefined
+          ? {}
+          : { trigger: this.getTriggerFromNodes(nodes) as Prisma.InputJsonValue | undefined }),
+        ...(ro.isActive === undefined ? {} : { isActive: ro.isActive }),
+        lastModifiedBy: this.userId(),
+      };
+      const workflow = await this.prismaService
+        .txClient()
+        .workflow.update({ where: { id: workflowId }, data });
+      if (nodes !== undefined) {
+        await this.assertButtonTriggerBindingAvailable(workflow);
+      }
+      if (ro.isActive === true) {
+        await this.assertButtonTriggerBindingAvailable(
+          workflow,
+          this.getButtonBindingSnapshot(workflow)
+        );
+      }
+      await this.syncButtonWorkflowFields(workflow);
+      return this.toVo(workflow);
+    });
   }
 
   async delete(baseId: string, workflowId: string) {
-    await this.findWorkflow(baseId, workflowId);
-    await this.prismaService.workflow.update({
-      where: { id: workflowId },
-      data: { deletedTime: new Date(), isActive: false, lastModifiedBy: this.userId() },
-    });
+    await this.deleteWorkflowResource(baseId, workflowId);
     return { workflowId };
   }
 
-  async updateActive(baseId: string, workflowId: string, ro: IActiveWorkflowRo) {
-    const workflow = await this.findWorkflow(baseId, workflowId);
-    const snapshot = this.getDraftSnapshot(workflow);
-
-    if (ro.method === 'activate') {
-      this.assertActivatable(snapshot);
-      const activeSnapshot = {
-        ...snapshot,
-        activatedAt: new Date().toISOString(),
-        activatedBy: this.userId(),
-      };
-      const updated = await this.prismaService.workflow.update({
-        where: { id: workflowId },
-        data: {
-          activeSnapshot: activeSnapshot as Prisma.InputJsonValue,
-          activeTime: new Date(),
-          activeBy: this.userId(),
-          isActive: true,
-          lastModifiedBy: this.userId(),
-        },
-      });
-      return this.toVo(updated);
-    }
-
-    if (ro.method === 'discard') {
-      const activeSnapshot = this.getActiveSnapshotGraph(workflow);
-      const updated = await this.prismaService.workflow.update({
-        where: { id: workflowId },
-        data: {
-          nodes: activeSnapshot.nodes as Prisma.InputJsonValue,
-          edges: activeSnapshot.edges as Prisma.InputJsonValue,
-          trigger: this.getTriggerFromNodes(activeSnapshot.nodes) as
-            | Prisma.InputJsonValue
-            | undefined,
-          lastModifiedBy: this.userId(),
-        },
-      });
-      return this.toVo(updated);
-    }
-
-    const updated = await this.prismaService.workflow.update({
-      where: { id: workflowId },
-      data: { isActive: false, lastModifiedBy: this.userId() },
+  async syncButtonWorkflowBinding(
+    baseId: string,
+    workflowId: string,
+    options: IButtonWorkflowBindingSyncOptions = {}
+  ) {
+    return await this.prismaService.$tx(async () => {
+      const workflow = await this.findWorkflow(baseId, workflowId);
+      await this.assertButtonWorkflowBindingAvailable(workflow, options);
+      await this.syncButtonWorkflowFields(workflow);
+      return workflow;
     });
-    return this.toVo(updated);
+  }
+
+  async deleteWorkflowResource(baseId: string, workflowId: string, permanent?: boolean) {
+    return await this.prismaService.$tx(async () => {
+      if (permanent) {
+        const workflow = await this.prismaService.txClient().workflow.findFirst({
+          where: { id: workflowId, baseId },
+          select: { id: true },
+        });
+        if (!workflow) {
+          throw new CustomHttpException('Workflow not found', HttpErrorCode.NOT_FOUND);
+        }
+        await this.clearButtonWorkflowFields(baseId, workflowId);
+        await this.prismaService.txClient().workflow.delete({ where: { id: workflowId } });
+        return;
+      }
+
+      await this.findWorkflow(baseId, workflowId);
+      await this.clearButtonWorkflowFields(baseId, workflowId);
+      await this.prismaService.txClient().workflow.update({
+        where: { id: workflowId },
+        data: { deletedTime: new Date(), isActive: false, lastModifiedBy: this.userId() },
+      });
+    });
+  }
+
+  async updateActive(baseId: string, workflowId: string, ro: IActiveWorkflowRo) {
+    return await this.prismaService.$tx(async () => {
+      const workflow = await this.findWorkflow(baseId, workflowId);
+      const snapshot = this.getDraftSnapshot(workflow);
+
+      if (ro.method === 'activate') {
+        this.assertActivatable(snapshot);
+        const activeSnapshot = {
+          ...snapshot,
+          activatedAt: new Date().toISOString(),
+          activatedBy: this.userId(),
+        };
+        await this.assertButtonTriggerBindingAvailable(workflow, snapshot);
+        const updated = await this.prismaService.txClient().workflow.update({
+          where: { id: workflowId },
+          data: {
+            activeSnapshot: activeSnapshot as Prisma.InputJsonValue,
+            activeTime: new Date(),
+            activeBy: this.userId(),
+            isActive: true,
+            lastModifiedBy: this.userId(),
+          },
+        });
+        await this.syncButtonWorkflowFields(updated);
+        return this.toVo(updated);
+      }
+
+      if (ro.method === 'discard') {
+        const activeSnapshot = this.getActiveSnapshotGraph(workflow);
+        const updated = await this.prismaService.txClient().workflow.update({
+          where: { id: workflowId },
+          data: {
+            nodes: activeSnapshot.nodes as Prisma.InputJsonValue,
+            edges: activeSnapshot.edges as Prisma.InputJsonValue,
+            trigger: this.getTriggerFromNodes(activeSnapshot.nodes) as
+              | Prisma.InputJsonValue
+              | undefined,
+            lastModifiedBy: this.userId(),
+          },
+        });
+        await this.syncButtonWorkflowFields(updated);
+        return this.toVo(updated);
+      }
+
+      const updated = await this.prismaService.txClient().workflow.update({
+        where: { id: workflowId },
+        data: { isActive: false, lastModifiedBy: this.userId() },
+      });
+      await this.syncButtonWorkflowFields(updated);
+      return this.toVo(updated);
+    });
   }
 
   async getActiveSnapshot(baseId: string, workflowId: string) {
@@ -235,26 +316,31 @@ export class AutomationService {
     category: IWorkflowCategory,
     ro: ICreateWorkflowGraphNodeRo
   ) {
-    const workflow = await this.findWorkflow(baseId, workflowId);
-    const snapshot = this.getDraftSnapshot(workflow);
-    const node = this.makeNode(category, ro);
-    const nodes =
-      category === 'trigger'
-        ? [node, ...snapshot.nodes.filter((item) => item.category !== 'trigger')]
-        : [...snapshot.nodes, node];
-    const removedNodeIds = new Set(
-      category === 'trigger'
-        ? snapshot.nodes.filter((item) => item.category === 'trigger').map((item) => item.id)
-        : []
-    );
-    const edges = snapshot.edges.filter(
-      (edge) => !removedNodeIds.has(edge.source) && !removedNodeIds.has(edge.target)
-    );
-    if (ro.parentNodeId) {
-      edges.push({ source: ro.parentNodeId, target: node.id });
-    }
-    await this.saveGraph(workflowId, nodes, edges);
-    return node;
+    return await this.prismaService.$tx(async () => {
+      const workflow = await this.findWorkflow(baseId, workflowId);
+      const snapshot = this.getDraftSnapshot(workflow);
+      const node = this.makeNode(category, ro);
+      const nodes =
+        category === 'trigger'
+          ? [node, ...snapshot.nodes.filter((item) => item.category !== 'trigger')]
+          : [...snapshot.nodes, node];
+      const removedNodeIds = new Set(
+        category === 'trigger'
+          ? snapshot.nodes.filter((item) => item.category === 'trigger').map((item) => item.id)
+          : []
+      );
+      const edges = snapshot.edges.filter(
+        (edge) => !removedNodeIds.has(edge.source) && !removedNodeIds.has(edge.target)
+      );
+      if (ro.parentNodeId) {
+        edges.push({ source: ro.parentNodeId, target: node.id });
+      }
+      await this.saveGraph(workflowId, nodes, edges);
+      const updated = await this.findWorkflow(baseId, workflowId);
+      await this.assertButtonTriggerBindingAvailable(updated);
+      await this.syncButtonWorkflowFields(updated);
+      return node;
+    });
   }
 
   async updateNode(
@@ -264,26 +350,31 @@ export class AutomationService {
     nodeId: string,
     ro: IUpdateWorkflowGraphNodeRo
   ) {
-    const workflow = await this.findWorkflow(baseId, workflowId);
-    const snapshot = this.getDraftSnapshot(workflow);
-    let updatedNode: IWorkflowNode | undefined;
-    const nodes = snapshot.nodes.map((node) => {
-      if (node.id !== nodeId || node.category !== category) return node;
-      updatedNode = {
-        ...node,
-        ...(ro.name === undefined ? {} : { name: ro.name }),
-        ...(ro.description === undefined ? {} : { description: ro.description }),
-        ...(ro.config === undefined ? {} : { config: ro.config }),
-        lastModifiedBy: this.userId(),
-        lastModifiedTime: new Date().toISOString(),
-      };
+    return await this.prismaService.$tx(async () => {
+      const workflow = await this.findWorkflow(baseId, workflowId);
+      const snapshot = this.getDraftSnapshot(workflow);
+      let updatedNode: IWorkflowNode | undefined;
+      const nodes = snapshot.nodes.map((node) => {
+        if (node.id !== nodeId || node.category !== category) return node;
+        updatedNode = {
+          ...node,
+          ...(ro.name === undefined ? {} : { name: ro.name }),
+          ...(ro.description === undefined ? {} : { description: ro.description }),
+          ...(ro.config === undefined ? {} : { config: ro.config }),
+          lastModifiedBy: this.userId(),
+          lastModifiedTime: new Date().toISOString(),
+        };
+        return updatedNode;
+      });
+      if (!updatedNode) {
+        throw new CustomHttpException('Workflow node not found', HttpErrorCode.NOT_FOUND);
+      }
+      await this.saveGraph(workflowId, nodes, snapshot.edges);
+      const updated = await this.findWorkflow(baseId, workflowId);
+      await this.assertButtonTriggerBindingAvailable(updated);
+      await this.syncButtonWorkflowFields(updated);
       return updatedNode;
     });
-    if (!updatedNode) {
-      throw new CustomHttpException('Workflow node not found', HttpErrorCode.NOT_FOUND);
-    }
-    await this.saveGraph(workflowId, nodes, snapshot.edges);
-    return updatedNode;
   }
 
   async generateWebhookToken(baseId: string, workflowId: string, nodeId: string) {
@@ -308,14 +399,21 @@ export class AutomationService {
     category: IWorkflowCategory,
     nodeId: string
   ) {
-    const workflow = await this.findWorkflow(baseId, workflowId);
-    const snapshot = this.getDraftSnapshot(workflow);
-    const nodes = snapshot.nodes.filter(
-      (node) => !(node.id === nodeId && node.category === category)
-    );
-    const edges = snapshot.edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId);
-    await this.saveGraph(workflowId, nodes, edges);
-    return { nodeId };
+    return await this.prismaService.$tx(async () => {
+      const workflow = await this.findWorkflow(baseId, workflowId);
+      const snapshot = this.getDraftSnapshot(workflow);
+      const nodes = snapshot.nodes.filter(
+        (node) => !(node.id === nodeId && node.category === category)
+      );
+      const edges = snapshot.edges.filter(
+        (edge) => edge.source !== nodeId && edge.target !== nodeId
+      );
+      await this.saveGraph(workflowId, nodes, edges);
+      const updated = await this.findWorkflow(baseId, workflowId);
+      await this.assertButtonTriggerBindingAvailable(updated);
+      await this.syncButtonWorkflowFields(updated);
+      return { nodeId };
+    });
   }
 
   async runManualTest(
@@ -1660,7 +1758,7 @@ export class AutomationService {
   }
 
   private async saveGraph(workflowId: string, nodes: IWorkflowNode[], edges: IWorkflowEdge[]) {
-    await this.prismaService.workflow.update({
+    await this.prismaService.txClient().workflow.update({
       where: { id: workflowId },
       data: {
         nodes: nodes as Prisma.InputJsonValue,
@@ -1669,6 +1767,289 @@ export class AutomationService {
         lastModifiedBy: this.userId(),
       },
     });
+  }
+
+  private getButtonBindingSnapshot(workflow: IWorkflowButtonBindingSource) {
+    return workflow.isActive
+      ? this.getActiveSnapshotGraph(workflow)
+      : this.getDraftSnapshot(workflow);
+  }
+
+  private getButtonTriggerBindingFromSnapshot(snapshot: IWorkflowSnapshot) {
+    const triggerNode = snapshot.nodes.find(
+      (node) => node.category === 'trigger' && node.type === 'buttonClick'
+    );
+    const config = triggerNode?.config ?? {};
+    const tableId = this.optionalString(config.tableId);
+    const fieldIds = this.stringArray(config.watchFieldIds);
+    if (!tableId || !fieldIds.length) {
+      return;
+    }
+    return {
+      tableId,
+      fieldIds: new Set(fieldIds),
+    };
+  }
+
+  private getButtonTriggerBinding(workflow: IWorkflowButtonBindingSource) {
+    return this.getButtonTriggerBindingFromSnapshot(this.getButtonBindingSnapshot(workflow));
+  }
+
+  private getButtonTriggerBindings(workflow: IWorkflowButtonBindingSource) {
+    const bindings: IWorkflowButtonBinding[] = [];
+    const draftBinding = this.getButtonTriggerBindingFromSnapshot(this.getDraftSnapshot(workflow));
+    if (draftBinding) {
+      bindings.push(draftBinding);
+    }
+
+    if (workflow.isActive && workflow.activeSnapshot) {
+      const activeBinding = this.getButtonTriggerBindingFromSnapshot(
+        this.getActiveSnapshotGraph(workflow)
+      );
+      if (activeBinding) {
+        bindings.push(activeBinding);
+      }
+    }
+
+    return bindings;
+  }
+
+  private parseButtonOptions(options: string | null) {
+    if (!options) return;
+    try {
+      const parsed = JSON.parse(options) as unknown;
+      return isPlainObject(parsed) ? (parsed as IButtonFieldOptions) : undefined;
+    } catch {
+      return;
+    }
+  }
+
+  private isSameButtonWorkflow(
+    current: IButtonFieldOptions['workflow'],
+    next: NonNullable<IButtonFieldOptions['workflow']>
+  ) {
+    return (
+      current?.id === next.id && current?.name === next.name && current?.isActive === next.isActive
+    );
+  }
+
+  private hasButtonBindingConflict(source: IWorkflowButtonBinding, target: IWorkflowButtonBinding) {
+    return (
+      source.tableId === target.tableId &&
+      [...source.fieldIds].some((fieldId) => target.fieldIds.has(fieldId))
+    );
+  }
+
+  private throwButtonBindingDuplicated(workflow: { id: string; name: string | null }) {
+    throw new CustomHttpException(
+      `Button field is already bound to workflow ${workflow.name}[${workflow.id}]`,
+      HttpErrorCode.VALIDATION_ERROR,
+      {
+        localization: {
+          i18nKey: 'httpErrors.automation.buttonClickTriggerDuplicated',
+          context: {
+            id: workflow.id,
+            name: workflow.name ?? workflow.id,
+          },
+        },
+      }
+    );
+  }
+
+  private async assertButtonFieldOptionsAvailable(
+    workflow: IWorkflowButtonBindingSource,
+    binding: IWorkflowButtonBinding
+  ) {
+    const fields = await this.prismaService.txClient().field.findMany({
+      where: {
+        tableId: binding.tableId,
+        id: { in: [...binding.fieldIds] },
+        type: FieldType.Button,
+        deletedTime: null,
+      },
+      select: {
+        options: true,
+      },
+    });
+
+    for (const field of fields) {
+      const options = this.parseButtonOptions(field.options);
+      const workflowId = options?.workflow?.id;
+      if (!workflowId || workflowId === workflow.id) continue;
+
+      const existingWorkflow = await this.prismaService.txClient().workflow.findFirst({
+        where: { id: workflowId, baseId: workflow.baseId, deletedTime: null },
+        select: { id: true, name: true },
+      });
+      if (existingWorkflow) {
+        this.throwButtonBindingDuplicated(existingWorkflow);
+      }
+    }
+  }
+
+  private async assertButtonWorkflowBindingAvailable(
+    workflow: IWorkflowButtonBindingSource,
+    options: IButtonWorkflowBindingSyncOptions
+  ) {
+    if (options.checkDraft) {
+      await this.assertButtonTriggerBindingAvailable(workflow, this.getDraftSnapshot(workflow));
+    }
+    if (options.checkActive) {
+      await this.assertButtonTriggerBindingAvailable(
+        workflow,
+        this.getActiveSnapshotGraph(workflow)
+      );
+    }
+  }
+
+  private async assertButtonTriggerBindingAvailable(
+    workflow: IWorkflowButtonBindingSource,
+    snapshot = this.getDraftSnapshot(workflow)
+  ) {
+    const binding = this.getButtonTriggerBindingFromSnapshot(snapshot);
+    if (!binding) return;
+
+    await this.assertButtonFieldOptionsAvailable(workflow, binding);
+
+    const workflows = await this.prismaService.txClient().workflow.findMany({
+      where: {
+        id: { not: workflow.id },
+        baseId: workflow.baseId,
+        deletedTime: null,
+      },
+      select: {
+        id: true,
+        name: true,
+        baseId: true,
+        trigger: true,
+        nodes: true,
+        edges: true,
+        activeSnapshot: true,
+        isActive: true,
+      },
+    });
+
+    for (const otherWorkflow of workflows) {
+      const hasConflict = this.getButtonTriggerBindings(otherWorkflow).some((otherBinding) =>
+        this.hasButtonBindingConflict(binding, otherBinding)
+      );
+      if (hasConflict) {
+        this.throwButtonBindingDuplicated(otherWorkflow);
+      }
+    }
+  }
+
+  private async hasExistingButtonWorkflowBinding(
+    workflow: IWorkflowButtonBindingSource,
+    options: IButtonFieldOptions
+  ) {
+    const workflowId = options.workflow?.id;
+    if (!workflowId || workflowId === workflow.id) return false;
+
+    const existingWorkflow = await this.prismaService.txClient().workflow.findFirst({
+      where: { id: workflowId, baseId: workflow.baseId, deletedTime: null },
+      select: { id: true },
+    });
+
+    return Boolean(existingWorkflow);
+  }
+
+  private isButtonTriggerField(
+    binding: IWorkflowButtonBinding | undefined,
+    field: { id: string; tableId: string }
+  ) {
+    return binding?.tableId === field.tableId && binding.fieldIds.has(field.id);
+  }
+
+  private async updateButtonWorkflowOptions(
+    tableId: string,
+    fieldId: string,
+    options: IButtonFieldOptions
+  ) {
+    const { newField, oldField, modifiedOps } = await this.fieldConvertingService.stageAnalysis(
+      tableId,
+      fieldId,
+      {
+        type: FieldType.Button,
+        options,
+      } as IConvertFieldRo
+    );
+    await this.fieldConvertingService.stageAlter(tableId, newField, oldField);
+    await this.fieldConvertingService.stageCalculate(tableId, newField, oldField, modifiedOps);
+  }
+
+  private async syncButtonWorkflowFields(workflow: IWorkflowButtonBindingSource) {
+    const binding = this.getButtonTriggerBinding(workflow);
+    const workflowMeta = {
+      id: workflow.id,
+      name: workflow.name ?? undefined,
+      isActive: workflow.isActive,
+    };
+    const fields = await this.prismaService.txClient().field.findMany({
+      where: {
+        type: FieldType.Button,
+        deletedTime: null,
+        table: {
+          baseId: workflow.baseId,
+          deletedTime: null,
+        },
+      },
+      select: {
+        id: true,
+        tableId: true,
+        options: true,
+      },
+    });
+    for (const field of fields) {
+      const options = this.parseButtonOptions(field.options);
+      if (!options) continue;
+
+      const shouldBind = this.isButtonTriggerField(binding, field);
+      const isBoundToWorkflow = options.workflow?.id === workflow.id;
+
+      if (shouldBind) {
+        if (this.isSameButtonWorkflow(options.workflow, workflowMeta)) continue;
+        if (await this.hasExistingButtonWorkflowBinding(workflow, options)) continue;
+        await this.updateButtonWorkflowOptions(field.tableId, field.id, {
+          ...options,
+          workflow: workflowMeta,
+        });
+        continue;
+      }
+
+      if (isBoundToWorkflow) {
+        await this.updateButtonWorkflowOptions(field.tableId, field.id, {
+          ...options,
+          workflow: null,
+        });
+      }
+    }
+  }
+
+  private async clearButtonWorkflowFields(baseId: string, workflowId: string) {
+    const fields = await this.prismaService.txClient().field.findMany({
+      where: {
+        type: FieldType.Button,
+        deletedTime: null,
+        table: {
+          baseId,
+          deletedTime: null,
+        },
+      },
+      select: {
+        id: true,
+        tableId: true,
+        options: true,
+      },
+    });
+    for (const field of fields) {
+      const options = this.parseButtonOptions(field.options);
+      if (options?.workflow?.id !== workflowId) continue;
+      await this.updateButtonWorkflowOptions(field.tableId, field.id, {
+        ...options,
+        workflow: null,
+      });
+    }
   }
 
   private makeNode(category: IWorkflowCategory, ro: ICreateWorkflowGraphNodeRo): IWorkflowNode {
@@ -1691,7 +2072,7 @@ export class AutomationService {
   }
 
   private async findWorkflow(baseId: string, workflowId: string) {
-    const workflow = await this.prismaService.workflow.findFirst({
+    const workflow = await this.prismaService.txClient().workflow.findFirst({
       where: { id: workflowId, baseId, deletedTime: null },
     });
     if (!workflow) {

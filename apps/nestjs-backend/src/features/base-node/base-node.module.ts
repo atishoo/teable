@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ShareDbModule } from '../../share-db/share-db.module';
 import { BaseNodePermissionGuard } from '../auth/guard/base-node-permission.guard';
+import { AutomationModule } from '../automation/automation.module';
 import { CanaryModule } from '../canary/canary.module';
 import { DashboardModule } from '../dashboard/dashboard.module';
 import { FieldDuplicateModule } from '../field/field-duplicate/field-duplicate.module';
@@ -22,6 +23,7 @@ import { BaseNodeFolderModule } from './folder/base-node-folder.module';
     TableModule,
     FieldOpenApiModule,
     FieldDuplicateModule,
+    AutomationModule,
   ],
   controllers: [BaseNodeController],
   providers: [BaseNodePermissionGuard, BaseNodeService, BaseNodeListener],
