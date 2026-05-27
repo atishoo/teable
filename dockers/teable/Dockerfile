@@ -109,6 +109,7 @@ ENV PATH="$PNPM_HOME/bin:$PNPM_HOME:$PATH"
 RUN set -ex; \
         npm install zx -g; \
         corepack enable; \
+        corepack prepare pnpm@9.13.0 --activate; \
         apt-get update; \
         apt-get install -y --no-install-recommends \
                 curl \
