@@ -290,6 +290,20 @@ const COMPOSER_PLACEHOLDER_KEYS = [
   'table:aiChat.inputPlaceholderFiles',
 ] as const;
 
+const isEditorChipOpenKey = (event: ReactKeyboardEvent<HTMLElement>) =>
+  event.key === 'Enter' || event.key === ' ';
+
+const isEditorSelectAllShortcut = (event: ReactKeyboardEvent<HTMLElement>) =>
+  (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a';
+
+const isEditorSubmitKey = (event: ReactKeyboardEvent<HTMLElement>, isComposing: boolean) =>
+  event.key === 'Enter' && !event.shiftKey && !isComposing && !event.nativeEvent.isComposing;
+
+const isEditorChipDeletionKey = (
+  event: ReactKeyboardEvent<HTMLElement>
+): event is ReactKeyboardEvent<HTMLElement> & { key: 'Backspace' | 'Delete' } =>
+  event.key === 'Backspace' || event.key === 'Delete';
+
 const createId = () =>
   globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -1745,6 +1759,8 @@ export const ChatPanel = () => {
   const composerRef = useRef<HTMLDivElement | null>(null);
   const composerShadowTimerRef = useRef<number>();
   const contextHintTimerRef = useRef<number>();
+  const editorCompositionEndTimerRef = useRef<number>();
+  const isEditorComposingRef = useRef(false);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const savedEditorRangeRef = useRef<Range>();
   const messageViewportRef = useRef<HTMLDivElement>(null);
@@ -2727,6 +2743,9 @@ export const ChatPanel = () => {
       }
       if (contextHintTimerRef.current) {
         window.clearTimeout(contextHintTimerRef.current);
+      }
+      if (editorCompositionEndTimerRef.current) {
+        window.clearTimeout(editorCompositionEndTimerRef.current);
       }
     };
   }, []);
@@ -5030,10 +5049,25 @@ export const ChatPanel = () => {
     syncMentionFromSelection();
   }, [clearSelectedChip, saveEditorSelection, syncComposerFromDom, syncMentionFromSelection]);
 
+  const handleEditorCompositionStart = useCallback(() => {
+    if (editorCompositionEndTimerRef.current) {
+      window.clearTimeout(editorCompositionEndTimerRef.current);
+      editorCompositionEndTimerRef.current = undefined;
+    }
+    isEditorComposingRef.current = true;
+  }, []);
+
+  const handleEditorCompositionEnd = useCallback(() => {
+    editorCompositionEndTimerRef.current = window.setTimeout(() => {
+      isEditorComposingRef.current = false;
+      editorCompositionEndTimerRef.current = undefined;
+    }, 0) as unknown as number;
+  }, []);
+
   const handleEditorKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>) => {
       const chip = getClosestChip(event.target as Node);
-      if (chip?.dataset.attachmentId && (event.key === 'Enter' || event.key === ' ')) {
+      if (chip?.dataset.attachmentId && isEditorChipOpenKey(event)) {
         event.preventDefault();
         event.stopPropagation();
         selectChipElement(chip);
@@ -5041,7 +5075,7 @@ export const ChatPanel = () => {
         return;
       }
 
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+      if (isEditorSelectAllShortcut(event)) {
         event.preventDefault();
         selectEditorContents();
         setContextOpen(false);
@@ -5050,7 +5084,7 @@ export const ChatPanel = () => {
         return;
       }
 
-      if (event.key === 'Enter' && !event.shiftKey) {
+      if (isEditorSubmitKey(event, isEditorComposingRef.current)) {
         event.preventDefault();
         void sendMessage();
         return;
@@ -5061,7 +5095,7 @@ export const ChatPanel = () => {
         setContextPickerPosition(undefined);
         return;
       }
-      if (event.key !== 'Backspace' && event.key !== 'Delete') return;
+      if (!isEditorChipDeletionKey(event)) return;
 
       const selection = window.getSelection();
       const range = selection?.rangeCount ? selection.getRangeAt(0) : undefined;
@@ -5244,6 +5278,8 @@ export const ChatPanel = () => {
               suppressContentEditableWarning
               className="max-h-[196px] min-h-[112px] cursor-text select-text overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words pt-px text-sm leading-7 text-foreground caret-foreground [overflow-wrap:anywhere] focus:outline-none"
               onInput={handleEditorInput}
+              onCompositionStart={handleEditorCompositionStart}
+              onCompositionEnd={handleEditorCompositionEnd}
               onKeyDown={handleEditorKeyDown}
               onKeyUp={saveEditorSelection}
               onMouseUp={saveEditorSelection}
